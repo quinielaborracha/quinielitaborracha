@@ -105,7 +105,7 @@
   // Señal de que Firebase ya está listo para usarse
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
-<link rel="stylesheet" href="styles.css?v=1.0">
+<link rel="stylesheet" href="styles.css?v=1.4">
 
 <!-- v7.2 — Banner de Modo Prueba (?test=1). Oculto por defecto (display:none
      inline); el script de Firebase de arriba lo muestra solo si TEST_MODE
@@ -182,12 +182,9 @@
     <div class="tab admin-tab" onclick="tab('fix')" style="display:none">📅 Fixture</div>
     <div class="tab admin-tab" onclick="tab('pred')" style="display:none">📝 Predicciones</div>
     <div class="tab" onclick="tab('stats')">📊 Estadísticas</div>
-    <div class="tab admin-tab" onclick="tab('bonos')" style="display:none">🎁 Bonos</div>
-    <div class="tab admin-tab" onclick="tab('integ')" style="display:none">🔒 Integridad</div>
     <div class="tab" onclick="tab('rules')">📋 Reglas</div>
     <div class="tab" onclick="tab('registro')">📝 Mi Quiniela</div>
     <div class="tab admin-tab" onclick="tab('admin')" style="display:none">🛠️ Admin</div>
-    <div class="tab admin-tab" onclick="tab('torneo')" style="display:none">⚙️ Configuración del torneo</div>
   </div>
 
   <!-- Wrapper with padding for all tab content -->
@@ -339,18 +336,6 @@
     </div>
   </div>
 
-  <div id="t-bonos" style="display:none">
-    <div class="rfl">
-      <span class="sec" style="margin:0">🎁 Bonos — Último lugar</span>
-      <div style="display:flex;gap:5px">
-        <button id="auto-close-btn" class="btn btn-sm" onclick="toggleAutoClose()"></button>
-        <button class="btn btn-sm btn-red" onclick="clearAllBonos()">🗑 Limpiar todo</button>
-      </div>
-    </div>
-    <div class="ib" id="bonos-mode-desc" style="margin-bottom:.5rem"></div>
-    <div id="bonos-body"></div>
-  </div>
-
   <div id="t-stats" style="display:none">
     <div style="display:flex;gap:0;border-bottom:1px solid var(--qb-border);margin-bottom:.875rem">
       <button class="stat-tab on" onclick="statTab('cards')" id="stab-cards">🃏 Tarjetas</button>
@@ -379,36 +364,6 @@
 
 
 
-  <div id="t-integ" style="display:none">
-    <div class="rfl">
-      <span class="sec" style="margin:0">🔒 Panel de Integridad</span>
-    </div>
-    <div class="ib">Verifica resultados, gestiona backups y administra la quiniela.</div>
-
-    <!-- Backup/Restore -->
-    <div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;margin-bottom:.75rem;background:var(--qb-surface)">
-      <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">💾 Backup / Restore</div>
-      <div style="font-size:11px;color:var(--qb-muted);margin-bottom:.625rem">Exporta todos los resultados, bonos y snapshots a un archivo JSON. Impórtalo en otro dispositivo o para recuperar datos.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-green" onclick="exportBackupJSON()">📥 Exportar backup</button>
-        <button class="btn btn-sm btn-blue" onclick="document.getElementById('backup-imp').click()">📤 Importar backup</button>
-        <input type="file" id="backup-imp" accept=".json" style="display:none" onchange="importBackupJSON(this)">
-      </div>
-      <div id="backup-status" style="margin-top:.5rem;font-size:11px;color:var(--qb-muted)"></div>
-    </div>
-
-    <!-- Integridad -->
-    <div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;background:var(--qb-surface)">
-      <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">🔐 Verificación de datos</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.625rem">
-        <button class="btn btn-sm btn-purple" onclick="runChecksumVerify()">🔐 Verificar checksums</button>
-        <button class="btn btn-sm" onclick="runScoreValidation()">✅ Validar resultados</button>
-        <button class="btn btn-sm btn-red" onclick="clearCorrupted()">🗑 Limpiar corrompidos</button>
-      </div>
-      <div id="integ-results"></div>
-    </div>
-  </div>
-
   <div id="t-rules" style="display:none">
     <div class="sec">Reglas básicas — Fase de Grupos</div>
     <div id="rbasic"></div>
@@ -417,8 +372,21 @@
     <div id="radv"></div>
 
     <div class="sec" style="margin-top:.875rem">Reglas de eliminatoria</div>
-    <div class="ib" style="margin-bottom:.5rem">Aplica para Dieciseisavos, Octavos, Cuartos, Semis y Final. Si aciertas la llave, sigues jugando con las mismas reglas de puntuación de 1ª Fase.</div>
+    <div class="ib" id="relim-note" style="margin-bottom:.5rem"></div>
     <div id="relim"></div>
+
+    <!-- v1.2 (fase 2) — Multiplicador/Racha/MVP: secciones que solo se
+         muestran si el admin las activó en Configuración del torneo
+         (renderRules() las oculta/muestra). Mismo patrón que el resto: un
+         <div class="sec"> + un contenedor que renderRules() llena. -->
+    <div class="sec" id="rmult-sec" style="margin-top:.875rem;display:none">⭐ Multiplicador por ronda</div>
+    <div id="rmult" style="display:none"></div>
+
+    <div class="sec" id="rracha-sec" style="margin-top:.875rem;display:none">⭐ Racha de aciertos</div>
+    <div id="rracha" style="display:none"></div>
+
+    <div class="sec" id="rmvp-sec" style="margin-top:.875rem;display:none">⭐ MVP de la jornada</div>
+    <div id="rmvp" style="display:none"></div>
 
     <div class="sec" style="margin-top:.875rem">⚠️ Bonos de último lugar</div>
     <div class="ib warn" style="margin-bottom:.5rem"><strong>* Los puntos del último lugar</strong> aplican solo una vez termina la fase correspondiente. No se cuentan puntos de llaves de la siguiente fase al momento del cierre.</div>
@@ -437,16 +405,73 @@
 
   <!-- v6.6.1 — Panel Admin, antes vivía adentro de Mi Quiniela como
        sub-pestaña (#rg-tabs). Mismo renderAdmin()/registro.js de siempre,
-       solo que ahora pinta en #admin-content en vez de #rg-content. -->
-  <div id="t-admin" class="rg-scope" style="display:none">
-    <div id="admin-content"></div>
-  </div>
+       solo que ahora pinta en #admin-content en vez de #rg-content.
+       v1.2 (fase 2) — "Bonos", "Integridad" y "Configuración del torneo"
+       eran pestañas propias del menú principal; para no acumular tantos
+       botones ahí, ahora viven AQUÍ DENTRO como sub-pestañas de Admin
+       (adminSubTab(), app-tabs.js). No se reescribió ningún render — cada
+       panel sigue siendo exactamente el mismo HTML/función de antes, solo
+       que ahora cuelga de #t-admin en vez de ser su propio #t-xxx. -->
+  <div id="t-admin" style="display:none">
+    <div class="inner-tabs" style="margin-bottom:.75rem">
+      <button class="inner-tab on" onclick="adminSubTab('general')" id="atab-general">🛠️ General</button>
+      <button class="inner-tab" onclick="adminSubTab('torneo')" id="atab-torneo">⚙️ Configuración del torneo</button>
+      <button class="inner-tab" onclick="adminSubTab('bonos')" id="atab-bonos">🎁 Bonos</button>
+      <button class="inner-tab" onclick="adminSubTab('integ')" id="atab-integ">🔒 Integridad</button>
+    </div>
 
-  <!-- v1.2 — Constructor de Torneos (fase 1): checklist de fases activas.
-       Reusa renderTorneoConfig()/toggleFaseActiva() (app-admin-tools.js) y
-       las clases .card/.switch/.ib de .rg-scope, igual que #t-admin. -->
-  <div id="t-torneo" class="rg-scope" style="display:none">
-    <div id="torneo-content"></div>
+    <div id="admin-general" class="rg-scope">
+      <div id="admin-content"></div>
+    </div>
+
+    <!-- v1.2 — Constructor de Torneos: checklist de fases activas + (fase
+         2) reglas de puntaje. Reusa renderTorneoConfig() (app-admin-tools.js)
+         y las clases .card/.switch/.ib de .rg-scope. -->
+    <div id="admin-torneo" class="rg-scope" style="display:none">
+      <div id="torneo-content"></div>
+    </div>
+
+    <div id="admin-bonos" style="display:none">
+      <div class="rfl">
+        <span class="sec" style="margin:0">🎁 Bonos — Último lugar</span>
+        <div style="display:flex;gap:5px">
+          <button id="auto-close-btn" class="btn btn-sm" onclick="toggleAutoClose()"></button>
+          <button class="btn btn-sm btn-red" onclick="clearAllBonos()">🗑 Limpiar todo</button>
+        </div>
+      </div>
+      <div class="ib" id="bonos-mode-desc" style="margin-bottom:.5rem"></div>
+      <div id="bonos-body"></div>
+    </div>
+
+    <div id="admin-integ" style="display:none">
+      <div class="rfl">
+        <span class="sec" style="margin:0">🔒 Panel de Integridad</span>
+      </div>
+      <div class="ib">Verifica resultados, gestiona backups y administra la quiniela.</div>
+
+      <!-- Backup/Restore -->
+      <div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;margin-bottom:.75rem;background:var(--qb-surface)">
+        <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">💾 Backup / Restore</div>
+        <div style="font-size:11px;color:var(--qb-muted);margin-bottom:.625rem">Exporta todos los resultados, bonos y snapshots a un archivo JSON. Impórtalo en otro dispositivo o para recuperar datos.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-green" onclick="exportBackupJSON()">📥 Exportar backup</button>
+          <button class="btn btn-sm btn-blue" onclick="document.getElementById('backup-imp').click()">📤 Importar backup</button>
+          <input type="file" id="backup-imp" accept=".json" style="display:none" onchange="importBackupJSON(this)">
+        </div>
+        <div id="backup-status" style="margin-top:.5rem;font-size:11px;color:var(--qb-muted)"></div>
+      </div>
+
+      <!-- Integridad -->
+      <div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;background:var(--qb-surface)">
+        <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">🔐 Verificación de datos</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.625rem">
+          <button class="btn btn-sm btn-purple" onclick="runChecksumVerify()">🔐 Verificar checksums</button>
+          <button class="btn btn-sm" onclick="runScoreValidation()">✅ Validar resultados</button>
+          <button class="btn btn-sm btn-red" onclick="clearCorrupted()">🗑 Limpiar corrompidos</button>
+        </div>
+        <div id="integ-results"></div>
+      </div>
+    </div>
   </div>
   </div><!-- /padding wrapper -->
 </div>
@@ -619,10 +644,10 @@
 
 <div id="pdfPoster"></div>
 
-<script src="participantes.js?v=1.2"></script>
+<script src="participantes.js?v=1.4"></script>
 <script src="partidos-grupos.js?v=1.0"></script>
 <script src="utils.js?v=1.0"></script>
-<script src="scoring.js?v=1.2"></script>
+<script src="scoring.js?v=1.4"></script>
 <script src="totp.js?v=1.0"></script>
 <!-- v8.0 — app.js (3906 líneas) se dividió en 16 módulos (Sprint 1,
      arquitectura). Cada uno es un slice contiguo del app.js anterior,
@@ -634,21 +659,21 @@
      participantes.js/utils.js/scoring.js/totp.js). app-bootstrap.js
      DEBE ser el último: hace el primer render llamando funciones
      definidas en todos los módulos anteriores. -->
-<script src="app-core-data.js?v=1.1"></script>
+<script src="app-core-data.js?v=1.0"></script>
 <script src="app-admin-auth.js?v=1.0"></script>
 <script src="app-live-sync.js?v=1.0"></script>
-<script src="app-tabs.js?v=1.2"></script>
+<script src="app-tabs.js?v=1.3"></script>
 <script src="app-eliminatoria-data.js?v=1.0"></script>
-<script src="app-batallas.js?v=1.2"></script>
+<script src="app-batallas.js?v=1.4"></script>
 <script src="app-bracket-render.js?v=1.2"></script>
 <script src="app-bracket-compute.js?v=1.0"></script>
-<script src="app-bracket-espn-sync.js?v=1.3"></script>
-<script src="app-bracket-view.js?v=1.3"></script>
-<script src="app-bracket-espn-live.js?v=1.1"></script>
+<script src="app-bracket-espn-sync.js?v=1.2"></script>
+<script src="app-bracket-view.js?v=1.2"></script>
+<script src="app-bracket-espn-live.js?v=1.0"></script>
 <script src="app-integridad.js?v=1.0"></script>
-<script src="app-predicciones.js?v=1.1"></script>
+<script src="app-predicciones.js?v=1.4"></script>
 <script src="app-estadisticas.js?v=1.0"></script>
-<script src="app-admin-tools.js?v=1.2"></script>
+<script src="app-admin-tools.js?v=1.4"></script>
 <script src="app-bootstrap.js?v=1.2"></script>
 <script src="registro.js?v=1.2"></script>
 
