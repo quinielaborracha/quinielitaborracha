@@ -25,7 +25,7 @@ function renderPred(){
   const pidx=window._selP||0;window._selP=pidx;
   sel.innerHTML=PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selP=${i};renderPred()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,14)} ${sn(name)}</button>`;}).join("");
   const name=PL[pidx];if(!name){body.innerHTML="";return;}
-  const m=PM[name]||{};const pts=calcPts(name);
+  const m=PM[name]||{};const pts=calcPts(name)+calcAdv(name)+calcElimPts(name)+calcBonos(name); // v1.1 — antes solo calcPts(name) (grupos); ahora coincide con el total de getRank()
   body.innerHTML=`<div class="pc"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem"><span style="font-weight:700;font-size:13px;color:var(--qb-text)">${flagEmoji(m.champFlag,16)} ${name}</span><span class="pill pb">${pts} pts</span></div>
   <div class="pg2">${MIDS.map(mid=>{
     const pred=MD[mid]?.preds[name];if(!pred)return"";
@@ -272,128 +272,12 @@ function renderScorers(silent=false){
 function addScorer(){const name=document.getElementById("sn").value.trim(),country=document.getElementById("sc2").value.trim(),goals=parseInt(document.getElementById("sg").value)||1;if(!name)return;const ex=S.scorers.find(s=>s.name.toLowerCase()===name.toLowerCase());if(ex)ex.goals=goals;else S.scorers.push({name,country,goals});document.getElementById("sn").value="";document.getElementById("sc2").value="";document.getElementById("sg").value="";save();renderScorers();toast("✓ Actualizado");}
 function rmS(name){S.scorers=S.scorers.filter(s=>s.name!==name);save();renderScorers();}
 
-// v1.2 (fase 2) — Antes esta función pintaba arrays ESTÁTICOS
-// (BRULES/ELIMRULES/LASTRULES, app-core-data.js): cambiar un puntaje en
-// "Configuración del torneo" no se reflejaba acá. Ahora lee TODO en vivo
-// de DB.configGlobal.reglas + BONUS_PHASES — la pestaña Reglas (pública,
-// la ve cualquiera) y el panel de admin leen exactamente el mismo dato,
-// así nunca pueden desincronizarse. ARULES (preguntas especiales) sigue
-// siendo el único array estático, porque esos puntos todavía no son
-// editables (fuera de alcance de esta fase).
-function ruleRow(label,ptsLabel,color,off){
-  const c=off?{bg:"var(--qb-surface2)",fg:"var(--qb-muted)",bc:"var(--qb-border2)"}:color;
-  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:${off?"var(--qb-muted)":"var(--qb-text)"}">
-    <span>${label}</span>
-    <span class="pill" style="background:${c.bg};color:${c.fg};border:1px solid ${c.bc}">${ptsLabel}</span>
-  </div>`;
-}
-const RULE_COLOR_BASIC={bg:"var(--qb-blue-dim)",fg:"#6ab8f7",bc:"rgba(20,120,200,.35)"};
-const RULE_COLOR_ADV={bg:"var(--qb-green-dim)",fg:"#4dde8c",bc:"rgba(0,200,83,.35)"};
-const RULE_COLOR_ELIM={bg:"rgba(124,58,237,.18)",fg:"#c4b5fd",bc:"rgba(124,58,237,.35)"};
-const RULE_COLOR_LAST={bg:"rgba(245,166,35,.14)",fg:"#f5c842",bc:"rgba(245,166,35,.35)"};
-const RULE_COLOR_STAR={bg:"rgba(255,215,0,.14)",fg:"#FFD700",bc:"rgba(255,215,0,.35)"};
-
 function renderRules(){
-  const R=DB.configGlobal.reglas;
-  const activePhases=getActivePhases();
-  const activeElim=activePhases.filter(p=>p.elimPhase);
-
-  // ── Básicas — Fase de grupos ──
-  const gOn=R.grupos.activo!==false;
-  const basicHtml=!isFaseActiva("grupos")
-    ? `<div class="ib">Este torneo no usa Fase de Grupos.</div>`
-    : !gOn
-      ? ruleRow("Puntos de Fase de Grupos","Desactivados",RULE_COLOR_BASIC,true)
-      : ruleRow("Acertar ganador del partido",`${R.grupos.ganador} pts`,RULE_COLOR_BASIC)
-        +ruleRow("Acertar empate",`${R.grupos.empate} pts`,RULE_COLOR_BASIC)
-        +ruleRow("Marcador exacto (adicional)",`+${R.grupos.exacto} pts`,RULE_COLOR_BASIC);
-  document.getElementById("rbasic").innerHTML=basicHtml;
-
-  // ── Avanzadas — sin cambios, todavía no editable en esta fase ──
-  document.getElementById("radv").innerHTML=ARULES.map(r=>ruleRow(r.l,`${r.p} pts`,RULE_COLOR_ADV)).join("");
-
-  // ── Eliminatoria ──
-  const eOn=R.elim.activo!==false;
-  const noteEl=document.getElementById("relim-note");
-  let elimHtml="";
-  if(!activeElim.length){
-    noteEl.textContent="Este torneo no usa fases de eliminatoria.";
-    elimHtml="";
-  }else if(!eOn){
-    noteEl.textContent=`Aplica para ${activeElim.map(p=>p.label).join(", ")}.`;
-    elimHtml=ruleRow("Puntos de resultado en Eliminatoria","Desactivados",RULE_COLOR_ELIM,true);
-  }else{
-    noteEl.textContent=`Aplica para ${activeElim.map(p=>p.label).join(", ")}. Si aciertas la llave, sigues jugando con las reglas de Ganador/Empate/Marcador exacto de eliminatoria.`;
-    // ¿El multiplicador hace que el valor cambie entre fases activas? Si
-    // todas valen lo mismo (o el multiplicador está apagado), una sola
-    // fila resumen; si no, una fila por fase para no mostrar un número
-    // que no aplica igual a todas.
-    const multOn=!!R.multiplicador.activo;
-    const mults=activeElim.map(p=>multOn?(Number(R.multiplicador.fases[p.key])||1):1);
-    const sameForAll=mults.every(m=>m===mults[0]);
-    if(sameForAll){
-      const m=mults[0]||1;
-      elimHtml=ruleRow("Acertar llave (por partido)",`${R.elim.llave} pts`,RULE_COLOR_ELIM)
-        +ruleRow("Acertar ganador",`${Math.round(R.elim.ganador*m)} pts`,RULE_COLOR_ELIM)
-        +ruleRow("Acertar empate",`${Math.round(R.elim.empate*m)} pts`,RULE_COLOR_ELIM)
-        +ruleRow("Marcador exacto (adicional)",`+${Math.round(R.elim.exacto*m)} pts`,RULE_COLOR_ELIM);
-    }else{
-      elimHtml=ruleRow("Acertar llave (por partido, todas las fases)",`${R.elim.llave} pts`,RULE_COLOR_ELIM);
-      activeElim.forEach((p,i)=>{
-        const m=mults[i];
-        elimHtml+=ruleRow(`Resultado en ${p.label}`,`Ganador ${Math.round(R.elim.ganador*m)} · Empate ${Math.round(R.elim.empate*m)} · +${Math.round(R.elim.exacto*m)} exacto`,RULE_COLOR_ELIM);
-      });
-    }
-    // Clasificado, por fase activa — respeta el switch propio de cada fase
-    activeElim.forEach(p=>{
-      const fOn=(R.fases[p.key]?.activo)!==false;
-      const clas=getFaseValor(p,"classifiedPts");
-      if(!fOn)elimHtml+=ruleRow(`Puntos de ${p.label}`,"Desactivados",RULE_COLOR_ELIM,true);
-      else if(clas>0)elimHtml+=ruleRow(`Clasificado en ${p.label} (por equipo)`,`${clas} pts`,RULE_COLOR_ELIM);
-    });
-  }
-  document.getElementById("relim").innerHTML=elimHtml;
-
-  // ── Multiplicador por ronda ──
-  const showMult=!!R.multiplicador.activo&&activeElim.length;
-  document.getElementById("rmult-sec").style.display=showMult?"":"none";
-  document.getElementById("rmult").style.display=showMult?"":"none";
-  if(showMult){
-    document.getElementById("rmult").innerHTML=
-      `<div class="ib" style="margin-bottom:.5rem">Multiplica los puntos de Ganador/Empate/Marcador exacto de eliminatoria (no afecta llave ni clasificado).</div>`
-      +activeElim.map(p=>ruleRow(p.label,`× ${Number(R.multiplicador.fases[p.key])||1}`,RULE_COLOR_STAR)).join("");
-  }
-
-  // ── Racha de aciertos ──
-  const showRacha=!!R.racha.activo;
-  document.getElementById("rracha-sec").style.display=showRacha?"":"none";
-  document.getElementById("rracha").style.display=showRacha?"":"none";
-  if(showRacha){
-    const hitos=(R.racha.hitos||[]).filter(h=>h&&h.n>0).sort((a,b)=>a.n-b.n);
-    document.getElementById("rracha").innerHTML=
-      `<div class="ib" style="margin-bottom:.5rem">Bono acumulado por aciertos CONSECUTIVOS (grupos + eliminatoria). Si la racha se corta, vuelve a empezar desde 0.</div>`
-      +hitos.map(h=>ruleRow(`${h.n} aciertos seguidos`,`+${h.pts} pts`,RULE_COLOR_STAR)).join("");
-  }
-
-  // ── MVP de la jornada ──
-  const showMvp=!!R.mvp.activo;
-  document.getElementById("rmvp-sec").style.display=showMvp?"":"none";
-  document.getElementById("rmvp").style.display=showMvp?"":"none";
-  if(showMvp){
-    document.getElementById("rmvp").innerHTML=
-      `<div class="ib" style="margin-bottom:.5rem">El que más puntos acumule en un mismo día de partidos recibe este bono extra (si hay empate en el máximo, todos los empatados lo reciben).</div>`
-      +ruleRow("Bono por día ganado",`+${R.mvp.pts} pts`,RULE_COLOR_STAR);
-  }
-
-  // ── Último lugar ──
-  let lastHtml="";
-  activePhases.forEach(p=>{
-    const fOn=p.key==="grupos"?gOn:((R.fases[p.key]?.activo)!==false);
-    const lastPts=getFaseValor(p,"lastPts");
-    if(!fOn){if(lastPts>0)lastHtml+=ruleRow(`Último al cierre de ${p.label}`,"Desactivado",RULE_COLOR_LAST,true);return;}
-    if(lastPts>0)lastHtml+=ruleRow(`Último al cierre de ${p.label}`,`*${lastPts} pts`,RULE_COLOR_LAST);
-  });
-  document.getElementById("rlast").innerHTML=lastHtml||`<div class="ib">Sin bonos de último lugar configurados.</div>`;
+  const ruleRow=(r,color)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${r.l}</span><span class="pill" style="background:${color.bg};color:${color.fg};border:1px solid ${color.bc}">${r.p} pts</span></div>`;
+  document.getElementById("rbasic").innerHTML=BRULES.map(r=>ruleRow(r,{bg:"var(--qb-blue-dim)",fg:"#6ab8f7",bc:"rgba(20,120,200,.35)"})).join("");
+  document.getElementById("radv").innerHTML=ARULES.map(r=>ruleRow(r,{bg:"var(--qb-green-dim)",fg:"#4dde8c",bc:"rgba(0,200,83,.35)"})).join("");
+  document.getElementById("relim").innerHTML=ELIMRULES.map(r=>ruleRow(r,{bg:"rgba(124,58,237,.18)",fg:"#c4b5fd",bc:"rgba(124,58,237,.35)"})).join("");
+  document.getElementById("rlast").innerHTML=LASTRULES.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${r.l}</span><span class="pill" style="background:rgba(245,166,35,.14);color:#f5c842;border:1px solid rgba(245,166,35,.35)">${r.p} pts</span></div>`).join("");
 }
 
 // ══════════════════════════════════════════════════════════════
