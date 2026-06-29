@@ -32,7 +32,7 @@ const ESPN_NAME_ES={
   "Iran":"Irán","New Zealand":"Nueva Zelanda","Belgium":"Bélgica","Egypt":"Egipto",
   "France":"Francia","Senegal":"Senegal","Iraq":"Irak","Norway":"Noruega",
   "Argentina":"Argentina","Algeria":"Argelia","Austria":"Austria","Jordan":"Jordania",
-  "Portugal":"Portugal","DR Congo":"RD Congo","Congo DR":"RD Congo","Congo":"RD Congo","Uzbekistan":"Uzbekistán",
+  "Portugal":"Portugal","DR Congo":"RD Congo","Congo":"RD Congo","Uzbekistan":"Uzbekistán",
   "Colombia":"Colombia","England":"Inglaterra","Croatia":"Croacia","Ghana":"Ghana","Panama":"Panamá",
   "Paraguay":"Paraguay","Australia":"Australia","Korea Republic":"Corea del Sur","Curacao":"Curazao","Curaçao":"Curazao",
   "Canada":"Canadá","Bosnia-Herzegovina":"Bosnia y Herzegovina","South Africa":"Sudáfrica",
@@ -44,13 +44,15 @@ const ESPN_NAME_ES={
 const ELIM_DATES=["20260628","20260629","20260630","20260701","20260702","20260703","20260704","20260705","20260706","20260707","20260709","20260710","20260711","20260712","20260714","20260715","20260718","20260719"];
 
 // Equipos "reales" conocidos hoy para un pid de eliminatoria, para poder
-// comparar orientación/identidad contra lo que reporta ESPN. Para 1/16
-// (73-88) viene de S.elimTeams; de Octavos en adelante viene de
-// getRealElimTeams(), que resuelve recursivamente contra ELIM_TREE y los
-// resultados de la fase previa (ya debería estar cerrada, ver
-// getFirstBlockedElimPhase()).
+// comparar orientación/identidad contra lo que reporta ESPN. Para la
+// PRIMERA fase de eliminatoria activa (getManualTeamPids() — normalmente
+// 1/16, pero pasa a ser Octavos u otra si las fases anteriores están
+// desactivadas) viene de S.elimTeams; de la ronda siguiente en adelante
+// viene de getRealElimTeams(), que resuelve recursivamente contra
+// ELIM_TREE y los resultados de la fase previa (ya debería estar
+// cerrada, ver getFirstBlockedElimPhase()).
 function equiposConocidosElim(pid){
-  if(ELIM_1_16_IDS.includes(pid))return(S.elimTeams[pid]&&S.elimTeams[pid].h)?S.elimTeams[pid]:null;
+  if(getManualTeamPids().includes(pid))return(S.elimTeams[pid]&&S.elimTeams[pid].h)?S.elimTeams[pid]:null;
   return getRealElimTeams(pid);
 }
 
@@ -89,10 +91,13 @@ async function fetchESPNElim(){
         S.elimTimes[pid]=ev.date;
       }
 
-      // ── Cruce real (solo aplica a 1/16, P73-P88 — las rondas
-      //    posteriores se resuelven solas a partir de los resultados
-      //    previos vía ELIM_TREE) ──
-      if(ELIM_1_16_IDS.includes(pid)&&homeES&&awayES){
+      // ── Cruce real (solo aplica a la PRIMERA fase de eliminatoria
+      //    activa, normalmente 1/16, P73-P88 — las rondas posteriores se
+      //    resuelven solas a partir de los resultados previos vía
+      //    ELIM_TREE. v1.2: si 1/16 (y/o Grupos) están desactivados, esto
+      //    se generaliza solo a la fase por la que el torneo arranca,
+      //    ej. Octavos — getManualTeamPids() ya lo resuelve) ──
+      if(getManualTeamPids().includes(pid)&&homeES&&awayES){
         const existT=S.elimTeams[pid];
         const sameTeams=!!(existT&&existT.h&&
           new Set([n(existT.h),n(existT.a)]).size===2&&
@@ -135,7 +140,7 @@ async function fetchESPNElim(){
           else if(!(n(real.h)===n(homeES)&&n(real.a)===n(awayES))){
             orientable=false; // ni coincide derecho ni invertido — no se adivina
           }
-        }else if(!ELIM_1_16_IDS.includes(pid)){
+        }else if(!getManualTeamPids().includes(pid)){
           orientable=false; // fase previa todavía no resuelta/cerrada
         }
         if(orientable&&(!existing||existing.live)){

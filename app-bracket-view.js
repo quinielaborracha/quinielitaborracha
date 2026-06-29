@@ -35,6 +35,7 @@ function renderBracket(){
   // Resumen de puntos y llaves
   let llaveOk=0,llaveTot=0,totalPts=0,partJugados=0,cruceOk=0;
   for(let pid=73;pid<=104;pid++){
+    const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue; // v1.2
     const sc=S.elimScores[pid];if(!sc)continue;
     partJugados++;llaveTot++;
     if(isLlaveCorrecta(name,pid))llaveOk++;
@@ -43,16 +44,17 @@ function renderBracket(){
   }
   const advPts=calcAdv(name);
   const llavePtsTotal=(llaveOk+cruceOk)*2;
+  const activeElimMidsTotal=getActivePhases().filter(p=>p.elimPhase).reduce((s,p)=>s+p.mids.length,0);
 
   // Classified pts for this participant
   let classifiedTotal=0;
-  BONUS_PHASES.forEach(ph=>{if(ph.elimPhase)classifiedTotal+=calcClassifiedPtsForPhase(name,ph);});
+  getActivePhases().forEach(ph=>{if(ph.elimPhase)classifiedTotal+=calcClassifiedPtsForPhase(name,ph);});
   let html=`<div class="brkt-summary">
     <div class="bsum-item"><div class="bsum-val">${totalPts}</div><div class="bsum-lbl">pts resultado</div></div>
     <div class="bsum-item"><div class="bsum-val" style="color:#6ab8f7">${llavePtsTotal}</div><div class="bsum-lbl">pts llaves</div></div>
     <div class="bsum-item"><div class="bsum-val" style="color:#4dde8c">${classifiedTotal}</div><div class="bsum-lbl">pts clasif.</div></div>
     <div class="bsum-item"><div class="bsum-val">${llaveOk}/${llaveTot}${cruceOk?` <span style="color:#6ab8f7;font-size:10px">(+${cruceOk} 🔀)</span>`:""}</div><div class="bsum-lbl">llaves ✓</div></div>
-    <div class="bsum-item"><div class="bsum-val">${partJugados}/32</div><div class="bsum-lbl">jugados</div></div>
+    <div class="bsum-item"><div class="bsum-val">${partJugados}/${activeElimMidsTotal}</div><div class="bsum-lbl">jugados</div></div>
   </div>`;
 
   // Leyenda
@@ -64,7 +66,7 @@ function renderBracket(){
     <span>⭐ = puntos de clasificado (en vivo, al cerrar la fase previa)</span>
   </div>`;
 
-  ELIM_ROUNDS.forEach(round=>{
+  getActiveElimRounds().forEach(round=>{
     html+=`<div class="brkt-round"><div class="brkt-round-title">${round.lbl}</div>`;
     round.ids.forEach(pid=>{
       // PREDICCIÓN del participante — siempre lo que ÉL puso
@@ -240,7 +242,7 @@ function renderRank(){
       <td data-label="#">${rk}</td>
       <td data-label="±" style="text-align:center">${mv}</td>
       <td data-label="País">${flagEmoji(p.champFlag,20)}</td>
-      <td data-label="Participante"><div class="pn">${p.name}</div><div class="ps">${cityCountry(p)}</div></td>
+      <td data-label="Participante"><div class="pn">${p.name}</div><div class="ps">${p.city||""}</div></td>
       <td data-label="Básicos"><span class="pill pb">${p.b}</span></td>
       <td data-label="Avanzado"><span class="pill pg">${p.av}</span></td>
       <td data-label="Elim"><span class="pill" style="background:rgba(124,58,237,.18);color:#c4b5fd;border:1px solid rgba(124,58,237,.35)">${p.elim}</span></td>
