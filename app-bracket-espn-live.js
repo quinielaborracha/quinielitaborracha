@@ -100,6 +100,28 @@ async function fetchESPN(){
   if(sp)sp.classList.remove("spin");if(tx)tx.textContent="ESPN Live";
 }
 
+// v1.1 — Bug #3 (playbook eliminatoria): parseESPNEvent() solo reconoce
+// partidos por par fijo de abreviaturas (ESPN_ABBR_MAP), que únicamente
+// cubre los 72 partidos de grupos — los cruces de eliminatoria son
+// dinámicos y no tienen un par fijo. Esta función es el camino paralelo
+// que SÍ reconoce eliminatoria, usando el MISMO mecanismo por gameId que
+// ya usa fetchESPNElim() (ESPN_GAMEID_TO_PID) para guardar los resultados
+// oficiales — así no se duplica el criterio de qué gameId es cada cruce.
+// No toca ni reemplaza parseESPNEvent(): se usa solo como respaldo cuando
+// esa no reconoce el evento (ver loadMM()).
+function parseESPNEventElim(ev){
+  const pid=ESPN_GAMEID_TO_PID[String(ev.id)];
+  if(!pid)return null;
+  const comp=ev.competitions?.[0]||{};const comps=comp.competitors||[];if(comps.length<2)return null;
+  const home=comps.find(c=>c.homeAway==="home")||comps[0];
+  const away=comps.find(c=>c.homeAway==="away")||comps[1];
+  const homeTeam=espnNameES(home.team?.displayName||"");
+  const awayTeam=espnNameES(away.team?.displayName||"");
+  const st=ev.status||comp.status;const state=st?.type?.state||"pre";const clock=st?.displayClock||"";
+  const hs=parseInt(home.score)||0;const as=parseInt(away.score)||0;
+  return{mid:pid,state,clock,homeScore:hs,awayScore:as,homeTeam,awayTeam,isElim:true};
+}
+
 function startMMT(){stopMMT();mmS=30;mmT=setInterval(()=>{mmS--;const el=document.getElementById("mm-cd");if(el)el.textContent=`Auto-actualiza en ${mmS}s`;if(mmS<=0){mmS=30;loadMM(false);}},1000);}
 function stopMMT(){if(mmT){clearInterval(mmT);mmT=null;}}
 
@@ -114,7 +136,7 @@ async function loadMM(showSpinner=false){
     const d2=`${tmrw.getFullYear()}${pad(tmrw.getMonth()+1)}${pad(tmrw.getDate())}`;
     const evts=await fetchAllDates([d1,d2]);
     const now=new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});
-    const parsed=evts.map(ev=>({ev,p:parseESPNEvent(ev)})).filter(x=>x.p);
+    const parsed=evts.map(ev=>({ev,p:parseESPNEvent(ev)||parseESPNEventElim(ev)})).filter(x=>x.p); // v1.1 — fallback a eliminatoria si no es un partido de grupos
     const liveOnes=parsed.filter(x=>x.p.state==="in");
     const preOnes=parsed.filter(x=>x.p.state==="pre").sort((a,b)=>new Date(a.ev.date)-new Date(b.ev.date));
     if(statusEl)statusEl.innerHTML=`<span class="sbadge info">ESPN · ${now}</span>${liveOnes.length?`<span class="sbadge" style="background:rgba(212,0,26,.18);color:#ff8080;border:1px solid rgba(212,0,26,.4)"><span class="ldot" style="width:5px;height:5px;margin-right:2px"></span>${liveOnes.length} en vivo</span>`:""}`;
@@ -125,25 +147,46 @@ async function loadMM(showSpinner=false){
 
 function predGroups(mid){const g={};PL.forEach(name=>{const p=MD[mid]?.preds[name];if(!p)return;const k=`${p.h}-${p.a}`;if(!g[k])g[k]=[];g[k].push(sn(name));});return g;}
 
+// v1.1 — Bug #3: equivalente a predGroups() pero para partidos de
+// eliminatoria. Solo agrupa a quienes tienen la llave correcta para este
+// pid (isLlaveCorrecta, scoring.js) — si la llave no coincide, su
+// marcador predicho es para un cruce distinto y mostrarlo acá confundiría
+// más de lo que ayuda. No duplica el criterio de "acierto": reusa la
+// misma función que ya usa el desglose de puntos.
+function predGroupsElim(pid){const g={};PL.forEach(name=>{if(!isLlaveCorrecta(name,pid))return;const p=elimPred(name,pid);if(!p)return;const k=`${p.h}-${p.a}`;if(!g[k])g[k]=[];g[k].push(sn(name));});return g;}
+
 function renderMM(liveList,preList){
   const body=document.getElementById("mm-body");if(!body)return;
   const showLive=liveList;const showNext=preList.slice(0,4);let html="";
   function buildCard(parsed,ev,isLive){
-    const mid=parsed.mid;const g=MGMAP[mid]||"";const lbl=MD[mid]?.lbl||"";
-    const pts=lbl.split(" vs ");const hN=(pts[0]||"").trim();const aN=(pts[1]||"").trim();
-    const hF=getFlag(g,hN);const aF=getFlag(g,aN);
-    const pgs=predGroups(mid);const sorted=Object.entries(pgs).sort((a,b)=>b[1].length-a[1].length);
+    const mid=parsed.mid;
+    let g,lbl,hN,aN,hF,aF,pgs;
+    if(parsed.isElim){
+      // v1.1 — Bug #3: cruce de eliminatoria, no hay par fijo de grupo;
+      // equipos y label de ronda vienen del evento ESPN / phaseForPid().
+      g=phaseForPid(mid)?.label||"Eliminatoria";
+      hN=parsed.homeTeam;aN=parsed.awayTeam;lbl=`${hN} vs ${aN}`;
+      hF=getFlag(null,hN);aF=getFlag(null,aN);
+      pgs=predGroupsElim(mid);
+    }else{
+      g=MGMAP[mid]||"";lbl=MD[mid]?.lbl||"";
+      const pts=lbl.split(" vs ");hN=(pts[0]||"").trim();aN=(pts[1]||"").trim();
+      hF=getFlag(g,hN);aF=getFlag(g,aN);
+      pgs=predGroups(mid);
+    }
+    const gLbl=parsed.isElim?g:`Grupo ${g}`;
+    const sorted=Object.entries(pgs).sort((a,b)=>b[1].length-a[1].length);
     if(isLive){
       const hs=parsed.homeScore;const as=parsed.awayScore;const curKey=`${hs}-${as}`;
       const predsHtml=sorted.map(([score,names])=>{const hit=score===curKey;
         return`<div class="pred-row"><div class="pred-row-hdr"><span class="spill ${hit?"match":""}">${score.replace("-"," – ")}</span><span class="cpill">${names.length}</span>${hit?`<span style="font-size:10px;color:#15803d;font-weight:500">← actual</span>`:""}</div><div class="names">${names.map(n=>`<span class="nchip ${hit?"hit":""}">${n}</span>`).join("")}</div></div>`;
       }).join("")||`<div style="font-size:11px;color:var(--qb-muted);padding:4px 0">Sin predicciones</div>`;
-      return`<div class="live-card is-live"><div class="live-hdr"><div style="display:flex;align-items:center;gap:6px"><span class="ldot"></span><span style="font-family:var(--ff-display);font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--qb-red);text-transform:uppercase">EN VIVO</span>${parsed.clock?`<span style="font-size:11px;color:var(--qb-muted)">${parsed.clock}'</span>`:""}</div><span style="font-size:10px;color:var(--qb-muted)">Grupo ${g} · P${mid}</span></div><div class="scoreboard"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${hN}</span></div><div class="live-score red">${hs} – ${as}</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${aN}</span></div></div><div style="padding:0 14px 6px;font-family:var(--ff-display);font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--qb-muted);text-transform:uppercase">Predicciones de los 27</div><div class="pred-section">${predsHtml}</div></div>`;
+      return`<div class="live-card is-live"><div class="live-hdr"><div style="display:flex;align-items:center;gap:6px"><span class="ldot"></span><span style="font-family:var(--ff-display);font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--qb-red);text-transform:uppercase">EN VIVO</span>${parsed.clock?`<span style="font-size:11px;color:var(--qb-muted)">${parsed.clock}'</span>`:""}</div><span style="font-size:10px;color:var(--qb-muted)">${gLbl} · P${mid}</span></div><div class="scoreboard"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${hN}</span></div><div class="live-score red">${hs} – ${as}</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${aN}</span></div></div><div style="padding:0 14px 6px;font-family:var(--ff-display);font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--qb-muted);text-transform:uppercase">Predicciones de los 27</div><div class="pred-section">${predsHtml}</div></div>`;
     }else{
       const ko=new Date(ev.date).toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});
       const koDate=new Date(ev.date).toLocaleDateString("es",{weekday:"short",day:"numeric",month:"short"});
       const predsHtml=sorted.map(([score,names])=>`<div class="pred-row"><div class="pred-row-hdr"><span class="spill">${score.replace("-"," – ")}</span><span class="cpill">${names.length}</span></div><div class="names">${names.map(n=>`<span class="nchip">${n}</span>`).join("")}</div></div>`).join("");
-      return`<div class="live-card"><div class="live-hdr"><span style="font-family:var(--ff-display);font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--qb-text)">Grupo ${g} · ${lbl}</span><span style="font-size:11px;color:var(--qb-muted)">⏱ ${ko} · ${koDate}</span></div><div class="scoreboard" style="padding:13px 14px 8px"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${hN}</span></div><div class="live-score" style="font-family:var(--ff-display);font-size:28px;font-weight:900;color:var(--qb-muted)">VS</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${aN}</span></div></div>${predsHtml?`<div style="padding:0 14px 6px;font-family:var(--ff-display);font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--qb-muted);text-transform:uppercase">Predicciones</div><div class="pred-section">${predsHtml}</div>`:""}</div>`;
+      return`<div class="live-card"><div class="live-hdr"><span style="font-family:var(--ff-display);font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--qb-text)">${gLbl} · ${lbl}</span><span style="font-size:11px;color:var(--qb-muted)">⏱ ${ko} · ${koDate}</span></div><div class="scoreboard" style="padding:13px 14px 8px"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${hN}</span></div><div class="live-score" style="font-family:var(--ff-display);font-size:28px;font-weight:900;color:var(--qb-muted)">VS</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${aN}</span></div></div>${predsHtml?`<div style="padding:0 14px 6px;font-family:var(--ff-display);font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--qb-muted);text-transform:uppercase">Predicciones</div><div class="pred-section">${predsHtml}</div>`:""}</div>`;
     }
   }
   showLive.forEach(({ev,p})=>{html+=buildCard(p,ev,true);});

@@ -164,7 +164,7 @@ const ALL_FLAGS={
   "Austria":"🇦🇹",
   "Jordania":"🇯🇴","Jordan":"🇯🇴",
   "Portugal":"🇵🇹",
-  "RD Congo":"🇨🇩","R.D.Congo":"🇨🇩","DR Congo":"🇨🇩","Congo":"🇨🇩","República Del Congo":"🇨🇩",
+  "RD Congo":"🇨🇩","R.D.Congo":"🇨🇩","DR Congo":"🇨🇩","Congo DR":"🇨🇩","Congo":"🇨🇩","República Del Congo":"🇨🇩",
   "Uzbekistán":"🇺🇿","Uzbekistan":"🇺🇿",
   "Colombia":"🇨🇴",
   "Inglaterra":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
