@@ -1,0 +1,278 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════
+// QUINIELITA BORRACHA — Reglas de seguridad de Firestore (v1.0)
+// Basado en Quiniela Borracha 2026 v7.2, instancia nueva y limpia.
+// ════════════════════════════════════════════════════════════════
+// Cómo publicar: Firebase Console -> proyecto "quinielitaborracha" ->
+// Firestore Database -> pestaña "Reglas" -> pegar este archivo completo
+// (reemplazando lo que haya) -> "Publicar". No tienen efecto hasta que
+// se publiquen ahí — esto es solo el texto, no algo que el código JS
+// pueda aplicar por sí mismo.
+//
+// Modelo de autenticación usado por estas reglas (ver app.js::wireFirebaseAuth
+// y participantes.js para el código que las usa):
+//   - Admin:        Firebase Auth con correo+contraseña real (Tato).
+//                    request.auth.token.email == "quinielaborracha@gmail.com"
+//                    y request.auth.token.email_verified... (NO se exige
+//                    verificación de correo aquí a propósito: Firebase
+//                    Auth ya garantiza que solo quien conoce la
+//                    contraseña real puede autenticarse con ese email).
+//   - Participante: Firebase Auth Anónima (signInAnonymously()), un UID
+//                    estable por dispositivo/navegador mientras no se
+//                    borren cookies/datos del sitio. NUNCA es admin
+//                    (user.isAnonymous queda true para estas sesiones).
+//
+// Plan Spark (gratuito): estas reglas NO requieren Cloud Functions, solo
+// Firestore + Firebase Auth, ambos incluidos en el plan gratuito.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper (v6.8 — Fase de Estabilización) ───────────────────────
+    // ¿Ya pasó la fecha/hora de cierre configurada por el admin en
+    // registro/meta.configGlobal? Antes esto SOLO lo decidía isLocked()
+    // en registro.js (100% cliente) — alguien con la consola del
+    // navegador abierta podía seguir escribiendo predicciones después
+    // del cierre sin que Firestore lo notara. Esta función lo replica
+    // del lado del servidor para que la regla de "update" de abajo
+    // pueda exigirlo de verdad.
+    //
+    // NOTA DE INTERPRETACIÓN: el cliente (isGloballyClosed() en
+    // registro.js) compara fechaCierre+horaCierre contra la hora LOCAL
+    // del navegador de quien mira la pantalla — que varía por ciudad
+    // (Orlando, Panamá, Maracaibo, Buenos Aires, Barcelona, etc.), así
+    // que hoy el cierre "real" ya ocurre en instantes distintos según
+    // desde dónde se mire. Esta regla del servidor necesita UN solo
+    // instante real para todos, así que interpreta fechaCierre+
+    // horaCierre como UTC. Esto es una mejora respecto al
+    // comportamiento actual (ambiguo), no un cambio que vaya a notar
+    // nadie en el uso normal — el cierre siempre se configura con
+    // margen de horas antes del primer partido, no al segundo.
+    function _metaConfigGlobal() {
+      return get(/databases/$(database)/documents/registro/meta).data.get('configGlobal', {});
+    }
+    function isPastDeadline() {
+      return exists(/databases/$(database)/documents/registro/meta) && _isPastDeadlineInner();
+    }
+    function _isPastDeadlineInner() {
+      let cfg = _metaConfigGlobal();
+      let fc = cfg.get('fechaCierre', '');
+      let hc = cfg.get('horaCierre', '');
+      return fc != ''
+        && request.time > timestamp.value(fc + 'T' + (hc != '' ? hc : '23:59') + ':00Z');
+    }
+
+    // ── RESULTADOS REALES, BONOS, BATALLAS — sin cambios respecto a
+    // versiones anteriores. Solo el admin puede escribir; cualquiera
+    // puede leer (el Ranking público lo necesita).
+    match /quiniela/estado {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == "quinielaborracha@gmail.com";
+    }
+
+    // ── MODO PRUEBA (?test=1) — v7.2 ──────────────────────────────────
+    // Documento espejo de /quiniela/estado, mismo modelo de permisos
+    // exacto (lectura pública, escritura solo admin). Existe para que el
+    // admin pueda experimentar con resultados/Bonos/Batallas hipotéticos
+    // sin tocar nunca el documento real que ven los 27 participantes.
+    // Sin esta regla, Firestore niega por defecto cualquier lectura o
+    // escritura a esta ruta (no existía antes de v7.2).
+    match /quiniela/estado-test {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == "quinielaborracha@gmail.com";
+    }
+
+    // ── "MI QUINIELA" — v6.4, Fase de Seguridad; v6.9, Fase de Privacidad ──
+    // Reemplaza al viejo documento único "registro/estado" (escritura
+    // pública sin ninguna validación de servidor: cualquiera con las
+    // devtools abiertas podía leer la clave de cualquier participante y
+    // reescribir la quiniela de cualquiera, no solo la suya).
+    //
+    // Ahora cada participante es su PROPIO documento, y solo puede
+    // escribirlo quien demuestre ser su dueño real (mismo UID anónimo
+    // que lo creó) — la app ya no es quien decide si la clave es
+    // correcta de cara a Firestore, lo decide Firestore mismo.
+    //
+    // v6.9 — Fase de Privacidad: este documento YA NO contiene clave ni
+    // correo (ver match /registro_privado/{pid} más abajo). Antes vivían
+    // acá mismo, y como este documento es de lectura pública (ver abajo
+    // por qué tiene que seguir siéndolo), cualquier visitante sin sesión
+    // podía leer la clave de los 27 participantes con solo abrir la
+    // página — y con eso "reclamar" la cuenta de cualquiera. Mover esos
+    // dos campos a una colección de lectura restringida (dueño o admin)
+    // cierra ese hueco sin tocar nada de lo que sí necesita ser público
+    // (nombre, código, predicciones, estado de envío).
+    match /registro_participants/{pid} {
+      // Lectura pública: el Ranking, Estadísticas y "¿ya hay alguien con
+      // este nombre?" necesitan poder leer a todos, sin sesión especial.
+      // (la verificación de correo duplicado ya NO se hace leyendo el
+      // correo de nadie -- ver emailHash en participantes.js).
+      allow read: if true;
+
+      // Crear: el documento nuevo debe declarar como ownerUid el UID de
+      // quien lo está creando (caso normal, alguien llena el wizard por
+      // primera vez) — o, si quien escribe es el admin, puede crear un
+      // documento "a nombre de" alguien más con cualquier ownerUid (o
+      // sin ninguno): esto cubre restaurar a alguien desde la papelera
+      // (que vuelve tal cual estaba, sin un ownerUid nuevo asignado).
+      allow create: if request.auth != null
+                    && (
+                         request.resource.data.ownerUid == request.auth.uid
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                       );
+
+      // Actualizar: el dueño real (ownerUid ya guardado coincide con la
+      // sesión actual) puede tocar lo que sea de SU PROPIO documento —
+      // esto es la base de todo: guardar predicciones, marcar como
+      // enviada, etc. — siempre que no esté ya "enviada" ni haya pasado
+      // el plazo global (v6.8). El admin también puede tocar cualquier
+      // documento desde su panel (regenerar clave, cambiar estado, nota
+      // interna).
+      //
+      // v6.9 — El re-claim YA NO compara una clave acá (ya no vive en
+      // este documento). En su lugar, exige que YA se haya reclamado
+      // exitosamente el documento HERMANO en registro_privado/{pid}
+      // (eso sí compara la clave, ver más abajo) ANTES de esta segunda
+      // escritura — son dos pasos secuenciales, no un batch atómico, a
+      // propósito: para cuando este segundo paso se evalúa, el primero
+      // ya quedó confirmado en el servidor, así que get() ve el ownerUid
+      // ya actualizado. Ver rgClaimOwnership() en participantes.js.
+      allow update: if request.auth != null
+                    && (
+                         (
+                           resource.data.ownerUid == request.auth.uid
+                           && resource.data.estadoQuiniela != 'enviada'
+                           && !isPastDeadline()
+                         )
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                         ||
+                         (
+                           request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['ownerUid', 'fechaActualizacion'])
+                           && get(/databases/$(database)/documents/registro_privado/$(pid)).data.ownerUid == request.auth.uid
+                         )
+                       );
+
+      // Borrar: el propio dueño puede borrar su documento (cancelar su
+      // inscripción, ver q_delete en registro.js) y el admin puede
+      // borrar el de cualquiera (mover a la papelera desde su panel,
+      // ver rgDeleteParticipantDoc() en participantes.js). En ambos
+      // casos, quien borra en Firestore también es responsable de
+      // quitar ese id de su copia local de DB.participants/predictions
+      // — eso lo hace el código JS, no esta regla.
+      allow delete: if request.auth != null
+                    && (
+                         resource.data.ownerUid == request.auth.uid
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                       );
+    }
+
+    // ── DATOS PRIVADOS DE "MI QUINIELA" (clave + correo) — v6.9, Fase
+    // de Privacidad ───────────────────────────────────────────────────
+    // Antes vivían dentro de registro_participants (público). Acá solo
+    // los puede leer el propio dueño o el admin -- nadie más, ni
+    // siquiera otro participante autenticado. La clave sigue sirviendo
+    // exactamente para lo mismo (reclamar el documento desde un
+    // dispositivo nuevo, ver el camino de re-claim abajo), pero ya no
+    // hace falta que sea legible por cualquiera para que ese mecanismo
+    // funcione: Firestore compara la clave ENVIADA contra la YA
+    // GUARDADA sin que el cliente necesite leerla primero.
+    match /registro_privado/{pid} {
+      allow read: if request.auth != null
+                  && (
+                       resource.data.ownerUid == request.auth.uid
+                       ||
+                       request.auth.token.email == "quinielaborracha@gmail.com"
+                     );
+
+      allow create: if request.auth != null
+                    && (
+                         request.resource.data.ownerUid == request.auth.uid
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                       );
+
+      // Actualizar: el dueño real puede tocar su propio correo/clave
+      // (ej. cambiar su correo desde el wizard) y el admin puede tocar
+      // cualquiera (regenerar clave). El tercer camino es el RE-CLAIM
+      // propiamente dicho: alguien que todavía no es el dueño puede
+      // tomar posesión SOLO si lo único que cambia es ownerUid+clave, Y
+      // la clave que manda coincide EXACTAMENTE con la que ya estaba
+      // guardada -- igual que antes, solo que ahora en este documento
+      // más chico en vez de en el público.
+      allow update: if request.auth != null
+                    && (
+                         resource.data.ownerUid == request.auth.uid
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                         ||
+                         (
+                           request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['ownerUid', 'clave'])
+                           && request.resource.data.clave == resource.data.clave
+                         )
+                       );
+
+      allow delete: if request.auth != null
+                    && (
+                         resource.data.ownerUid == request.auth.uid
+                         ||
+                         request.auth.token.email == "quinielaborracha@gmail.com"
+                       );
+    }
+
+    // ── CONFIG GLOBAL + CONTADOR DE CÓDIGOS — sin datos sensibles.
+    // El contador de códigos (nextSeq) avanza cada vez que alguien nuevo
+    // se registra, así que tiene que ser escribible por cualquiera. Pero
+    // configGlobal (fechaCierre, registroAbierto, etc.) vive en el MISMO
+    // documento por simplicidad del cliente, y hasta v6.7 la regla no
+    // distinguía: cualquier sesión autenticada (anónima incluida) podía
+    // reescribir TODO el documento, incluida la fecha de cierre del
+    // torneo entero. v6.8 — Fase de Estabilización: ahora solo se acepta
+    // una escritura no-admin si lo ÚNICO que cambia es nextSeq (más el
+    // timestamp). Si configGlobal cambia y quien escribe no es el admin,
+    // la escritura se rechaza completa — no hay forma de tocar
+    // configGlobal sin ser admin. La app (rgPushToFirestore en
+    // participantes.js) ya solo escribe acá cuando su copia local de
+    // configGlobal coincide con la última conocida, así que en el uso
+    // normal esto no cambia nada visible para nadie.
+    match /registro/meta {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && (
+                        request.auth.token.email == "quinielaborracha@gmail.com"
+                        ||
+                        resource == null
+                        ||
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['nextSeq', 'updatedAt'])
+                      );
+    }
+
+    // ── PAPELERA — conserva la clave en texto plano de quien se
+    // elimina (para poder restaurarlo exactamente como estaba), así que
+    // se mantiene completamente separada del resto: solo el admin puede
+    // leerla o escribirla.
+    match /registro/papelera {
+      allow read, write: if request.auth != null
+                          && request.auth.token.email == "quinielaborracha@gmail.com";
+    }
+
+    // ── 2FA ADMIN (v7.1) — secreto TOTP + código de respaldo (hasheado)
+    // + mapa de navegadores de confianza (también hasheados, con
+    // expiración). Mismo motivo y mismo patrón que papelera: contiene un
+    // secreto, así que solo el propio admin puede leerlo o escribirlo.
+    // Esta regla no existía desde la reescritura v6.8/v6.9 -- sin ella,
+    // ni siquiera el admin podía leer su propio secreto (Firestore niega
+    // por defecto cualquier ruta sin regla explícita).
+    match /registro/admin2fa {
+      allow read, write: if request.auth != null
+                          && request.auth.token.email == "quinielaborracha@gmail.com";
+    }
+  }
+}
