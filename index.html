@@ -158,7 +158,7 @@
       <img id="logo-img" src="" alt="QB" style="width:40px;height:40px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v1.5.3</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v1.5.4</span>
         <span id="admin-indicator" onclick="openLoginModal()" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -546,8 +546,27 @@
 <div class="toast" id="toast"></div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- v1.5.4 — Fase 1 de rendimiento: dos cambios acá.
+     (1) `defer`: igual que los 22 scripts del proyecto más abajo. Estos
+     dos no hacían falta para el primer render (html2canvas/jsPDF recién
+     se usan al tocar "Exportar imagen" o "Generar PDF", código ya
+     preparado para el caso de que no hayan cargado todavía -- ver el
+     chequeo `typeof html2canvas !== 'function' || !window.jspdf...` en
+     registro.js), así que no hay motivo para que bloqueen el parseo del
+     HTML antes que nada.
+     (2) integrity/crossorigin (Subresource Integrity): sin esto, si
+     cdnjs alguna vez sirviera un archivo alterado (CDN comprometido) en
+     esta URL, el navegador lo ejecutaría sin chistar. Con el hash, si el
+     contenido descargado no coincide byte-a-byte con este hash, el
+     navegador se niega a ejecutarlo. Hashes calculados (SHA-384) contra
+     el archivo real de estas versiones exactas, descargado del propio
+     repo espejo de cdnjs en GitHub (github.com/cdnjs/cdnjs) -- no
+     inventados ni copiados de otro sitio. Si alguna vez se sube la
+     versión de html2canvas o jsPDF acá, hay que recalcular el hash para
+     la versión nueva (es específico byte-a-byte de ESTE contenido; no
+     sirve para otra versión, ni una letra distinta). -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- ═══ LOGIN MODAL ═══ -->
 <div id="login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;align-items:center;justify-content:center;padding:1rem">
   <div style="background:var(--qb-surface);border-radius:16px;padding:1.5rem;width:100%;max-width:340px;border:1px solid var(--qb-border2);box-shadow:0 24px 64px rgba(0,0,0,.6)">
@@ -644,11 +663,11 @@
 
 <div id="pdfPoster"></div>
 
-<script src="participantes.js?v=1.5"></script>
-<script src="partidos-grupos.js?v=1.0"></script>
-<script src="utils.js?v=1.1"></script>
-<script src="scoring.js?v=1.5"></script>
-<script src="totp.js?v=1.0"></script>
+<script defer src="participantes.js?v=1.5"></script>
+<script defer src="partidos-grupos.js?v=1.0"></script>
+<script defer src="utils.js?v=1.1"></script>
+<script defer src="scoring.js?v=1.5"></script>
+<script defer src="totp.js?v=1.0"></script>
 <!-- v8.0 — app.js (3906 líneas) se dividió en 16 módulos (Sprint 1,
      arquitectura). Cada uno es un slice contiguo del app.js anterior,
      SIN cambios de lógica (ver split.js en el repo para el script que
@@ -659,29 +678,52 @@
      participantes.js/utils.js/scoring.js/totp.js). app-bootstrap.js
      DEBE ser el último: hace el primer render llamando funciones
      definidas en todos los módulos anteriores. -->
-<script src="app-core-data.js?v=1.0"></script>
-<script src="app-admin-auth.js?v=1.0"></script>
-<script src="app-live-sync.js?v=1.1"></script>
-<script src="app-tabs.js?v=1.3"></script>
-<script src="app-eliminatoria-data.js?v=1.0"></script>
-<script src="app-batallas.js?v=1.5"></script>
-<script src="app-bracket-render.js?v=1.2"></script>
-<script src="app-bracket-compute.js?v=1.0"></script>
-<script src="app-bracket-espn-sync.js?v=1.2"></script>
-<script src="app-bracket-view.js?v=1.3"></script>
-<script src="app-bracket-espn-live.js?v=1.1"></script>
-<script src="app-integridad.js?v=1.0"></script>
-<script src="app-predicciones.js?v=1.5"></script>
-<script src="app-estadisticas.js?v=1.1"></script>
-<script src="app-admin-tools.js?v=1.5"></script>
-<script src="app-bootstrap.js?v=1.2"></script>
-<script src="registro.js?v=1.5.2"></script>
+<script defer src="app-core-data.js?v=1.0"></script>
+<script defer src="app-admin-auth.js?v=1.1"></script>
+<script defer src="app-live-sync.js?v=1.1"></script>
+<script defer src="app-tabs.js?v=1.3"></script>
+<script defer src="app-eliminatoria-data.js?v=1.0"></script>
+<script defer src="app-batallas.js?v=1.5"></script>
+<script defer src="app-bracket-render.js?v=1.2"></script>
+<script defer src="app-bracket-compute.js?v=1.0"></script>
+<script defer src="app-bracket-espn-sync.js?v=1.2"></script>
+<script defer src="app-bracket-view.js?v=1.3"></script>
+<script defer src="app-bracket-espn-live.js?v=1.1"></script>
+<script defer src="app-integridad.js?v=1.0"></script>
+<script defer src="app-predicciones.js?v=1.5"></script>
+<script defer src="app-estadisticas.js?v=1.1"></script>
+<script defer src="app-admin-tools.js?v=1.5"></script>
+<script defer src="app-bootstrap.js?v=1.2"></script>
+<script defer src="registro.js?v=1.5.2"></script>
 
 <!-- v7.4 — Acá ya corrió el primer render (load()+renderRank() desde
      caché local, ahora en app-bootstrap.js -- ver v8.0 más arriba),
      así que es el momento correcto para ocultar el loader: hay
-     contenido real detrás, no una pantalla vacía. -->
-<script>if (window.__qbHideLoader) window.__qbHideLoader();</script>
+     contenido real detrás, no una pantalla vacía.
+
+     v1.5.4 — Fase 1 de rendimiento: los 22 <script> de arriba ahora
+     cargan con `defer` (ver más arriba). Eso cambia CUÁNDO corren: un
+     script con defer ya NO se ejecuta en su posición durante el parseo
+     del HTML -- se pospone y corre recién justo antes de
+     "DOMContentLoaded", en el mismo orden relativo entre sí (el orden
+     que ya importaba, ver comentario de v8.0, se conserva intacto).
+     Este <script> de acá SÍ es inline (sin src), así que `defer` no le
+     aplica a él -- un inline sigue ejecutando exactamente en su
+     posición del documento. Antes de este cambio, con los 22 scripts
+     bloqueantes, para cuando el parser llegaba hasta acá los 22 ya
+     habían corrido de verdad -- por eso alcanzaba con este chequeo
+     directo. Ahora, en ese mismo instante, los scripts deferred TODAVÍA
+     no corrieron (recién van a correr después), así que ocultar el
+     loader acá sería prematuro -- volvería a aparecer la pantalla en
+     blanco que este loader existe para evitar. Por eso ahora se espera
+     al evento "DOMContentLoaded", que el navegador garantiza que solo
+     se dispara DESPUÉS de que todos los scripts deferred (incluido
+     app-bootstrap.js, el que hace el primer render) ya terminaron. -->
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.__qbHideLoader) window.__qbHideLoader();
+  });
+</script>
 
 <!-- v7.3 — PWA: registro del Service Worker. Va al final y recién
      en "load" para no competir con la carga inicial de la app ni
