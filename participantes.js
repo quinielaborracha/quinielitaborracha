@@ -124,6 +124,19 @@ const RG_DEFAULT_CONFIG = {
     // aciertos CONSECUTIVOS (grupos + eliminatoria, en orden cronológico
     // de partido). Si la racha se corta, vuelve a empezar desde 0.
     racha:{activo:false, hitos:[{n:3,pts:3},{n:5,pts:6},{n:8,pts:10}]},
+    // NUEVO (v1.6) — Racha de DESACIERTOS: el espejo de la racha de
+    // aciertos de arriba, pero para cuando la mala suerte se acumula.
+    // Bono de consuelo (con humor) al llegar a cada hito de FALLOS
+    // CONSECUTIVOS -- mismo motor cronológico (buildChronologicalResults),
+    // mismo criterio de "acierto/fallo" que ya usa el resto del sistema,
+    // solo que acá se cuenta la racha contraria. Hitos y puntos son un
+    // set TOTALMENTE independiente del de aciertos (editable aparte en
+    // el panel de Reglas) -- el admin puede, por ejemplo, premiar fallar
+    // 3 seguidos con menos puntos que acertar 3 seguidos, para que siga
+    // siendo un premio de consuelo y no una razón para fallar a
+    // propósito. Arranca desactivada, como toda regla nueva, para no
+    // alterar el puntaje de nadie sin que el admin la prenda.
+    rachaDesaciertos:{activo:false, hitos:[{n:3,pts:1},{n:5,pts:2},{n:8,pts:4}]},
     // NUEVO — MVP de la jornada: quien más puntos acumule en un mismo día
     // de partidos (puede haber varios ganadores si quedan empatados).
     mvp:{activo:false, pts:3}
@@ -167,6 +180,10 @@ function mergeReglas(saved){
     racha: {
       activo: (saved.racha&&saved.racha.activo!==undefined) ? !!saved.racha.activo : d.racha.activo,
       hitos: (saved.racha&&Array.isArray(saved.racha.hitos)&&saved.racha.hitos.length) ? saved.racha.hitos : d.racha.hitos
+    },
+    rachaDesaciertos: {
+      activo: (saved.rachaDesaciertos&&saved.rachaDesaciertos.activo!==undefined) ? !!saved.rachaDesaciertos.activo : d.rachaDesaciertos.activo,
+      hitos: (saved.rachaDesaciertos&&Array.isArray(saved.rachaDesaciertos.hitos)&&saved.rachaDesaciertos.hitos.length) ? saved.rachaDesaciertos.hitos : d.rachaDesaciertos.hitos
     },
     mvp: {
       activo: (saved.mvp&&saved.mvp.activo!==undefined) ? !!saved.mvp.activo : d.mvp.activo,

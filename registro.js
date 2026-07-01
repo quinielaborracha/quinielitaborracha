@@ -416,6 +416,23 @@ function isLocked(p){
   return p.estadoQuiniela === 'enviada' || isGloballyClosed();
 }
 
+// v1.6 — Formatea una duración en ms como "2d 5h 32min 10s" (unidades
+// vacías se omiten de izquierda a derecha: si faltan menos de 1h ya no
+// muestra "0d 0h", pero SIEMPRE muestra segundos, para que el reloj se
+// vea "vivo" tickeando incluso en el último minuto). Nunca baja de "0s".
+function formatCountdown(ms){
+  let s = Math.max(0, Math.floor(ms/1000));
+  const d = Math.floor(s/86400); s -= d*86400;
+  const h = Math.floor(s/3600); s -= h*3600;
+  const m = Math.floor(s/60); s -= m*60;
+  const parts = [];
+  if(d>0) parts.push(`${d}d`);
+  if(d>0||h>0) parts.push(`${h}h`);
+  if(d>0||h>0||m>0) parts.push(`${m}min`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
 /* ════════════════════════════════════════
    BRACKET DINÁMICO — alpha 0.2
    El participante NUNCA escribe equipos a mano en la fase eliminatoria.
@@ -2973,7 +2990,24 @@ function renderQuinielaForm(pid, originTab){
         : `<div class="locked-banner">✅ Quiniela enviada el ${fmtDate(p.fechaEnvio)} — solo lectura.</div>`)
     : '';
 
+  // v1.6 — Saludo + cuenta regresiva (arriba a la izquierda): solo tiene
+  // sentido mostrarlo mientras la quiniela sigue editable y hay un cierre
+  // configurado -- una vez enviada o cerrado el plazo, ya está el
+  // lockedTopBanner de arriba diciendo justamente eso, así que no se
+  // pisan. El texto en sí (id="wiz_countdown_text") lo actualiza
+  // tickWizCountdown() cada segundo SIN re-renderizar todo el wizard
+  // (evita perder el foco de quien esté tecleando un marcador).
+  const cierreTs = getCierreTimestamp();
+  const showCountdown = !readOnly && cierreTs!==null && !closedByDeadline;
+  const firstName = (p.name||'').trim().split(/\s+/)[0] || p.name || '';
+  const greetingHtml = showCountdown
+    ? `<div class="wiz-greeting">👋 Hola, <b>${esc(firstName)}</b> — tienes <b id="wiz_countdown_text">${esc(formatCountdown(cierreTs-Date.now()))}</b> para completar tu registro</div>`
+    : `<span></span>`;
+  const exitBtnHtml = `<button class="rg-btn rg-btn-ghost wiz-exit-btn" id="wiz_exit_btn" title="Salir">✕ Salir</button>`;
+  const topBarHtml = `<div class="wiz-topbar">${greetingHtml}${exitBtnHtml}</div>`;
+
   c.innerHTML = `
+    ${topBarHtml}
     <div class="card">
       ${buildStepperHtml(WIZ_STEP)}
       <div id="wiz_save_indicator" class="save-indicator">&nbsp;</div>
@@ -2986,6 +3020,17 @@ function renderQuinielaForm(pid, originTab){
     ${navHtml}
     ${(!readOnly && step.key==='personal') ? `<div class="rg-btn-row"><button class="rg-btn rg-btn-danger" id="q_delete">Eliminar mi registro</button></div>` : ''}
   `;
+
+  // v1.6 — Botón "Salir": mismo patrón exacto que "dash_logout_btn" del
+  // Dashboard post-bloqueo (no duplica un criterio nuevo de "hay cambios
+  // sin guardar" -- reusa WIZ_DIRTY + showExitModal ya existentes). No
+  // borra nada en Firestore ni el ownerUid de este dispositivo, solo
+  // cierra el wizard y vuelve a la pantalla de inicio de "Mi Quiniela".
+  document.getElementById('wiz_exit_btn')?.addEventListener('click', ()=>{
+    const doSalir = ()=>{ clearDraft(); render(); };
+    if(DRAFT_PID && WIZ_DIRTY){ showExitModal(doSalir); return; }
+    doSalir();
+  });
 
   if(!readOnly){
     if(step.key==='personal'){
@@ -3845,6 +3890,22 @@ setInterval(()=>{
     if(DRAFT_PID) render();
   }
 }, 30000);
+
+// v1.6 — Tick de 1s para el contador regresivo "tienes hasta..." arriba
+// del wizard. A propósito NO llama a render(): solo toca el textContent
+// del <b id="wiz_countdown_text"> si está presente en el DOM en este
+// instante (nada que hacer si el wizard no está abierto, o si está en un
+// paso/vista donde ese elemento no existe). Así el reloj tickea sin
+// robarle el foco a quien esté escribiendo un marcador al mismo tiempo —
+// el cierre automático en sí lo sigue decidiendo el interval de 30s de
+// arriba, este solo actualiza el texto que la persona está viendo.
+setInterval(()=>{
+  const el = document.getElementById('wiz_countdown_text');
+  if(!el) return;
+  const t = getCierreTimestamp();
+  if(t===null) return;
+  el.textContent = formatCountdown(t - Date.now());
+}, 1000);
 
 render();
 

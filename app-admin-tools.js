@@ -336,6 +336,18 @@ function buildReglasHtml(R){
       <span>+${reglaNumInput(`racha.hitos.${i}.pts`,h.pts,44)}pts</span>
     </div>`).join('');
 
+  // v1.6 — hitos de la racha de DESACIERTOS, mismo patrón visual que los
+  // de aciertos de arriba, pero con su propio path ("rachaDesaciertos.
+  // hitos.N.*") -- updateReglaValor()/toggleReglaSwitch() ya navegan
+  // cualquier path por notación de puntos, así que no hace falta tocar
+  // esas dos funciones para que esto guarde.
+  const hitosRowsDesaciertos=(R.rachaDesaciertos.hitos||[]).map((h,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--qb-border);color:var(--qb-text)">
+      <span>${reglaNumInput(`rachaDesaciertos.hitos.${i}.n`,h.n,44)} fallos seguidos</span>
+      <span class="muted">→</span>
+      <span>+${reglaNumInput(`rachaDesaciertos.hitos.${i}.pts`,h.pts,44)}pts</span>
+    </div>`).join('');
+
   return `
     <div class="card">
       <div class="card-title">🎯 Puntos base</div>
@@ -374,6 +386,12 @@ function buildReglasHtml(R){
       <div class="card-title">⭐⭐⭐⭐⭐ Racha de aciertos</div>
       ${reglaSwitchRow('racha.activo',!!R.racha.activo,'Activar racha','Bono extra al llegar a cada hito de aciertos CONSECUTIVOS (grupos + eliminatoria, en orden cronológico). Si la racha se corta, vuelve a empezar desde 0.')}
       ${R.racha.activo?`<div style="margin-top:.5rem">${hitosRows}</div>`:""}
+    </div>
+
+    <div class="card">
+      <div class="card-title">😅 Racha de desaciertos</div>
+      ${reglaSwitchRow('rachaDesaciertos.activo',!!R.rachaDesaciertos.activo,'Activar racha de desaciertos','Bono de consuelo (con humor) al llegar a cada hito de FALLOS CONSECUTIVOS -- para que fallar duela menos y a nadie se le quiten las ganas de seguir jugando. Hitos independientes de la racha de aciertos. Si acierta uno, la racha de fallos se corta y vuelve a empezar desde 0.')}
+      ${R.rachaDesaciertos.activo?`<div style="margin-top:.5rem">${hitosRowsDesaciertos}</div>`:""}
     </div>
 
     <div class="card">

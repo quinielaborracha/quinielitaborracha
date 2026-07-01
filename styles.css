@@ -844,6 +844,10 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .rg-scope .ro-score{font-family:var(--ff-display);font-weight:800;font-size:14px;background:var(--qb-surface2);border-radius:6px;padding:6px 10px;min-width:54px;text-align:center}
 .rg-scope .ro-text{font-size:13.5px;color:var(--qb-text)}
 .rg-scope .locked-banner{background:var(--qb-green-dim);border:1px solid var(--qb-green);color:var(--qb-green);border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:1rem}
+.rg-scope .wiz-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.6rem}
+.rg-scope .wiz-greeting{font-size:12.5px;color:var(--qb-muted);flex:1;min-width:0}
+.rg-scope .wiz-greeting b{color:var(--qb-text)}
+.rg-scope .wiz-exit-btn{flex-shrink:0;font-size:11px;padding:7px 12px}
 .rg-scope .confirm-check{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;cursor:pointer;margin:.5rem 0}
 .rg-scope .confirm-check input{width:18px;height:18px;flex-shrink:0;margin-top:1px}
 .rg-scope .switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--qb-border)}

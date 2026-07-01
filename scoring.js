@@ -407,6 +407,7 @@ function calcBonos(name){
     if(lp&&lp.name===name)pts+=lp.pts;
   });
   pts+=calcRachaBonos(name); // v1.2 (fase 2) — nuevo, desactivado por defecto
+  pts+=calcRachaDesaciertosBonos(name); // v1.6 — nuevo, desactivado por defecto
   pts+=calcMvpBonos(name);   // v1.2 (fase 2) — nuevo, desactivado por defecto
   return pts;
 }
@@ -472,6 +473,31 @@ function calcRachaBonos(name){
   let streak=0,pts=0;
   buildChronologicalResults(name).forEach(m=>{
     if(m.hit){
+      streak++;
+      hitos.forEach(h=>{if(streak===Number(h.n))pts+=Number(h.pts)||0;});
+    }else{
+      streak=0;
+    }
+  });
+  return pts;
+}
+
+// v1.6 — Bono de racha de DESACIERTOS: el espejo exacto de calcRachaBonos
+// de arriba, pero contando fallos CONSECUTIVOS en vez de aciertos (mismo
+// buildChronologicalResults(), mismo criterio de "acierto/fallo" que ya
+// usa el resto del sistema -- no se inventa un segundo criterio). Cada
+// vez que la racha de fallos llega EXACTO a uno de los hitos configurados
+// en reglas.rachaDesaciertos, se suma el bono de consuelo de ese hito.
+// Un acierto (aunque sea uno solo) corta la racha de fallos y la vuelve a
+// 0, igual que un fallo corta la racha de aciertos en la función hermana.
+function calcRachaDesaciertosBonos(name){
+  const cfg=DB.configGlobal?.reglas?.rachaDesaciertos;
+  if(!cfg||!cfg.activo)return 0;
+  const hitos=(cfg.hitos||[]).filter(h=>h&&h.n>0).sort((a,b)=>a.n-b.n);
+  if(!hitos.length)return 0;
+  let streak=0,pts=0;
+  buildChronologicalResults(name).forEach(m=>{
+    if(!m.hit){
       streak++;
       hitos.forEach(h=>{if(streak===Number(h.n))pts+=Number(h.pts)||0;});
     }else{
