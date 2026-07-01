@@ -563,6 +563,173 @@ function calcMvpBonos(name){
   return _mvpCache[name]||0;
 }
 
+// ══════════════════════════════════════════════════════════════
+// EVOLUCIÓN — v1.5. Replay histórico de puntaje/ranking.
+// ══════════════════════════════════════════════════════════════
+// Estas 5 funciones alimentan el panel "Mi Evolución" (registro.js,
+// pestaña del Dashboard del participante). Reutilizan el mismo criterio
+// de "qué partido cuenta y cuándo" que ya usan buildChronologicalResults()
+// / getPlayedDaysList() / calcPtsForDay() (racha + MVP, arriba en este
+// archivo) — a propósito, para no tener dos definiciones distintas de
+// "partido jugado" que se puedan desincronizar entre sí.
+//
+// QUÉ SÍ entra al replay histórico: puntos de Básicos (grupos) +
+// Eliminatoria (ganador/empate + marcador exacto + llave/cruce, con el
+// multiplicador de ronda si aplica) — el mismo cálculo que ya usa
+// calcPtsForDay() para el bono de MVP. Se recalcula partido a partido,
+// en orden cronológico real (S.matchTimes / S.elimTimes), sin importar
+// si el partido es de Grupos o de Eliminatoria — así el panel sigue
+// funcionando sin cortes al pasar de una fase a la otra (mismo gateo de
+// isFaseActiva()/isFasePuntosActiva() que ya usa buildChronologicalResults(),
+// partido por partido, no una sola vez al principio).
+//
+// QUÉ NO entra (a propósito, mismo criterio que calcPtsForDay/MVP):
+// predicciones especiales (calcAdv — campeón, goleador, etc., que solo
+// se resuelven al cerrar el torneo) ni bonos de racha/MVP/último lugar
+// (calcBonos — no tienen una fecha de partido a la que atribuirse). Por
+// esto el ranking "histórico" del gráfico puede diferir un poco del
+// ranking oficial de HOY (que sí incluye bonos) — es una diferencia
+// menor y esperada, no un bug.
+//
+// Participantes ocultos (S.hiddenPL) se excluyen del replay, igual que
+// getRank()/getDashStatsInfo() los excluye del ranking oficial.
+
+function _evolActivePL(){
+  const hiddenSet = S.hiddenPL instanceof Set ? S.hiddenPL
+    : new Set(Object.keys(S.hiddenPL||{}).filter(k=>S.hiddenPL[k]));
+  return PL.filter(name=>!hiddenSet.has(name));
+}
+
+// Todos los partidos YA jugados y terminados (grupos + eliminatoria,
+// según fases activas y puntos-activos por fase), en orden cronológico
+// real. Cada evento es UN partido puntual (no un participante) — el
+// mismo universo de partidos que ya usa buildChronologicalResults() por
+// participante, pero acá es uno solo para todos.
+function getChronoMatchEvents(){
+  const list=[];
+  if(isFaseActiva("grupos")&&getReglasGrupos().activo!==false){
+    MIDS.forEach(mid=>{
+      const t=S.matchTimes&&S.matchTimes[mid];if(!t)return;
+      const s=sc(mid);if(!s||s.live)return;
+      list.push({mid,isElim:false,ts:new Date(t).getTime()});
+    });
+  }
+  const elimActivo=getReglasElim().activo!==false;
+  for(let pid=73;pid<=104;pid++){
+    const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
+    if(phase&&(!elimActivo||!isFasePuntosActiva(phase.key)))continue;
+    const t=S.elimTimes&&S.elimTimes[pid];if(!t)continue;
+    const real=S.elimScores[pid]||S.elimScores[String(pid)];if(!real||real.live)continue;
+    list.push({mid:pid,isElim:true,ts:new Date(t).getTime()});
+  }
+  list.sort((a,b)=>a.ts-b.ts);
+  return list;
+}
+
+// Puntos que UN participante ganó por UN evento puntual (mismo criterio
+// que calcPtsForDay(), pero para un solo partido en vez de un día
+// entero) — se usa para armar el replay partido a partido.
+function _evolPtsForEvent(name,e){
+  if(!e.isElim){
+    const s=sc(e.mid);if(!s)return 0;
+    const p=MD[e.mid]?.preds?.[name];if(!p)return 0;
+    const Rg=getReglasGrupos();
+    const rR=s.h>s.a?"H":s.h<s.a?"A":"D";
+    const pR=p.h>p.a?"H":p.h<p.a?"A":"D";
+    if(rR!==pR)return 0;
+    let pts=rR==="D"?Rg.empate:Rg.ganador;
+    if(p.h===s.h&&p.a===s.a)pts+=Rg.exacto;
+    return pts;
+  }
+  return calcElimMatchPts(name,e.mid); // ya respeta R.elim.activo/isFasePuntosActiva internamente
+}
+
+// Convierte la lista de eventos en un snapshot DE TODOS los
+// participantes por cada partido jugado: puntaje acumulado (cum) y
+// posición en la tabla (ranks) justo después de ese partido. Granularidad
+// fina (partido a partido, no por día) — getTendenciaStats() la necesita
+// así para poder comparar "los últimos N partidos" sin importar cuántos
+// días abarquen.
+function buildHistoricalSnapshots(events){
+  const activePL=_evolActivePL();
+  const cum={};activePL.forEach(name=>cum[name]=0);
+  return events.map(e=>{
+    activePL.forEach(name=>{cum[name]+=_evolPtsForEvent(name,e);});
+    const ranked=activePL.slice().sort((a,b)=>cum[b]-cum[a]||a.localeCompare(b));
+    const ranks={};ranked.forEach((name,i)=>ranks[name]=i+1);
+    return{ts:e.ts,dayKey:dayKeyOf(e.ts),cum:{...cum},ranks};
+  });
+}
+
+// Agrupa los snapshots partido-a-partido en JORNADAS (un día calendario
+// con al menos un partido jugado — mismo concepto que getPlayedDaysList()).
+// Para cada jornada guarda la posición de cierre del día (ranks del
+// último partido de ese día) y el puntaje acumulado al empezar y al
+// terminar el día (para poder calcular "cuánto sumó ESE día" restando).
+function groupSnapshotsByJornada(snapshots){
+  const order=[];const byDay={};
+  snapshots.forEach(s=>{
+    if(!byDay[s.dayKey]){byDay[s.dayKey]=[];order.push(s.dayKey);}
+    byDay[s.dayKey].push(s);
+  });
+  const days=[];let prevCum=null;
+  order.forEach(dayKey=>{
+    const list=byDay[dayKey];
+    const last=list[list.length-1];
+    days.push({ts:last.ts,ranks:last.ranks,startCum:prevCum||{},endCum:last.cum});
+    prevCum=last.cum;
+  });
+  return days;
+}
+
+// Tendencia reciente: compara el % de aciertos de los últimos winSize
+// partidos contra los winSize anteriores a esos. Necesita una muestra
+// mínima para no mostrar "tendencia" con 1 o 2 partidos jugados (la UI
+// usa t.available=false para mostrar un mensaje en vez de un dato poco
+// confiable).
+function getTendenciaStats(name,events,snapshots,rankNow){
+  const results=buildChronologicalResults(name); // {ts,hit}, ya gateado por fase
+  const totalPlayed=results.length;
+  const winSize=5;
+  if(totalPlayed<winSize+3){
+    return{available:false,totalPlayed,rankNow};
+  }
+  const pct=arr=>arr.length?Math.round(arr.filter(r=>r.hit).length/arr.length*100):0;
+  const recent=results.slice(-winSize);
+  const before=results.slice(-winSize*2,-winSize);
+  const precAhora=pct(recent);
+  const precAntes=before.length?pct(before):precAhora;
+  const idxAntes=Math.max(0,snapshots.length-winSize-1);
+  const rankAntes=(snapshots.length&&snapshots[idxAntes])?(snapshots[idxAntes].ranks[name]||rankNow):rankNow;
+  const diff=precAhora-precAntes;
+  const trend=diff>=8?'mejorando':diff<=-8?'empeorando':'estable';
+  return{available:true,totalPlayed,winSize,precAntes,precAhora,rankAntes,rankNow,trend};
+}
+
+// Logros desbloqueados: al menos un marcador exacto (grupos), racha de
+// 10 aciertos consecutivos alguna vez (mismo criterio de "acierto" que
+// buildChronologicalResults()/calcRachaBonos()), y mejor posición
+// histórica alcanzada (Top 10/5/3/1).
+function getLogrosStats(name,events,days,rankNow){
+  let exactoAlguna=false;
+  events.forEach(e=>{
+    if(e.isElim)return; // "marcador exacto" como logro se limita a Grupos, mismo criterio visible en Predicciones
+    const s=sc(e.mid);const p=MD[e.mid]?.preds?.[name];
+    if(s&&p&&p.h===s.h&&p.a===s.a)exactoAlguna=true;
+  });
+  let curStreak=0,maxStreak=0;
+  buildChronologicalResults(name).forEach(r=>{
+    if(r.hit){curStreak++;if(curStreak>maxStreak)maxStreak=curStreak;}else curStreak=0;
+  });
+  const racha10=maxStreak>=10;
+  const TIERS=[10,5,3,1];
+  let bestRank=rankNow;
+  days.forEach(d=>{const r=d.ranks[name];if(r&&r<bestRank)bestRank=r;});
+  const unlockedTiers=TIERS.filter(t=>bestRank<=t);
+  const nextTier=TIERS.find(t=>bestRank>t);
+  return{exactoAlguna,racha10,unlockedTiers,nextTier};
+}
+
 function getTodaysMatchIds(){
   const now=new Date();
   const y=now.getFullYear(),m=now.getMonth(),d=now.getDate();

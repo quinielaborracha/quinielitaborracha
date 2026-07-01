@@ -1897,11 +1897,42 @@ function renderParticipantDashboard(pid){
     `<button class="inner-tab ${DASH_TAB===t.key?'on':''}" data-dtab="${t.key}">${t.icon} ${esc(t.label)}</button>`
   ).join('');
 
-  const activeLabel = (DASH_TABS.find(t=>t.key===DASH_TAB)||DASH_TABS[0]).label;
-  const bodyHtml = DASH_TAB==='perfil' ? buildDashPerfilHtml(p)
-    : DASH_TAB==='predicciones' ? buildDashPrediccionesHtml(p)
-    : DASH_TAB==='evolucion' ? buildDashEvolucionHtml(p) // v6.6 — Fase B
-    : buildDashComingSoonHtml(activeLabel);
+  // v1.5 — FIX: antes, si buildDashPerfilHtml/buildDashPrediccionesHtml/
+  // buildDashEvolucionHtml lanzaban una excepción, el error solo quedaba
+  // atrapado cuando se llegaba acá desde render()/renderInicio() (que sí
+  // tiene try/catch, v6.5). Pero los clics en las sub-pestañas de ACÁ
+  // ADENTRO (#dash-tabs/#dash-pred-subtabs, más abajo en esta misma
+  // función) llaman a renderParticipantDashboard() directo, sin ninguna
+  // red de seguridad — un error ahí rompía el render a mitad de camino
+  // (pantalla corrupta) y además DASH_TAB quedaba apuntando para siempre
+  // a la sub-pestaña rota (nunca se resetea al cambiar de pestaña
+  // principal), así que CUALQUIER intento posterior de volver a "Mi
+  // Quiniela" — inclusive por el camino que sí tiene try/catch — volvía
+  // a pisar el mismo error una y otra vez. Único escape: refrescar toda
+  // la página (lo único que reinicia DASH_TAB a 'perfil'). Ahora este
+  // bloque atrapa cualquier error acá mismo, en el origen, Y resetea
+  // DASH_TAB/DASH_PRED_SUBTAB a un estado seguro para que "Reintentar" (o
+  // simplemente volver a entrar a Mi Quiniela) realmente recupere la
+  // sección en vez de repetir el mismo choque en bucle.
+  let bodyHtml;
+  try{
+    const activeLabel = (DASH_TABS.find(t=>t.key===DASH_TAB)||DASH_TABS[0]).label;
+    bodyHtml = DASH_TAB==='perfil' ? buildDashPerfilHtml(p)
+      : DASH_TAB==='predicciones' ? buildDashPrediccionesHtml(p)
+      : DASH_TAB==='evolucion' ? buildDashEvolucionHtml(p) // v6.6 — Fase B
+      : buildDashComingSoonHtml(activeLabel);
+  }catch(err){
+    console.error("Error al renderizar el Dashboard (pestaña "+DASH_TAB+"):", err);
+    DASH_TAB = 'perfil';
+    DASH_PRED_SUBTAB = 'grupos';
+    bodyHtml = `
+      <div class="card center" style="padding:1.75rem 1rem">
+        <div style="font-size:32px;margin-bottom:.5rem">⚠️</div>
+        <div class="card-title" style="justify-content:center">Hubo un problema al cargar esta sección</div>
+        <div class="muted" style="margin-bottom:1.1rem;font-size:13px">Volvimos a Perfil. Si el problema sigue, avísale al admin con este detalle: <code style="word-break:break-all">${esc(String(err&&err.message||err))}</code></div>
+        <button class="rg-btn rg-btn-primary rg-btn-block" id="dash_err_retry">🔄 Reintentar</button>
+      </div>`;
+  }
 
   c.innerHTML = `
     ${previewBanner}
@@ -1923,6 +1954,7 @@ function renderParticipantDashboard(pid){
     renderParticipantDashboard(pid);
   });
   document.getElementById('dash_pdf_btn')?.addEventListener('click', ()=> generarPDF(p));
+  document.getElementById('dash_err_retry')?.addEventListener('click', ()=> renderParticipantDashboard(pid));
   // v6.7 — "Salir" NO borra el ownerUid en Firestore (este dispositivo
   // sigue siendo el dueño reconocido), solo limpia la sesión EN MEMORIA
   // para esta carga de página — la próxima vez que alguien abra la app en
