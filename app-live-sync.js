@@ -156,7 +156,20 @@ function save(){
 // ══════════════════════════════════════════════════════════════
 // SINCRONIZACIÓN EN VIVO — Firestore (v5.5.5)
 // ══════════════════════════════════════════════════════════════
-let _suppressNextFirestoreEcho=false; // evita re-aplicar nuestro propio guardado al recibirlo de vuelta
+// v1.5.6 — Fase 3 (proceso/CI): _suppressNextFirestoreEcho reemplazado por
+// _lastPushedStateJSON. El diseño viejo asumía "el PRÓXIMO snapshot que
+// llegue es nuestro propio eco" -- una bandera basada en ORDEN, frágil en
+// un escenario real: el SDK de Firestore dispara onSnapshot DOS veces por
+// cada escritura propia (una vez al toque, desde el caché local con
+// hasPendingWrites:true; otra cuando el servidor confirma), y si llegaba
+// una escritura genuina de otro admin justo en el medio, la bandera podía
+// terminar suprimiendo el snapshot equivocado. El nuevo mecanismo compara
+// CONTENIDO: guardamos el JSON exacto que acabamos de escribir, y cuando
+// llega un snapshot lo comparamos contra eso -- si coincide byte a byte,
+// es nuestro propio eco (sea cual sea el orden en que haya llegado, y
+// sea cuál sea el disparo -- local o confirmado -- del propio SDK); si
+// no coincide, es un cambio remoto genuino y se aplica normalmente.
+let _lastPushedStateJSON=null;
 let _firestoreSyncWired=false;
 let _firestoreConnected=false;
 
@@ -164,8 +177,9 @@ function pushStateToFirestore(payload){
   if(!isAdmin())return; // solo el admin escribe a Firestore
   const fb=window.__fb;
   if(!fb)return;
-  _suppressNextFirestoreEcho=true;
-  fb.setDoc(fb.STATE_DOC,{json:JSON.stringify(payload),updatedAt:fb.serverTimestamp()})
+  const json=JSON.stringify(payload);
+  _lastPushedStateJSON=json;
+  fb.setDoc(fb.STATE_DOC,{json,updatedAt:fb.serverTimestamp()})
     .catch(err=>{console.error("Error al sincronizar con Firebase:",err);});
 }
 
@@ -193,7 +207,7 @@ function seedTestStateFromProduction(isAuto){
       return;
     }
     const data=snap.data();
-    _suppressNextFirestoreEcho=true; // este doc lo originamos nosotros mismos
+    _lastPushedStateJSON=data.json; // este doc lo originamos nosotros mismos
     fb.setDoc(fb.STATE_DOC_TEST,{json:data.json,updatedAt:fb.serverTimestamp()})
       .then(()=>{
         toast(isAuto
@@ -274,13 +288,12 @@ function wireFirestoreSync(){
   if(!fb)return;
   fb.onSnapshot(fb.STATE_DOC,(snap)=>{
     setLiveBadge(true);
-    if(_suppressNextFirestoreEcho){
-      _suppressNextFirestoreEcho=false;
-      return; // este cambio lo originamos nosotros mismos, ya está aplicado localmente
-    }
     if(!snap.exists())return;
     const data=snap.data();
     if(!data||!data.json)return;
+    if(data.json===_lastPushedStateJSON){
+      return; // este cambio lo originamos nosotros mismos, ya está aplicado localmente
+    }
     try{
       const p=JSON.parse(data.json);
       applyRemoteState(p);

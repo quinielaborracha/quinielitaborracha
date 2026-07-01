@@ -45,6 +45,14 @@ const dom = new JSDOM(`<!DOCTYPE html><html><body>
   <div id="integ-banner"></div>
   <img id="logo-img">
   <span id="admin-indicator"></span>
+  <span id="hstat"></span><span id="hdr-master-badge"></span>
+  <table><tbody id="rb"></tbody></table>
+  <div id="em_continue"></div><div id="em_save_exit"></div><div id="em_discard"></div>
+  <div id="block_ok"></div><div id="block_goto"></div>
+  <div id="exitModal" style="display:none"></div><div id="blockModal" style="display:none"></div>
+  <div id="blockModalText"></div><div id="pdfPoster"></div>
+  <div id="rg-tabs"></div><div id="rg-content"></div>
+  <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
 </body></html>`, { runScripts: "dangerously", url: "https://example.org/" });
 
 const { window } = dom;

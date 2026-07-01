@@ -1,0 +1,17 @@
+{
+  "name": "quinielita-borracha",
+  "version": "1.5.6",
+  "private": true,
+  "description": "Quiniela del Mundial 2026 (EE.UU./Canadá/México) para un grupo de ~27 amigos. Frontend estático (vanilla JS, sin bundler) + Firebase/Firestore. Este package.json existe solo para el tooling de desarrollo (tests con jsdom) -- la app en sí no tiene build step, GitHub Pages sirve los archivos tal cual.",
+  "scripts": {
+    "test": "node run-tests.js",
+    "check": "node check-syntax.js",
+    "verify": "npm run check && npm test"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

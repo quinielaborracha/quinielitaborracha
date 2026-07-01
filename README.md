@@ -72,12 +72,42 @@ Soporte: `manifest.json`, `sw.js` (PWA), `favicon.png`, `apple-touch-icon.png`,
    armó este pack).
 6. Habilitar GitHub Pages en este repo (rama `main`, carpeta raíz).
 
+## Tests
+
+**v1.5.6** — el proyecto tiene `package.json` (jsdom como devDependency) y
+un workflow de GitHub Actions que corre en cada push/PR contra `main`. Antes
+de esto había que instalar `jsdom` a mano en un scratch directory para poder
+correr los `test_*.js` — ya no.
+
+```bash
+npm install       # una sola vez (o cuando cambie package-lock.json)
+npm run check     # node --check en todos los .js del proyecto
+npm test          # los 10 harnesses (9 test_*.js + sim_firestore_rules.js), con resumen final
+npm run verify    # check + test, uno atrás del otro (lo mismo que corre CI)
+```
+
+Los tests son harnesses funcionales con `jsdom`: cargan los archivos de
+producción reales como `<script>`, en el mismo orden y scope global que
+`index.html`, contra un mock de Firebase en memoria — no son mocks
+superficiales de "existe la función", ejercitan el flujo real (batches
+atómicos, reglas de `registro_privado`, 2FA, etc.). `sim_firestore_rules.js`
+es aparte: reimplementa a mano la lógica booleana de `firestore.rules` para
+verificar que el razonamiento de cada regla es consistente (no reemplaza
+probarlo con el emulador real o tráfico real antes de publicar reglas
+nuevas).
+
+CI (`.github/workflows/tests.yml`) corre `npm run check` y `npm test` en
+cada push/PR a `main` — gratis en repos públicos. Esto es lo que habría
+atrapado automáticamente, en su momento, el incidente de código
+desactualizado que rompió una entrega anterior.
+
 ## Convenciones del proyecto (igual que el original)
 
 - Cache-busting: cada archivo modificado necesita su contenido cambiado
   **y** el `?v=` en `index.html` bumpeado, o el Service Worker (v1.0+, ver
   `sw.js`) seguirá sirviendo la versión vieja desde caché.
 - Todo el código, comentarios, toasts y textos de UI están en español.
-- `node --check` + el harness jsdom (`test_full_page_load.js`) son el gate
-  de verificación antes de cualquier entrega — corren los 22 archivos de
-  producción en el mismo orden y scope global que el navegador real.
+- `npm run verify` (`node --check` en todo + los 10 harnesses jsdom) es el
+  gate de verificación antes de cualquier entrega — corren los 22 archivos
+  de producción en el mismo orden y scope global que el navegador real. CI
+  corre lo mismo automáticamente en cada push/PR a `main`.

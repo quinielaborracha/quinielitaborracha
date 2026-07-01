@@ -170,7 +170,15 @@ let allOk = true;
 function check(label, cond) { console.log((cond ? "✅ " : "❌ ") + label); if (!cond) allOk = false; }
 
 function fillForm(vals) {
-  window.document.getElementById("r_name").value = vals.name;
+  // v1.5.6 — Fase 3 (proceso/CI): el campo único r_name se dividió en
+  // r_nombre + r_apellido (ver registro.js, formulario "crear"). Se
+  // reusa splitName() -- la misma función que usa el resto de la app
+  // (utils.js, ya cargado acá arriba) -- para no reinventar el criterio
+  // de "primera palabra = nombre, resto = apellido" con una regla propia
+  // del test que después se desincroniza de la real.
+  const { nombre, apellido } = window.splitName(vals.name);
+  window.document.getElementById("r_nombre").value = nombre;
+  window.document.getElementById("r_apellido").value = apellido;
   window.document.getElementById("r_city").value = vals.city;
   window.document.getElementById("r_country").value = vals.country;
   window.document.getElementById("r_country_iso").value = vals.countryIso;

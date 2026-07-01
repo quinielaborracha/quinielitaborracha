@@ -1,0 +1,35 @@
+name: Tests
+
+# v1.5.6 — Fase 3 (proceso/CI). Corre en cada push a main (lo que pedía
+# el roadmap) y además en cada pull request contra main -- esto último es
+# un agregado: así un cambio se valida ANTES de mezclarse a main, no
+# después. Es la diferencia entre enterarte de un error roto ya en
+# producción (push a main) versus enterarte antes de que llegue ahí
+# (pull_request). Gratis en repos públicos, igual que push.
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias (jsdom)
+        run: npm install
+
+      - name: Verificar sintaxis (node --check en todos los .js)
+        run: npm run check
+
+      - name: Correr la suite de tests (9 harnesses con jsdom)
+        run: npm test

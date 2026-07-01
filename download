@@ -1,0 +1,21 @@
+# v1.5.6 — Fase 3 (proceso/CI). El proyecto no tenía .gitignore porque
+# hasta ahora no tenía ninguna dependencia de Node -- esta es la primera
+# vez que aparece una carpeta node_modules en el repo (jsdom, para los
+# tests). Si ya subiste node_modules a git ANTES de este archivo, hace
+# falta sacarlo del historial a mano una vez (git rm -r --cached
+# node_modules) -- .gitignore por sí solo no retroactivamente deja de
+# trackear algo que ya estaba commiteado.
+
+node_modules/
+
+# Backups automáticos que algunas operaciones del panel Admin descargan
+# al navegador del que hace la acción (Integridad, importar info de
+# participantes, etc.) -- si alguna vez terminan sueltos en la carpeta
+# del proyecto por trabajar localmente, no deberían subirse: pueden traer
+# datos reales de participantes (correo/clave).
+backup_*.json
+
+# Archivos de sistema operativo / editor comunes.
+.DS_Store
+Thumbs.db
+*.swp
