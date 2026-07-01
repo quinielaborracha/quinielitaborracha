@@ -745,6 +745,100 @@ function rgResetAll(){
   return Promise.all(promesas);
 }
 
+// v1.5.1 — Restaura TODO el sistema de registro (participantes+
+// predicciones+papelera+meta) desde un backup integral, en modo REEMPLAZO
+// TOTAL: cualquier participante que hoy exista en Firestore pero NO esté
+// en el backup se BORRA (documento público + privado), igual de a
+// propósito que rgResetAll() más arriba y por el mismo motivo -- un
+// "reemplazo total" que solo agregara/actualizara (como hace
+// rgPushToFirestore, pensado para el autoguardado normal, que nunca borra
+// nada) dejaría a cualquier participante nuevo desde el backup viejo
+// como un huérfano invisible para el archivo pero bien visible en el
+// Ranking. No toca registro/admin2fa (2FA del admin) bajo ningún
+// escenario -- ver la nota de seguridad en app-admin-tools.js.
+//
+// No actualiza DB.participants/predictions a mano: una vez que el batch
+// de abajo se confirma en el servidor, el propio listener en vivo
+// (rgWireFirestoreSync -> _rgApplyCombinedSnapshot) reconstruye
+// DB.participants/predictions desde el snapshot real de Firestore -- ya
+// idéntico al backup recién escrito -- así que no hace falta (ni
+// conviene) duplicar esa reconstrucción acá.
+//
+// registroBackup: { participants, predictions, papelera, nextSeq, configGlobal }
+// (la forma exacta que arma buildFullBackupPayload() en app-admin-tools.js).
+function rgRestoreFullBackup(registroBackup){
+  if(typeof isAdmin!=="function"||!isAdmin()){
+    return Promise.reject(new Error("Solo el admin puede restaurar un backup."));
+  }
+  const fb = window.__fb;
+  if(!fb||!fb.PARTICIPANTS_COL||!fb.PRIVADO_COL||!fb.REGISTRO_META_DOC){
+    return Promise.reject(new Error("Firebase todavía no está listo -- recargá la página e intentá de nuevo."));
+  }
+  registroBackup = registroBackup || {};
+  const nuevos = (registroBackup.participants||[]).map(p=>({...p}));
+  const nuevasPredicciones = registroBackup.predictions || {};
+  const nuevaPapelera = registroBackup.papelera || [];
+  const nuevoNextSeq = registroBackup.nextSeq || 1;
+  const nuevoConfigGlobal = mergeConfigGlobal(registroBackup.configGlobal || {});
+
+  const idsNuevos = new Set(nuevos.map(p=>p.id));
+  // _rgLatestParticipants: el último snapshot REAL de Firestore, no
+  // DB.participants (que el caller ya pudo haber tocado antes de llamar
+  // esto) -- mismo criterio que ya usa rgResetAll() más arriba.
+  const aBorrar = (_rgLatestParticipants||[]).filter(p=>!idsNuevos.has(p.id));
+
+  const ops = [];
+  nuevos.forEach(p=>{
+    const preds = nuevasPredicciones[p.id] || {};
+    ops.push({type:'set', ref:fb.doc(fb.PARTICIPANTS_COL,p.id), data:{..._rgPublicFieldsOf(p), predictions:preds, updatedAt:fb.serverTimestamp()}});
+    ops.push({type:'set', ref:fb.doc(fb.PRIVADO_COL,p.id), data:_rgPrivadoFieldsOf(p)});
+  });
+  aBorrar.forEach(p=>{
+    ops.push({type:'delete', ref:fb.doc(fb.PARTICIPANTS_COL,p.id)});
+    ops.push({type:'delete', ref:fb.doc(fb.PRIVADO_COL,p.id)});
+  });
+
+  // Firestore permite máx. 500 operaciones por batch -- se agrupa de a
+  // 400 para quedar con margen (cada participante nuevo son 2 escrituras,
+  // cada uno a borrar son 2 borrados).
+  const CHUNK = 400;
+  const commits = [];
+  for(let i=0;i<ops.length;i+=CHUNK){
+    const batch = fb.writeBatch(fb.db);
+    ops.slice(i,i+CHUNK).forEach(op=>{
+      if(op.type==='set') batch.set(op.ref, op.data);
+      else batch.delete(op.ref);
+    });
+    commits.push(batch.commit());
+  }
+
+  const metaPayload = { nextSeq:nuevoNextSeq, configGlobal:nuevoConfigGlobal };
+
+  return Promise.all(commits)
+    .then(()=> fb.setDoc(fb.REGISTRO_META_DOC, { ...metaPayload, updatedAt:fb.serverTimestamp() }))
+    .then(()=>{
+      // set() completo (reemplazo total) del documento de papelera --
+      // se fuerza la escritura aunque el contenido "parezca" el mismo
+      // que el último conocido (restaurar el mismo backup dos veces
+      // seguidas debe funcionar igual las dos veces).
+      _rgLastKnownPapeleraJSON = null;
+      return rgSavePapelera(nuevaPapelera);
+    })
+    .then(()=>{
+      // Refresca las cachés de "último conocido" para que el próximo
+      // autoguardado normal (alguien editando su quiniela ahora mismo)
+      // no interprete esto como un cambio pendiente y lo reescriba solo.
+      _rgLastKnownParticipantsJSON = {};
+      _rgLastKnownPrivadoJSON = {};
+      nuevos.forEach(p=>{
+        _rgLastKnownParticipantsJSON[p.id] = _rgParticipantJSON(p, nuevasPredicciones[p.id]||{});
+        _rgLastKnownPrivadoJSON[p.id] = _rgPrivadoJSON(p);
+        _rgLatestPrivadoByOwner[p.id] = _rgPrivadoFieldsOf(p);
+      });
+      _rgLastKnownMetaJSON = JSON.stringify(metaPayload);
+    });
+}
+
 // v6.9 — Fase de Privacidad: migración de UNA SOLA VEZ para los
 // participantes que YA EXISTÍAN antes de este cambio. rgPushToFirestore
 // (de ahora en más) ya separa clave/correo al documento privado en

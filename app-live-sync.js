@@ -109,6 +109,36 @@ function buildStatePayload(){
   return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory};
 }
 
+// v1.5.1 — Contraparte de buildStatePayload(): aplica un payload completo
+// (típicamente de un backup integral, ver exportBackupJSON()/
+// importBackupJSON() en app-admin-tools.js) sobre S, en modo REEMPLAZO
+// TOTAL -- a diferencia de applyRemoteState() (sincronización en vivo, que
+// a propósito conserva lo que ya había si el payload remoto no trae una
+// clave), acá cada campo se resetea a su default si el backup no lo trae,
+// porque restaurar un backup significa "dejar el estado IGUAL al
+// archivo", no "completar lo que falte". No llama a save() por sí sola --
+// el llamador decide cuándo persistir (siempre DESPUÉS de haber bajado ya
+// la copia de seguridad del estado actual, ver importBackupJSON()).
+function applyStatePayload(p){
+  p=p||{};
+  S.scores=p.scores||{};
+  S.checksums=p.checksums||{};
+  S.elimScores=p.elimScores||{};
+  S.elimTeams=p.elimTeams||{};
+  S.scorers=p.scorers||[];
+  S.matchTimes=p.matchTimes||{};
+  S.elimTimes=p.elimTimes||{};
+  S.bonos=p.bonos||{lastPlace:{},classified:{},llaves:{},closed:{}};
+  S.tieBreakers=p.tieBreakers||{};
+  S.hiddenPL=p.hiddenPL?new Set(Object.keys(p.hiddenPL).filter(k=>p.hiddenPL[k])):new Set();
+  S.snapshots=p.snapshots||[];
+  S.autoClose=p.autoClose!==undefined?p.autoClose:false;
+  S.reality=p.reality||{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountryGoals:0,mostConceded:""};
+  S.adv=p.adv||{};
+  S.battles=p.battles||{};
+  S.battleHistory=p.battleHistory||[];
+}
+
 function save(){
   try{
     Object.keys(S.scores).forEach(mid=>{

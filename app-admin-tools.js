@@ -68,44 +68,64 @@ function closeEditParticipant(){
 }
 
 // ══════════════════════════════════════════════════════════════
-// BACKUP / RESTORE JSON
+// BACKUP / RESTORE JSON — v1.5.1: backup INTEGRAL
 // ══════════════════════════════════════════════════════════════
-function exportBackupJSON(){
-  const payload={
-    version:"wb26v43",
+// Antes (hasta v1.5) esto solo respaldaba quiniela/estado (resultados,
+// bonos, batallas, snapshots...) -- restaurar ese backup en un sitio
+// nuevo perdía TODOS los participantes, sus predicciones, la papelera y
+// la configuración del torneo (fases activas, reglas de puntaje). Ahora
+// el JSON trae las dos mitades del sistema:
+//   - "quiniela": el mismo payload de siempre (buildStatePayload(),
+//     app-live-sync.js) -- única fuente de verdad, ya no se duplican los
+//     campos a mano acá (eso fue justo el bug que hacía que hiddenPL
+//     nunca se exportara aunque el import sí sabía leerlo).
+//   - "registro": participantes + predicciones + papelera + nextSeq +
+//     configGlobal (todo lo que vive en participantes.js/registro.js).
+// Deliberadamente NO se incluye:
+//   - quiniela/estado-test (el espejo de "🧪 Modo Prueba"): es
+//     efímero, no es parte de la quiniela real.
+//   - registro/admin2fa (secreto TOTP + navegadores de confianza del
+//     admin): es un secreto equivalente a una contraseña. Meterlo en un
+//     JSON descargable (que puede terminar copiado, compartido por
+//     correo, etc.) sería un riesgo real de seguridad para un beneficio
+//     chico -- si hace falta reconfigurar el 2FA, ya existe el flujo
+//     normal para eso. Restaurar un backup NUNCA toca este documento,
+//     así que el admin nunca queda bloqueado de su propia sesión por
+//     restaurar un backup viejo.
+function buildFullBackupPayload(){
+  return {
+    tipo:"quinielaborracha_backup_integral",
+    version:"1.5.1",
     exportedAt:new Date().toISOString(),
-    scores:S.scores,
-    checksums:S.checksums,
-    elimScores:S.elimScores,
-    elimTeams:S.elimTeams,
-    scorers:S.scorers,
-    matchTimes:S.matchTimes,
-    elimTimes:S.elimTimes,
-    bonos:S.bonos,
-    tieBreakers:S.tieBreakers,
-    autoClose:S.autoClose,
-    snapshots:S.snapshots,
-    reality:S.reality,
-    adv:S.adv,
-    // FIX: faltaban estas dos — el backup manual (este export, distinto del
-    // guardado automático en buildStatePayload()) se quedó desactualizado
-    // cuando se agregó Batallas (v5.0/v5.4) y nunca se le sumaron estas
-    // claves. Un restore con un backup viejo (sin esto) borraba en silencio
-    // S.battles/S.battleHistory porque importBackupJSON() tampoco los tocaba.
-    battles:S.battles,
-    battleHistory:S.battleHistory
+    quiniela:buildStatePayload(),
+    registro:{
+      participants:DB.participants,
+      predictions:DB.predictions,
+      papelera:DB.papelera,
+      nextSeq:DB.nextSeq,
+      configGlobal:DB.configGlobal
+    }
   };
-  const json=JSON.stringify(payload,null,2);
+}
+
+function descargarJSON(obj,nombreArchivo){
+  const json=JSON.stringify(obj,null,2);
   const blob=new Blob([json],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  const date=new Date().toISOString().slice(0,10);
-  a.href=url;a.download=`quiniela-backup-${date}.json`;
+  a.href=url;a.download=nombreArchivo;
   document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},500);
+}
+
+function exportBackupJSON(){
+  const payload=buildFullBackupPayload();
+  const date=new Date().toISOString().slice(0,10);
+  descargarJSON(payload,`quiniela-backup-integral-${date}.json`);
+  const n=(DB.participants||[]).length;
   const el=document.getElementById("backup-status");
-  if(el)el.innerHTML=`<span style="color:#4dde8c">✓ Backup exportado: quiniela-backup-${date}.json</span>`;
-  toast("✓ Backup exportado");
+  if(el)el.innerHTML=`<span style="color:#4dde8c">✓ Backup integral exportado: ${n} participante(s) + resultados/bonos/batallas + configuración del torneo</span>`;
+  toast("✓ Backup integral exportado");
 }
 
 function importBackupJSON(input){
@@ -114,34 +134,53 @@ function importBackupJSON(input){
   reader.onload=e=>{
     try{
       const p=JSON.parse(e.target.result);
-      if(!p.scores&&!p.elimScores){throw new Error("Archivo no válido — no parece un backup de la quiniela");}
-      if(!confirm(`¿Importar backup del ${p.exportedAt?new Date(p.exportedAt).toLocaleString("es"):"archivo"}? Esto reemplazará todos los datos actuales.`))return;
-      // Restore state
-      S.scores=p.scores||{};
-      S.checksums=p.checksums||{};
-      S.elimScores=p.elimScores||{};
-      S.elimTeams=p.elimTeams||{};
-      S.scorers=p.scorers||[];
-      S.matchTimes=p.matchTimes||{};
-      S.elimTimes=p.elimTimes||{};
-      if(p.bonos)S.bonos=p.bonos;
-      if(p.tieBreakers)S.tieBreakers=p.tieBreakers;
-      if(p.hiddenPL){S.hiddenPL=new Set(Object.keys(p.hiddenPL).filter(k=>p.hiddenPL[k]));}
-      if(p.snapshots)S.snapshots=p.snapshots;
-      if(p.autoClose!==undefined)S.autoClose=p.autoClose;
-      S.reality=p.reality||S.reality;
-      S.adv=p.adv||{};
-      // FIX: igual que bonos/snapshots arriba — solo se sobrescribe si el
-      // backup las trae. Así, restaurar un backup VIEJO (exportado antes de
-      // este fix, sin estas claves) ya NO borra en silencio las batallas
-      // activas ni el historial actuales.
-      if(p.battles)S.battles=p.battles;
-      if(p.battleHistory)S.battleHistory=p.battleHistory;
+      const esIntegral=!!(p&&p.quiniela&&p.registro);
+      const esFormatoViejo=!esIntegral&&!!(p&&(p.scores||p.elimScores));
+      if(!esIntegral&&!esFormatoViejo){
+        throw new Error("Archivo no válido — no parece un backup de la quiniela");
+      }
+
+      const fb=window.__fb;
+      if(esIntegral&&(!fb||!fb.PARTICIPANTS_COL||!fb.PRIVADO_COL||!fb.REGISTRO_META_DOC)){
+        toast("Firebase todavía no está listo en esta pestaña (o quedó una versión vieja en caché). Recargá la página (Ctrl+Shift+R) y volvé a intentar.",true);
+        return;
+      }
+
+      const fecha=p.exportedAt?new Date(p.exportedAt).toLocaleString("es"):"archivo";
+      const nParticipantes=esIntegral?(p.registro.participants||[]).length:null;
+      const msg=esIntegral
+        ?`Este es un BACKUP INTEGRAL del ${fecha}: va a REEMPLAZAR TODO (${nParticipantes} participante(s) con sus predicciones, papelera, configuración del torneo Y resultados/bonos/batallas) por lo que hay en el archivo. Cualquier participante o cambio que exista hoy y NO esté en el archivo se BORRA. Antes de aplicar nada se descarga automáticamente un backup del estado actual, por si hay que volver atrás. ¿Continuar?`
+        :`¿Importar backup del ${fecha}? Es un archivo del formato anterior (solo resultados/bonos/batallas, sin participantes) — esto reemplaza esos datos actuales, sin tocar participantes. ¿Continuar?`;
+      if(!confirm(msg))return;
+
+      // Backup de seguridad automático del estado ACTUAL antes de tocar
+      // nada -- mismo cuidado que ya usa importarInfoParticipantes()
+      // (registro.js) para cualquier operación que reescribe datos de
+      // varios participantes a la vez.
+      descargarJSON(buildFullBackupPayload(),`backup_antes_de_restaurar_${Date.now()}.json`);
+
+      const quinielaData=esIntegral?p.quiniela:p; // formato viejo: los campos de S viven sueltos en la raíz
+      applyStatePayload(quinielaData);
       save();
-      renderRank();renderSnapshotPanel();updateGenerarBtn();updateElimBtns();
+
       const el=document.getElementById("backup-status");
-      if(el)el.innerHTML=`<span style="color:#4dde8c">✓ Backup importado correctamente · ${Object.keys(S.scores).length} resultados de grupos · ${Object.keys(S.elimScores).length} de eliminatoria</span>`;
-      toast("✓ Backup importado");
+      const terminarOk=(detalle)=>{
+        renderRank();renderSnapshotPanel();updateGenerarBtn();updateElimBtns();
+        if(el)el.innerHTML=`<span style="color:#4dde8c">✓ Backup importado correctamente${detalle}</span>`;
+        toast("✓ Backup importado");
+      };
+
+      if(esIntegral){
+        rgRestoreFullBackup(p.registro)
+          .then(()=> terminarOk(` · ${nParticipantes} participante(s) restaurado(s)`))
+          .catch(err=>{
+            console.error("Error al restaurar participantes del backup:",err);
+            if(el)el.innerHTML=`<span style="color:#ff8080">⚠️ Los resultados se restauraron, pero hubo un error al restaurar participantes: ${err.message}</span>`;
+            toast("⚠️ Error al restaurar participantes: "+err.message,true);
+          });
+      }else{
+        terminarOk("");
+      }
     }catch(err){
       const el=document.getElementById("backup-status");
       if(el)el.innerHTML=`<span style="color:#ff8080">⚠️ Error: ${err.message}</span>`;

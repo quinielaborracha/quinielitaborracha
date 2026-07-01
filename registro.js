@@ -810,8 +810,7 @@ function foldAccents(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f
 
 // v0.9 (Fase 7) — Exportar correo+Clave de todos los participantes a un
 // .csv descargable. Se construye a mano (sin SheetJS ni librerías
-// externas) porque este prototipo es un único archivo HTML; un CSV con
-// BOM UTF-8 abre correctamente acentos en Excel.
+// externas) porque este prototipo es un único archivo HTML.
 //
 // v6.4 — Esta función no toca Firestore (solo lee DB.participants, ya en
 // memoria del admin) así que no necesitó ningún cambio funcional con la
@@ -820,14 +819,22 @@ function foldAccents(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f
 // de nadie (eso ahora lo hace ownerUid + las reglas de Firestore) — sigue
 // siendo sensible porque es lo que permite reclamar/recuperar acceso
 // desde un dispositivo nuevo (ver renderLogin en este mismo archivo), así
-// que el CSV exportado sigue mereciendo el mismo cuidado de siempre al
-// compartirlo, solo que la razón de fondo cambió.
+// que el archivo exportado sigue mereciendo el mismo cuidado de siempre
+// al compartirlo, solo que la razón de fondo cambió.
+//
+// v1.5.1 — "Exportar correos y claves" (.csv, solo correo+clave) pasó a
+// ser "Exportar info de participantes" (.json, TODA la info visible en
+// la tabla del panel: código, nombre, correo, ubicación, clave, creado,
+// enviado, estado y avance) -- ver exportarInfoParticipantes()/
+// importarInfoParticipantes() más abajo. _parseCSV() se conserva tal
+// cual para poder seguir importando archivos .csv viejos.
 // Parser de CSV mínimo, a mano (sin librerías, mismo criterio que el
-// resto del proyecto) -- entiende exactamente el formato que genera
-// exportarCorreosClaves(): campos entre comillas dobles, comillas
-// internas escapadas como "" (ej. un nombre con comillas adentro), y
-// filas separadas por \r\n (también acepta \n solo, por si alguien
-// edita el archivo a mano en otro programa).
+// resto del proyecto) -- entiende exactamente el formato que generaba
+// la vieja exportarCorreosClaves() (hasta v1.5), que importarInfoParticipantes()
+// sigue aceptando por compatibilidad hacia atrás: campos entre comillas
+// dobles, comillas internas escapadas como "" (ej. un nombre con
+// comillas adentro), y filas separadas por \r\n (también acepta \n
+// solo, por si alguien edita el archivo a mano en otro programa).
 function _parseCSV(text){
   const rows = [];
   let row = [], field = '', inQuotes = false;
@@ -863,7 +870,7 @@ function _colIndex(header, nombres){
   return -1;
 }
 
-function importarCorreosClaves(file){
+function importarInfoParticipantes(file){
   if(!file) return;
   // v6.9.3 — Chequeo temprano: si fb.PARTICIPANTS_COL/fb.PRIVADO_COL
   // todavía no están listos (Firebase no terminó de cargar, o el
@@ -881,57 +888,83 @@ function importarCorreosClaves(file){
   const reader = new FileReader();
   reader.onload = (e)=>{
     try{
-      // Quita el BOM que el propio exportarCorreosClaves() le agrega al
-      // CSV (\uFEFF) -- si no se quita, la primera columna del header
-      // ("Nombre") no matchea por tener ese caracter invisible pegado.
+      // Quita el BOM que el propio exportarInfoParticipantes()/
+      // exportarCorreosClaves() (versiones anteriores a v1.5.1) le
+      // agrega al archivo (\uFEFF) -- si no se quita, la primera clave
+      // del header no matchea por tener ese caracter invisible pegado.
       const text = String(e.target.result || '').replace(/^\uFEFF/, '').trim();
 
-      // por codigo -> {clave, email}. Se matchea por CÓDIGO (ej.
-      // "QLB-2026-0001"), que es lo único que tanto el CSV exportado
+      // por codigo -> {clave, email, name, city, country, estadoQuiniela,
+      // fechaCreacion, fechaEnvio}. Se matchea por CÓDIGO (ej.
+      // "QLB-2026-0001"), que es lo único que tanto el archivo exportado
       // como la tabla del panel muestran y que no cambia nunca para un
-      // mismo participante -- el CSV no trae el id interno.
+      // mismo participante -- el archivo no trae el id interno.
+      //
+      // v1.5.1 — "nombre" viaja en el JSON exportado (es info visible en
+      // la tabla), pero A PROPÓSITO no se aplica acá al importar: cambiar
+      // el nombre de un participante también tiene que migrar S.hiddenPL
+      // y S.adv (que lo usan como clave) -- eso solo lo hace
+      // saveEditParticipant() (app-admin-tools.js, el ✏️ de la tabla), que
+      // vive en otro archivo y no comparte ese cuidado con un import
+      // masivo. Para renombrar, usar "Editar" en la fila del participante.
       let porCodigo = {};
       let formato = '';
 
       if(text[0] === '{' || text[0] === '['){
-        // Por las dudas alguien todavía tenga a mano el backup JSON
-        // automático (el que se descarga solo al migrar) en vez del
-        // CSV -- también se acepta, matcheando por id en ese caso.
-        formato = 'json';
         const raw = JSON.parse(text);
-        const participantsBackup =
-          (raw.dbAntesDeLaMigracion && raw.dbAntesDeLaMigracion.participants) ||
-          (raw.dbAntesDeImportar && raw.dbAntesDeImportar.participants) ||
-          raw.participants ||
-          (Array.isArray(raw) ? raw : null);
-        if(!participantsBackup || !Array.isArray(participantsBackup)){
-          throw new Error("No encontré una lista de participantes en este archivo JSON.");
+        if(raw && raw.tipo === 'quinielaborracha_info_participantes' && Array.isArray(raw.participantes)){
+          // Formato nuevo (v1.5.1) — el que arma exportarInfoParticipantes().
+          formato = 'json';
+          raw.participantes.forEach(p=>{
+            if(!p || !p.codigo) return;
+            const datos = {};
+            if(p.clave) datos.clave = p.clave;
+            if(p.correo) datos.email = p.correo;
+            if(p.ciudad) datos.city = p.ciudad;
+            if(p.pais) datos.country = p.pais;
+            if(p.estado) datos.estadoQuiniela = p.estado;
+            if(p.creado) datos.fechaCreacion = p.creado;
+            if(p.enviado) datos.fechaEnvio = p.enviado;
+            if(Object.keys(datos).length) porCodigo[p.codigo] = datos;
+          });
+        }else{
+          // Por las dudas alguien todavía tenga a mano el backup JSON
+          // automático (el que se descarga solo al migrar, o el que se
+          // descarga antes de cualquier import) en vez del archivo de
+          // este panel -- también se acepta, matcheando por id en ese caso.
+          formato = 'json-legado';
+          const participantsBackup =
+            (raw.dbAntesDeLaMigracion && raw.dbAntesDeLaMigracion.participants) ||
+            (raw.dbAntesDeImportar && raw.dbAntesDeImportar.participants) ||
+            raw.participants ||
+            (Array.isArray(raw) ? raw : null);
+          if(!participantsBackup || !Array.isArray(participantsBackup)){
+            throw new Error("No encontré una lista de participantes en este archivo JSON.");
+          }
+          const porId = {};
+          participantsBackup.forEach(p=>{
+            if(!p || !p.id) return;
+            if(!p.clave && !p.email) return;
+            porId[p.id] = { clave: p.clave||'', email: p.email||'' };
+          });
+          DB.participants.forEach(p=>{
+            if(porId[p.id]) porCodigo[p.codigo] = porId[p.id];
+          });
         }
-        const porId = {};
-        participantsBackup.forEach(p=>{
-          if(!p || !p.id) return;
-          if(!p.clave && !p.email) return;
-          porId[p.id] = { clave: p.clave||'', email: p.email||'' };
-        });
-        // Traducimos id -> codigo usando los participantes ACTUALES,
-        // para que el resto de la función (que matchea por código,
-        // formato CSV) funcione igual sin importar de cuál de los dos
-        // formatos vino.
-        DB.participants.forEach(p=>{
-          if(porId[p.id]) porCodigo[p.codigo] = porId[p.id];
-        });
       }else{
+        // Compatibilidad con el .csv que exportaba "Exportar correos y
+        // claves" en versiones anteriores a v1.5.1 (solo correo+clave).
         formato = 'csv';
         const rows = _parseCSV(text);
         if(rows.length < 2){
-          throw new Error("El CSV no tiene filas de datos (¿está vacío?).");
+          throw new Error("El archivo no tiene filas de datos (¿está vacío?).");
         }
         const header = rows[0];
         const idxCodigo = _colIndex(header, ['Codigo','Código']);
         const idxClave = _colIndex(header, ['Clave']);
         const idxCorreo = _colIndex(header, ['Correo','Email','Correo electronico','Correo electrónico']);
         if(idxCodigo === -1){
-          throw new Error("No encontré la columna 'Codigo' en el CSV -- ¿es el archivo exportado desde 'Exportar correos y claves'?");
+          throw new Error("No encontré la columna 'Codigo' en el archivo -- ¿es un archivo exportado desde este panel?");
         }
         rows.slice(1).forEach(r=>{
           const codigo = (r[idxCodigo]||'').trim();
@@ -945,7 +978,7 @@ function importarCorreosClaves(file){
 
       const codigosConDatos = Object.keys(porCodigo);
       if(!codigosConDatos.length){
-        throw new Error("El archivo no tiene clave ni correo guardado para ningún participante.");
+        throw new Error("El archivo no tiene datos guardados para ningún participante.");
       }
 
       let coincidencias = 0;
@@ -954,13 +987,13 @@ function importarCorreosClaves(file){
         throw new Error("Ningún participante actual coincide con los códigos de este archivo -- ¿es el archivo correcto?");
       }
 
-      if(!confirm(`Encontré clave/correo guardado para ${coincidencias} de los ${DB.participants.length} participantes actuales en este archivo ${formato.toUpperCase()}. Esto va a reemplazar su clave/correo actual por el del archivo y los va a volver a guardar en el documento privado. Antes de aplicar nada se descarga un backup del estado actual, por si esto tampoco era lo que hacía falta. ¿Continuar?`)) return;
+      if(!confirm(`Encontré datos guardados para ${coincidencias} de los ${DB.participants.length} participantes actuales en este archivo. Esto va a reemplazar su correo/ubicación/clave/estado actual (según lo que traiga el archivo) por el del archivo y los va a volver a guardar en el documento privado. Antes de aplicar nada se descarga un backup del estado actual, por si esto tampoco era lo que hacía falta. ¿Continuar?`)) return;
 
       // Backup del estado ACTUAL antes de aplicar el import -- mismo
       // cuidado que cualquier otra operación de este panel que
       // reescribe datos de varios participantes a la vez.
       const backupActual = {
-        tipo: "backup_pre_importacion_correos_claves",
+        tipo: "backup_pre_importacion_info_participantes",
         fecha: new Date().toISOString(),
         dbAntesDeImportar: JSON.parse(JSON.stringify(DB))
       };
@@ -977,6 +1010,11 @@ function importarCorreosClaves(file){
         if(!datos) return;
         if(datos.clave) p.clave = datos.clave;
         if(datos.email) p.email = datos.email;
+        if(datos.city) p.city = datos.city;
+        if(datos.country) p.country = datos.country;
+        if(datos.estadoQuiniela) p.estadoQuiniela = datos.estadoQuiniela;
+        if(datos.fechaCreacion) p.fechaCreacion = datos.fechaCreacion;
+        if(datos.fechaEnvio) p.fechaEnvio = datos.fechaEnvio;
         aplicados++;
       });
 
@@ -985,30 +1023,59 @@ function importarCorreosClaves(file){
       // normal, no hace falta nada especial acá.
       saveData(DB);
       render();
-      toast(`✓ Se importaron clave/correo para ${aplicados} participante(s) desde el ${formato.toUpperCase()}. Re-sincronizando al documento privado.`);
+      toast(`✓ Se importó info para ${aplicados} participante(s) desde el archivo (${formato}). Re-sincronizando al documento privado.`);
     }catch(err){
-      console.error("Error al importar correos/claves:", err);
+      console.error("Error al importar info de participantes:", err);
       toast("Error al importar: " + err.message, true);
     }
   };
   reader.readAsText(file);
 }
 
-function exportarCorreosClaves(){
+// v1.5.1 — Exporta TODA la info que se ve en la tabla del panel Admin
+// (Código, Nombre, Correo, Ubicación, Clave, Creado, Enviado, Estado,
+// Avance) a un .json descargable -- antes ("Exportar correos y claves")
+// solo exportaba correo+clave a un .csv. "avance" viaja como dato
+// informativo (el % de la quiniela contestada al momento de exportar);
+// NO es un campo real guardado en Firestore, así que
+// importarInfoParticipantes() lo ignora al leer un archivo de vuelta (se
+// recalcula solo, siempre, a partir de las predicciones reales de cada
+// quien). "Nombre" también viaja informativo pero no se reimporta -- ver
+// el comentario grande en importarInfoParticipantes().
+function exportarInfoParticipantes(){
   if(!DB.participants.length){ toast('No hay participantes para exportar.', true); return; }
-  const header = ['Nombre','Correo','Codigo','Clave','Estado'];
-  const rows = DB.participants.slice()
-    .sort((a,b)=> a.name.localeCompare(b.name))
-    .map(p=> [p.name, p.email||'', p.codigo||'', p.clave||'', p.estadoQuiniela]);
-  const csvEscape = (v)=> `"${String(v).replace(/"/g,'""')}"`;
-  const csv = [header, ...rows].map(r=> r.map(csvEscape).join(',')).join('\r\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const total = totalMatches();
+  const payload = {
+    tipo: "quinielaborracha_info_participantes",
+    version: "1.5.1",
+    exportedAt: new Date().toISOString(),
+    participantes: DB.participants.slice()
+      .sort((a,b)=> a.name.localeCompare(b.name))
+      .map(p=>{
+        const ans = countAnswered(p.id);
+        const pct = total ? Math.round((ans/total)*100) : 0;
+        return {
+          codigo: p.codigo || '',
+          nombre: p.name || '',
+          correo: p.email || '',
+          ciudad: p.city || '',
+          pais: p.country || '',
+          clave: p.clave || '',
+          creado: p.fechaCreacion || null,
+          enviado: p.fechaEnvio || null,
+          estado: p.estadoQuiniela || '',
+          avance: pct
+        };
+      })
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], {type:'application/json;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'quiniela_correos_claves.csv';
+  a.href = url; a.download = 'quiniela_info_participantes.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  toast(`Listado exportado (${DB.participants.length} participantes).`);
+  toast(`Info de participantes exportada (${DB.participants.length} participantes).`);
 }
 
 function fmtDate(ts){
@@ -3456,9 +3523,9 @@ function renderAdmin(){
       <div id="admin_table_wrap">${buildParticipantsRowsHtml(ADMIN_SEARCH, ADMIN_FILTER)}</div>
       <div class="rg-btn-row" style="margin-top:.75rem">
         <button class="rg-btn rg-btn-ghost" id="a_gen_claves" title="Genera una clave nueva solo a quien no tenga ninguna">🔑 Generar claves faltantes</button>
-        <button class="rg-btn rg-btn-ghost" id="a_export_claves" title="Descarga un .csv con nombre, correo, código y clave de todos">⬇️ Exportar correos y claves</button>
-        <button class="rg-btn rg-btn-ghost" id="a_import_claves" title="Restaura correo/clave desde el mismo .csv que descarga 'Exportar correos y claves' (también acepta el backup .json de la migración)">⬆️ Importar correos y claves</button>
-        <input id="import_claves_file" type="file" accept=".csv,.json" style="display:none">
+        <button class="rg-btn rg-btn-ghost" id="a_export_info" title="Descarga un .json con código, nombre, correo, ubicación, clave, creado, enviado, estado y avance de todos">⬇️ Exportar info de participantes</button>
+        <button class="rg-btn rg-btn-ghost" id="a_import_info" title="Restaura correo/ubicación/clave/estado desde el mismo .json que descarga 'Exportar info de participantes' (también acepta el .csv de versiones anteriores y el backup .json de la migración)">⬆️ Importar info de participantes</button>
+        <input id="import_info_file" type="file" accept=".json,.csv" style="display:none">
         <button class="rg-btn rg-btn-ghost" id="a_toggle_papelera">🗑️ Papelera (${(DB.papelera||[]).length})</button>
         <button class="rg-btn rg-btn-danger" id="a_reset">Borrar todos los datos de prueba</button>
       </div>
@@ -3506,13 +3573,13 @@ function renderAdmin(){
     });
   });
 
-  document.getElementById('a_export_claves').addEventListener('click', exportarCorreosClaves);
-  document.getElementById('a_import_claves').addEventListener('click', ()=>{
-    document.getElementById('import_claves_file').click();
+  document.getElementById('a_export_info').addEventListener('click', exportarInfoParticipantes);
+  document.getElementById('a_import_info').addEventListener('click', ()=>{
+    document.getElementById('import_info_file').click();
   });
-  document.getElementById('import_claves_file').addEventListener('change', (ev)=>{
+  document.getElementById('import_info_file').addEventListener('change', (ev)=>{
     const file = ev.target.files[0];
-    importarCorreosClaves(file);
+    importarInfoParticipantes(file);
     ev.target.value = ""; // permite volver a elegir el mismo archivo si hace falta repetir
   });
 

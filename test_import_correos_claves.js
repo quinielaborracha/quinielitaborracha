@@ -1,13 +1,17 @@
-// Test de integración v6.9.3 — reproduce el bug real reportado:
+// Test de integración v6.9.3 (actualizado v1.5.1 para importarInfoParticipantes) —
+// reproduce el bug real reportado:
 // 1) Login anónimo (bootstrap) -> login admin real, y verifica que
 //    rgWirePrivadoSyncIfAdmin() SÍ se reintenta al pasar a admin (antes
 //    no se reintentaba, así que el admin nunca veía correo/clave).
 // 2) Simula que Firestore ya tiene clave/correo guardados (snapshot de
 //    registro_privado) y verifica que se mezclan en DB.participants
 //    (lo que se ve en la tabla del panel Admin).
-// 3) Importa un CSV de correos/claves real y verifica que el batch se
-//    escribe sin reventar (antes: "Expected first argument to
-//    collection() to be a CollectionReference...").
+// 3) Importa un archivo .json (formato nuevo, v1.5.1) de info de
+//    participantes real y verifica que el batch se escribe sin reventar
+//    (antes: "Expected first argument to collection() to be a
+//    CollectionReference...").
+// 3b) Importa también un .csv viejo (formato anterior a v1.5.1) para
+//     confirmar que sigue funcionando (compatibilidad hacia atrás).
 // 4) Caso roto a propósito (fb.PRIVADO_COL undefined, ej. cache vieja
 //    del index.html) -> debe mostrar un mensaje claro, NUNCA el error
 //    crudo de Firestore, y NUNCA reportar éxito falso.
@@ -115,13 +119,13 @@ function check(label, cond) { console.log((cond ? "✅ " : "❌ ") + label); if 
 for (const f of FILES) {
   let code = fs.readFileSync(path.join(__dirname, f), "utf8");
   if (f === "registro.js") {
-    // registro.js es un único IIFE -- importarCorreosClaves() vive en su
+    // registro.js es un único IIFE -- importarInfoParticipantes() vive en su
     // scope interno y no queda accesible desde afuera solo por exponer
     // render/renderAdminTab/tryAutoLoginByOwnerUid (lo único que el
     // propio archivo expone hoy). Lo inyectamos por slicing justo antes
     // del cierre del IIFE, mismo patrón que ya usa test_login_reclaim.js.
     code = code.replace(/\}\)\(\);\s*$/, `
-window.importarCorreosClaves = importarCorreosClaves;
+window.importarInfoParticipantes = importarInfoParticipantes;
 })();`);
   }
   const script = window.document.createElement("script");
@@ -140,7 +144,7 @@ window.__test = {
     document.getElementById("login-2fa-code").value = code;
     await submit2FACode();
   },
-  importarCorreosClaves: (file) => window.importarCorreosClaves(file),
+  importarInfoParticipantes: (file) => window.importarInfoParticipantes(file),
   getLastToast: () => { const t = document.getElementById("toast"); return t ? t.textContent : null; },
 };
 `;
@@ -191,23 +195,43 @@ T.getDB().configGlobal = T.getDB().configGlobal || {};
   const p1 = T.getDB().participants.find((p) => p.id === "p1");
   check("Caso 3: la clave/correo de p1 se mezcló en DB.participants (lo que ve la tabla del admin)", p1.clave === "ABC123" && p1.email === "juan@correo.com");
 
-  // ── Paso 4: importar un CSV real (mismo formato que exportarCorreosClaves) ──
-  const csv = '\uFEFF"Nombre","Correo","Codigo","Clave","Estado"\r\n"JUAN PEREZ","nuevo.juan@correo.com","QB-2026-0001","NUEVACLAVE1","enviada"\r\n"MARIA LOPEZ","maria@correo.com","QB-2026-0002","NUEVACLAVE2","enviada"\r\n';
+  // ── Paso 4: importar un .json real (formato nuevo v1.5.1, mismo que arma exportarInfoParticipantes) ──
+  const jsonInfo = JSON.stringify({
+    tipo: "quinielaborracha_info_participantes",
+    version: "1.5.1",
+    exportedAt: new Date().toISOString(),
+    participantes: [
+      { codigo: "QB-2026-0001", nombre: "JUAN PEREZ", correo: "nuevo.juan@correo.com", ciudad: "Ciudad", pais: "Panamá", clave: "NUEVACLAVE1", creado: 1000, enviado: 2000, estado: "enviada", avance: 100 },
+      { codigo: "QB-2026-0002", nombre: "MARIA LOPEZ", correo: "maria@correo.com", ciudad: "Ciudad", pais: "Panamá", clave: "NUEVACLAVE2", creado: 1500, enviado: 2500, estado: "enviada", avance: 80 },
+    ],
+  });
   window.FileReader = function () {
-    this.readAsText = () => { this.onload({ target: { result: csv } }); };
+    this.readAsText = () => { this.onload({ target: { result: jsonInfo } }); };
   };
   const fakeFile = {};
-  T.importarCorreosClaves(fakeFile);
+  T.importarInfoParticipantes(fakeFile);
   await new Promise((r) => setTimeout(r, 10));
 
   check("Caso 4 (FIX #2): el import escribió sin reventar (hay un batch en writeLog)", writeLog.length >= 1);
   const p1after = T.getDB().participants.find((p) => p.id === "p1");
   const p2after = T.getDB().participants.find((p) => p.id === "p2");
-  check("Caso 4: p1 quedó con la clave/correo nuevos del CSV", p1after.clave === "NUEVACLAVE1" && p1after.email === "nuevo.juan@correo.com");
-  check("Caso 4: p2 quedó con la clave/correo nuevos del CSV", p2after.clave === "NUEVACLAVE2" && p2after.email === "maria@correo.com");
+  check("Caso 4: p1 quedó con la clave/correo nuevos del JSON", p1after.clave === "NUEVACLAVE1" && p1after.email === "nuevo.juan@correo.com");
+  check("Caso 4: p2 quedó con la clave/correo nuevos del JSON", p2after.clave === "NUEVACLAVE2" && p2after.email === "maria@correo.com");
+  check("Caso 4: p1 quedó con ciudad/país/estado del JSON (campos nuevos que el CSV viejo no traía)", p1after.city === "Ciudad" && p1after.country === "Panamá" && p1after.estadoQuiniela === "enviada");
+  check("Caso 4: 'nombre' del JSON NO se aplicó (a propósito -- ver comentario en importarInfoParticipantes)", p1after.name === "Juan Perez" && p2after.name === "Maria Lopez");
   const lastBatch = writeLog[writeLog.length - 1];
   const privadoWrites = lastBatch.filter((op) => op.ref && op.ref.col === "registro_privado");
   check("Caso 4: el batch incluyó escrituras al documento privado de p1 y p2", privadoWrites.length === 2);
+
+  // ── Paso 4b: importar un .csv viejo (formato anterior a v1.5.1) -- compatibilidad hacia atrás ──
+  const csv = '\uFEFF"Nombre","Correo","Codigo","Clave","Estado"\r\n"JUAN PEREZ","otro.juan@correo.com","QB-2026-0001","CLAVEVIEJA1","enviada"\r\n"MARIA LOPEZ","otra.maria@correo.com","QB-2026-0002","CLAVEVIEJA2","enviada"\r\n';
+  window.FileReader = function () {
+    this.readAsText = () => { this.onload({ target: { result: csv } }); };
+  };
+  T.importarInfoParticipantes({});
+  await new Promise((r) => setTimeout(r, 10));
+  const p1csv = T.getDB().participants.find((p) => p.id === "p1");
+  check("Caso 4b: el .csv viejo (compatibilidad hacia atrás) también aplica clave/correo", p1csv.clave === "CLAVEVIEJA1" && p1csv.email === "otro.juan@correo.com");
 
   // ── Paso 5: caso roto a propósito -- fb.PRIVADO_COL desaparece (ej. cache vieja) ──
   const realPrivadoCol = window.__fb.PRIVADO_COL;
@@ -215,7 +239,7 @@ T.getDB().configGlobal = T.getDB().configGlobal || {};
   const writesBefore = writeLog.length;
   let threw = false;
   try {
-    T.importarCorreosClaves({});
+    T.importarInfoParticipantes({});
   } catch (e) {
     threw = true;
   }
