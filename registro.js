@@ -1111,9 +1111,12 @@ function countAnswered(pid){ return getCompletionStatus(pid).totalDone; }
 // el toast() global de la app principal (app.js), ya cargado antes que este
 // archivo. Mismo orden de parámetros (mensaje, esError), así que todas las
 // llamadas existentes en este archivo siguen funcionando sin cambios.
-function esc(s){
-  return (s||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-}
+//
+// v1.5.3 — esc() se movió a utils.js (Fase 0 de seguridad): ahora es una
+// utilidad global para TODOS los módulos, no solo para este archivo. Sigue
+// disponible acá con el mismo nombre y comportamiento porque utils.js
+// carga antes que registro.js (ver orden de <script> en index.html) — las
+// 110 llamadas existentes a esc() en este archivo no necesitaron tocarse.
 
 // Espera a que todas las <img> dentro de un contenedor terminen de cargar
 // (o fallen, en cuyo caso ya disparó su propio onerror de respaldo) antes de

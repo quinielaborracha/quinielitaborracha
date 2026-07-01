@@ -13,6 +13,31 @@
    de funciones de scoring.js).
    ════════════════════════════════════════════════════════════ */
 
+// ── Escape de HTML (v1.5.3 — Fase de Seguridad) ──────────────────────
+// Movida acá desde registro.js: es la única función de escape de HTML de
+// todo el proyecto y debe estar disponible para TODOS los módulos, no
+// solo para el de registro. utils.js se carga antes que cualquier módulo
+// app-*.js (y antes que registro.js), así que esc() queda disponible
+// para todos ellos.
+//
+// USO OBLIGATORIO: cualquier dato que pueda haber sido escrito por un
+// participante (name, city, country, notas de admin, nombres de
+// "batallas", goleadores, etc.) DEBE pasar por esc() antes de insertarse
+// vía innerHTML/outerHTML o dentro de un atributo HTML. Los campos de
+// participantes NO tienen ningún filtro de caracteres del lado del
+// cliente ni del servidor (firestore.rules solo valida tipo/tamaño, a
+// propósito — no es su trabajo validar contenido) — sin esc(), un
+// nombre como "<img src=x onerror=...>" se ejecuta para cualquiera que
+// vea el Ranking, Estadísticas, Batallas o Predicciones, admin incluido.
+//
+// NO hace falta escapar texto que solo se usa en confirm()/prompt()/
+// alert() o en toast() (usa .textContent, no innerHTML) — esos no
+// interpretan HTML nunca, escaparlos ahí sería trabajo de más (y en
+// prompt()/confirm() se vería literalmente "&amp;" en vez de "&").
+function esc(s){
+  return (s||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+
 function normalizeAbbr(a){
   const MAP={
     "CUW":"CUR","CW":"CUR",       // Curazao

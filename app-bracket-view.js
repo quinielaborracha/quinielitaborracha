@@ -28,7 +28,7 @@
 
 function renderBracket(){
   const pidx=window._selB||0;window._selB=pidx;
-  const sel=`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.75rem">${PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selB=${i};renderBracket()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,13)} ${sn(name)}</button>`;}).join("")}</div>`;
+  const sel=`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.75rem">${PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selB=${i};renderBracket()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,13)} ${esc(sn(name))}</button>`;}).join("")}</div>`;
   document.getElementById("bsel").innerHTML=sel;
   const name=PL[pidx];if(!name){document.getElementById("bracket-body").innerHTML="";return;}
 
@@ -222,7 +222,12 @@ function renderRank(){
 
   tbody.innerHTML=ranked.map((p,i)=>{
     const rk=i<3?`<span style="font-size:20px">${rki[i]}</span>`:i===9?`<span style="font-size:20px">⚽</span>`:i===25?`<span style="font-size:20px">🚑</span>`:i===26?`<span style="font-size:20px">👸</span>`:`<span class="rk">${i+1}</span>`;
-    const lnk=p.link?`<a href="${p.link}" target="_blank" class="lk">🔗</a>`:"—";
+    // v1.5.3 — Fase 0 de seguridad: p.link también es texto libre (aunque
+    // hoy nada lo escribe todavía) — se escapa igual que el resto, y se
+    // restringe a http(s) para que no se pueda colar un "javascript:" en
+    // el href. rel="noopener noreferrer" es buena práctica en target=_blank
+    // aunque no sea parte del hallazgo de XSS.
+    const lnk=(p.link&&/^https?:\/\//i.test(p.link))?`<a href="${esc(p.link)}" target="_blank" rel="noopener noreferrer" class="lk">🔗</a>`:"—";
     const bonBadge=p.bon>0
       ?`<span class="pill" style="background:rgba(245,166,35,.15);color:#f5c842;border:1px solid rgba(245,166,35,.4)">${p.bon}</span>`
       :`<span style="color:var(--qb-muted);font-size:11px">—</span>`;
@@ -231,16 +236,24 @@ function renderRank(){
     // Hidden participants show with reduced opacity in admin mode, hidden in spectator
     if(p.hidden&&!admin)return"";
     const hiddenStyle=p.hidden?"opacity:.4;":"";
+    // v1.5.3 — Fase 0 de seguridad: antes acá había
+    // onclick="openEditParticipant('${p.name.replace(/'/g,"\'")}')" — ese
+    // replace no escapaba nada de verdad ("\'" en JS es solo el carácter
+    // ' ), así que un nombre con comilla simple rompía el atributo onclick
+    // y abría una vía de inyección adicional (ver auditoría de seguridad).
+    // Ahora el nombre va en data-pname (pasado por esc(), no puede romper
+    // el atributo) y un listener delegado (al final de este archivo) hace
+    // la llamada real — elimina el vector de raíz, no solo este caso.
     const adminActions=admin?`<td data-label="Hoja" style="display:flex;gap:3px;align-items:center">
       ${lnk}
-      <button onclick="openEditParticipant('${p.name.replace(/'/g,"\'")}')" title="Editar" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">✏️</button>
-      <button onclick="toggleHideParticipant('${p.name.replace(/'/g,"\'")}')" title="${p.hidden?"Mostrar":"Ocultar"}" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">${p.hidden?"👁":"🙈"}</button>
+      <button class="js-edit-participant" data-pname="${esc(p.name)}" title="Editar" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">✏️</button>
+      <button class="js-toggle-hide-participant" data-pname="${esc(p.name)}" title="${p.hidden?"Mostrar":"Ocultar"}" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">${p.hidden?"👁":"🙈"}</button>
     </td>`:"";
-    return`<tr data-rkey="${p.name}" style="${hiddenStyle}">
+    return`<tr data-rkey="${esc(p.name)}" style="${hiddenStyle}">
       <td data-label="#">${rk}</td>
       <td data-label="±" style="text-align:center">${mv}</td>
       <td data-label="País">${flagEmoji(p.champFlag,20)}</td>
-      <td data-label="Participante"><div class="pn">${p.name}</div><div class="ps">${cityCountry(p)}</div></td>
+      <td data-label="Participante"><div class="pn">${esc(p.name)}</div><div class="ps">${esc(cityCountry(p))}</div></td>
       <td data-label="Básicos"><span class="pill pb">${p.b}</span></td>
       <td data-label="Avanzado"><span class="pill pg">${p.av}</span></td>
       <td data-label="Elim"><span class="pill" style="background:rgba(124,58,237,.18);color:#c4b5fd;border:1px solid rgba(124,58,237,.35)">${p.elim}</span></td>
@@ -249,6 +262,7 @@ function renderRank(){
       ${adminActions}
     </tr>`;
   }).join("");
+
 
   // Animar solo las filas que cambiaron de posición respecto al render anterior
   Array.from(tbody.querySelectorAll("tr[data-rkey]")).forEach((tr,newIdx)=>{
@@ -352,5 +366,18 @@ function importFixJSON(input){
     input.value="";
   };r.readAsText(file);
 }
+
+// v1.5.3 — Fase 0 de seguridad: listener delegado para los botones
+// ✏️/👁 del Ranking (ver renderRank() más arriba). Delegado en document
+// (no en #rb) para no depender de que el tbody ya exista en el momento
+// en que este script corre, y porque sigue funcionando sin volver a
+// engancharse aunque renderRank() reemplace tbody.innerHTML en cada
+// render — un solo listener, siempre vivo.
+document.addEventListener("click", (ev) => {
+  const editBtn = ev.target.closest(".js-edit-participant");
+  if (editBtn) { openEditParticipant(editBtn.dataset.pname); return; }
+  const hideBtn = ev.target.closest(".js-toggle-hide-participant");
+  if (hideBtn) { toggleHideParticipant(hideBtn.dataset.pname); return; }
+});
 
 // ══════════════════════════════════════════════════════════════

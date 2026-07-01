@@ -89,7 +89,7 @@ function populateBattleSelects(){
       const sel=document.getElementById(`battle-slot${slot}-p${p}`);
       if(!sel)return;
       const current=sel.value;
-      sel.innerHTML=`<option value="">— elegir —</option>`+names.map(n=>`<option value="${n}">${n}</option>`).join("");
+      sel.innerHTML=`<option value="">— elegir —</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
       if(names.includes(current))sel.value=current;
     });
   });
@@ -141,8 +141,8 @@ function renderOneBattle(slot){
   const pct1=total>0?Math.round((pts1/total)*100):50;
   let winnerBadge="";
   if(done){
-    if(pts1>pts2)winnerBadge=`<div style="text-align:center;font-size:13px;font-weight:800;color:#f5c842;margin-top:.5rem">👑 ${p1} GANA EL DUELO</div>`;
-    else if(pts2>pts1)winnerBadge=`<div style="text-align:center;font-size:13px;font-weight:800;color:#f5c842;margin-top:.5rem">👑 ${p2} GANA EL DUELO</div>`;
+    if(pts1>pts2)winnerBadge=`<div style="text-align:center;font-size:13px;font-weight:800;color:#f5c842;margin-top:.5rem">👑 ${esc(p1)} GANA EL DUELO</div>`;
+    else if(pts2>pts1)winnerBadge=`<div style="text-align:center;font-size:13px;font-weight:800;color:#f5c842;margin-top:.5rem">👑 ${esc(p2)} GANA EL DUELO</div>`;
     else winnerBadge=`<div style="text-align:center;font-size:13px;font-weight:800;color:var(--qb-muted);margin-top:.5rem">🤝 EMPATE</div>`;
   }
   const fmtPred=(p)=>p?`${p.h}-${p.a}`:"—";
@@ -159,17 +159,17 @@ function renderOneBattle(slot){
       return{lbl:`Eliminatoria #${pid}`,played:!!es,real:es?`${es.h}-${es.a}`:null,pred1:"—",pred2:"—"}; // bracket: predicción individual no aplica al marcador básico de la misma forma
     })
   ];
-  const battleName=name||"Batalla del día";
+  const battleName=esc(name||"Batalla del día");
   return`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:var(--qb-surface);${done?"border-color:rgba(245,166,35,.5)":""}">
     <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName}</div>
     <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center">
       <div>
-        <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${p1}</div>
+        <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p1)}</div>
         <div style="font-size:24px;font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</div>
       </div>
       <div style="font-family:var(--ff-display);font-size:18px;font-weight:900;color:var(--qb-red)">VS</div>
       <div>
-        <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${p2}</div>
+        <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p2)}</div>
         <div style="font-size:24px;font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</div>
       </div>
     </div>
@@ -188,8 +188,8 @@ function renderOneBattle(slot){
             <span>${c.played?`✓ ${c.real}`:"⏳ pendiente"}</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--qb-muted);margin-top:2px">
-            <span>${p1}: ${c.pred1}</span>
-            <span>${p2}: ${c.pred2}</span>
+            <span>${esc(p1)}: ${c.pred1}</span>
+            <span>${esc(p2)}: ${c.pred2}</span>
           </div>
         </div>`).join("")}
       </div>
@@ -233,15 +233,15 @@ function renderBattleHistory(){
     const isEditing=_editingHistIdx===idx;
     const winnerLine=h.winner==="Empate"
       ?`<span style="color:var(--qb-muted)">🤝 Empate</span>`
-      :`<span style="color:#f5c842;font-weight:800">👑 ${h.winner}</span>`;
+      :`<span style="color:#f5c842;font-weight:800">👑 ${esc(h.winner)}</span>`;
     // El ganador SIEMPRE se recalcula a partir del marcador editado (pts1 vs pts2),
     // así nunca puede quedar desincronizado del puntaje mostrado.
     const editControls=isEditing?`<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px dashed var(--qb-border);display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--qb-muted)">${h.p1}</span>
+        <span style="font-size:10px;color:var(--qb-muted)">${esc(h.p1)}</span>
         <input type="number" id="hist-edit-pts1-${idx}" value="${h.pts1}" style="width:54px;font-size:12px;padding:4px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text);text-align:center">
         <span style="font-size:10px;color:var(--qb-red);font-weight:800">VS</span>
         <input type="number" id="hist-edit-pts2-${idx}" value="${h.pts2}" style="width:54px;font-size:12px;padding:4px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text);text-align:center">
-        <span style="font-size:10px;color:var(--qb-muted)">${h.p2}</span>
+        <span style="font-size:10px;color:var(--qb-muted)">${esc(h.p2)}</span>
         <button class="btn btn-sm btn-blue" onclick="saveEditBattleHistory(${idx})">Guardar</button>
         <button class="btn btn-sm" onclick="closeEditBattleHistory()">Cancelar</button>
       </div>`:"";
@@ -251,13 +251,13 @@ function renderBattleHistory(){
       </div>`:"";
     return`<div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:var(--qb-surface)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
-        <span style="font-size:11px;font-weight:700;color:var(--qb-text)">${h.name}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--qb-text)">${esc(h.name)}</span>
         <span style="font-size:10px;color:var(--qb-muted)">${h.date}</span>
       </div>
       <div style="display:flex;justify-content:center;align-items:center;gap:10px;font-size:13px;font-weight:800">
-        <span>${h.p1}</span><span style="color:${h.pts1>=h.pts2?'#f5c842':'var(--qb-text)'}">${h.pts1}</span>
+        <span>${esc(h.p1)}</span><span style="color:${h.pts1>=h.pts2?'#f5c842':'var(--qb-text)'}">${h.pts1}</span>
         <span style="color:var(--qb-red);font-size:11px">VS</span>
-        <span style="color:${h.pts2>=h.pts1?'#f5c842':'var(--qb-text)'}">${h.pts2}</span><span>${h.p2}</span>
+        <span style="color:${h.pts2>=h.pts1?'#f5c842':'var(--qb-text)'}">${h.pts2}</span><span>${esc(h.p2)}</span>
       </div>
       <div style="text-align:center;margin-top:.375rem;font-size:11px">${winnerLine}</div>
       ${editControls}
@@ -318,9 +318,9 @@ function renderBattlesBanner(){
       const pts1=calcBattlePts(b.p1,b.groupMids,b.elimMids);
       const pts2=calcBattlePts(b.p2,b.groupMids,b.elimMids);
       return`<div style="display:flex;align-items:center;justify-content:center;gap:10px;font-size:11px;padding:.375rem 0;cursor:pointer" onclick="tab('battles')">
-        <span style="font-weight:700">${b.p1}</span><span style="font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</span>
+        <span style="font-weight:700">${esc(b.p1)}</span><span style="font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</span>
         <span style="color:var(--qb-red);font-weight:800">VS</span>
-        <span style="font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</span><span style="font-weight:700">${b.p2}</span>
+        <span style="font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</span><span style="font-weight:700">${esc(b.p2)}</span>
       </div>`;
     }).join("")}
   </div>`;
@@ -425,7 +425,7 @@ function renderBonosPanel(){
       </div>
       ${closed&&S.bonos.lastPlace?.[phase.key]?`
         <div style="margin-top:6px;padding:5px 9px;background:rgba(245,166,35,.1);border-radius:6px;border:1px solid rgba(245,166,35,.25);font-size:11px;color:var(--qb-yellow)">
-          🚑 Último lugar: <strong>${S.bonos.lastPlace[phase.key].name}</strong>
+          🚑 Último lugar: <strong>${esc(S.bonos.lastPlace[phase.key].name)}</strong>
           <span style="color:var(--qb-muted)">(${S.bonos.lastPlace[phase.key].total}pts al corte)</span>
           → +${S.bonos.lastPlace[phase.key].pts}pts
         </div>`:""}
@@ -454,7 +454,7 @@ function renderBonosPanel(){
     bonoPts.forEach(p=>{
       const m=PM[p.name]||{};
       html+=`<tr>
-        <td><div class="pn">${flagEmoji(m.champFlag,14)} ${p.name}</div></td>
+        <td><div class="pn">${flagEmoji(m.champFlag,14)} ${esc(p.name)}</div></td>
         <td style="text-align:right"><span style="font-family:var(--ff-display);font-size:18px;font-weight:800;color:var(--qb-yellow)">+${p.last}</span></td>
       </tr>`;
     });

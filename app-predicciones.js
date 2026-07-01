@@ -23,10 +23,10 @@
 function renderPred(){
   const sel=document.getElementById("psel"),body=document.getElementById("pb2");
   const pidx=window._selP||0;window._selP=pidx;
-  sel.innerHTML=PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selP=${i};renderPred()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,14)} ${sn(name)}</button>`;}).join("");
+  sel.innerHTML=PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selP=${i};renderPred()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,14)} ${esc(sn(name))}</button>`;}).join("");
   const name=PL[pidx];if(!name){body.innerHTML="";return;}
   const m=PM[name]||{};const pts=calcPts(name)+calcAdv(name)+calcElimPts(name)+calcBonos(name); // v1.1 — antes solo calcPts(name) (grupos); ahora coincide con el total de getRank()
-  body.innerHTML=`<div class="pc"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem"><span style="font-weight:700;font-size:13px;color:var(--qb-text)">${flagEmoji(m.champFlag,16)} ${name}</span><span class="pill pb">${pts} pts</span></div>
+  body.innerHTML=`<div class="pc"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem"><span style="font-weight:700;font-size:13px;color:var(--qb-text)">${flagEmoji(m.champFlag,16)} ${esc(name)}</span><span class="pill pb">${pts} pts</span></div>
   <div class="pg2">${MIDS.map(mid=>{
     const pred=MD[mid]?.preds[name];if(!pred)return"";
     const s=sc(mid);const played=!!s;let pts2=0,hit=false;
@@ -61,7 +61,7 @@ function renderAdv(){
     <div class="ai"><label>País más goleado (1 juego)</label><input type="text" value="${r.mostConceded}" placeholder="País" style="width:130px" onchange="S.reality.mostConceded=this.value;save()"></div>
   </div>`;
   const pidx=window._selA||0;window._selA=pidx;
-  const sel=`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.75rem">${PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selA=${i};renderAdv()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,13)} ${sn(name)}</button>`;}).join("")}</div>`;
+  const sel=`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.75rem">${PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selA=${i};renderAdv()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,13)} ${esc(sn(name))}</button>`;}).join("")}</div>`;
   const name=PL[pidx];if(!name){document.getElementById("ab").innerHTML=ri+sel;return;}
   const m=PM[name]||{};const ap=calcAdv(name);
   const spec=getDynamicSpec(name)||{};
@@ -109,7 +109,7 @@ function renderAdv(){
   }).join("");
   const abEl=document.getElementById("ab");if(!abEl)return;abEl.innerHTML=ri+sel+`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.75rem .875rem;background:var(--qb-surface)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
-      <span style="font-weight:700;font-size:13px;color:var(--qb-text)">${flagEmoji(m.champFlag,15)} ${name}</span>
+      <span style="font-weight:700;font-size:13px;color:var(--qb-text)">${flagEmoji(m.champFlag,15)} ${esc(name)}</span>
       <span class="pill pg">${ap} pts</span>
     </div>
     <div style="margin-bottom:.5rem;font-size:10px;color:var(--qb-muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--ff-display);font-weight:700">Predicciones especiales (del archivo maestro)</div>
@@ -262,15 +262,26 @@ function renderScorers(silent=false){
     return`<div class="sr">
       <span style="width:18px;font-family:var(--ff-display);font-size:11px;font-weight:700;color:var(--qb-muted)">${i+1}</span>
       <span style="font-size:16px;line-height:1">${flagIco}</span>
-      <div style="flex:1"><div style="font-weight:600;font-size:12px;color:var(--qb-text)">${s.name}</div><div style="font-size:10px;color:var(--qb-muted)">${s.country||""}</div></div>
+      <div style="flex:1"><div style="font-weight:600;font-size:12px;color:var(--qb-text)">${esc(s.name)}</div><div style="font-size:10px;color:var(--qb-muted)">${esc(s.country||"")}</div></div>
       <span class="pill pb">${s.goals} ⚽</span>
-      <button class="btn btn-red btn-sm" onclick="rmS('${s.name.replace(/'/g,"\\'")}')">✕</button>
+      <button class="btn btn-red btn-sm js-rm-scorer" data-sname="${esc(s.name)}">✕</button>
     </div>`;
   }).join("");
   body.innerHTML=html;
 }
 function addScorer(){const name=document.getElementById("sn").value.trim(),country=document.getElementById("sc2").value.trim(),goals=parseInt(document.getElementById("sg").value)||1;if(!name)return;const ex=S.scorers.find(s=>s.name.toLowerCase()===name.toLowerCase());if(ex)ex.goals=goals;else S.scorers.push({name,country,goals});document.getElementById("sn").value="";document.getElementById("sc2").value="";document.getElementById("sg").value="";save();renderScorers();toast("✓ Actualizado");}
 function rmS(name){S.scorers=S.scorers.filter(s=>s.name!==name);save();renderScorers();}
+
+// v1.5.3 — Fase 0 de seguridad: antes el botón ✕ de goleadores era
+// onclick="rmS('${s.name.replace(/'/g,"\\'")}')" — el escape de comillas
+// acá SÍ funcionaba bien (a diferencia del de app-bracket-view.js), pero
+// se migra igual a data-attribute + listener delegado por consistencia
+// con el resto del proyecto: un solo patrón para todos los botones que
+// llevan un nombre libre adentro, más fácil de auditar a futuro.
+document.addEventListener("click",(ev)=>{
+  const rmBtn=ev.target.closest(".js-rm-scorer");
+  if(rmBtn){rmS(rmBtn.dataset.sname);}
+});
 
 function renderRules(){
   const ruleRow=(r,color)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${r.l}</span><span class="pill" style="background:${color.bg};color:${color.fg};border:1px solid ${color.bc}">${r.p} pts</span></div>`;
