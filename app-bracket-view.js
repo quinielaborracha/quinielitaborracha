@@ -246,8 +246,8 @@ function renderRank(){
     // la llamada real — elimina el vector de raíz, no solo este caso.
     const adminActions=admin?`<td data-label="Hoja" style="display:flex;gap:3px;align-items:center">
       ${lnk}
-      <button class="js-edit-participant" data-pname="${esc(p.name)}" title="Editar" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">✏️</button>
-      <button class="js-toggle-hide-participant" data-pname="${esc(p.name)}" title="${p.hidden?"Mostrar":"Ocultar"}" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">${p.hidden?"👁":"🙈"}</button>
+      <button class="js-edit-participant" data-pname="${esc(p.name)}" title="Editar" aria-label="Editar a ${esc(p.name)}" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">✏️</button>
+      <button class="js-toggle-hide-participant" data-pname="${esc(p.name)}" title="${p.hidden?"Mostrar":"Ocultar"}" aria-label="${p.hidden?"Mostrar a":"Ocultar a"} ${esc(p.name)}" style="padding:2px 5px;font-size:10px;border:1px solid var(--qb-border2);border-radius:4px;background:var(--qb-surface2);color:var(--qb-muted);cursor:pointer">${p.hidden?"👁":"🙈"}</button>
     </td>`:"";
     return`<tr data-rkey="${esc(p.name)}" style="${hiddenStyle}">
       <td data-label="#">${rk}</td>

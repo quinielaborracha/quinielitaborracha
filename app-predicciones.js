@@ -264,7 +264,7 @@ function renderScorers(silent=false){
       <span style="font-size:16px;line-height:1">${flagIco}</span>
       <div style="flex:1"><div style="font-weight:600;font-size:12px;color:var(--qb-text)">${esc(s.name)}</div><div style="font-size:10px;color:var(--qb-muted)">${esc(s.country||"")}</div></div>
       <span class="pill pb">${s.goals} ⚽</span>
-      <button class="btn btn-red btn-sm js-rm-scorer" data-sname="${esc(s.name)}">✕</button>
+      <button class="btn btn-red btn-sm js-rm-scorer" data-sname="${esc(s.name)}" title="Quitar goleador" aria-label="Quitar a ${esc(s.name)} de goleadores">✕</button>
     </div>`;
   }).join("");
   body.innerHTML=html;

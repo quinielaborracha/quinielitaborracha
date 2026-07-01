@@ -3223,12 +3223,12 @@ function buildParticipantsRowsHtml(filterText, filterMode){
         <td><span class="badge ${estadoCls}" data-act="toggle-estado" data-id="${p.id}" style="cursor:pointer" title="Click para reabrir (si está enviada) o marcar como enviada (si está en borrador)">${esc(p.estadoQuiniela)}</span></td>
         <td><span class="badge ${cls}">${pct}%</span></td>
         <td style="white-space:nowrap">
-          <button class="icon-btn" data-act="edit" data-id="${p.id}" title="Editar (modo administrador)">✏️</button>
-          <button class="icon-btn" data-act="preview" data-id="${p.id}" title="Ver como participante">👁️</button>
-          <button class="icon-btn" data-act="pdf" data-id="${p.id}" title="Generar PDF">📄</button>
-          <button class="icon-btn" data-act="regen-clave" data-id="${p.id}" title="Regenerar clave">🔑</button>
-          <button class="icon-btn ${hasNota?'icon-btn-has-note':''}" data-act="nota" data-id="${p.id}" title="${hasNota?esc(p.notaAdmin):'Agregar nota interna'}">${hasNota?'🗒️':'📝'}</button>
-          <button class="icon-btn" data-act="del" data-id="${p.id}" title="Eliminar">🗑️</button>
+          <button class="icon-btn" data-act="edit" data-id="${p.id}" title="Editar (modo administrador)" aria-label="Editar (modo administrador)">✏️</button>
+          <button class="icon-btn" data-act="preview" data-id="${p.id}" title="Ver como participante" aria-label="Ver como participante">👁️</button>
+          <button class="icon-btn" data-act="pdf" data-id="${p.id}" title="Generar PDF" aria-label="Generar PDF">📄</button>
+          <button class="icon-btn" data-act="regen-clave" data-id="${p.id}" title="Regenerar clave" aria-label="Regenerar clave">🔑</button>
+          <button class="icon-btn ${hasNota?'icon-btn-has-note':''}" data-act="nota" data-id="${p.id}" title="${hasNota?esc(p.notaAdmin):'Agregar nota interna'}" aria-label="${hasNota?'Editar nota interna':'Agregar nota interna'}">${hasNota?'🗒️':'📝'}</button>
+          <button class="icon-btn" data-act="del" data-id="${p.id}" title="Eliminar" aria-label="Eliminar participante">🗑️</button>
         </td>
       </tr>`;
   }).join('');
@@ -3364,8 +3364,8 @@ function buildPapeleraRowsHtml(){
         <td class="muted">${esc(p.city)}, ${esc(p.country)}</td>
         <td class="muted">${fmtDate(entry.fechaEliminado)}</td>
         <td style="white-space:nowrap">
-          <button class="icon-btn" data-pact="restore" data-pid="${p.id}" title="Restaurar">♻️</button>
-          <button class="icon-btn" data-pact="purge" data-pid="${p.id}" title="Eliminar para siempre">🗑️</button>
+          <button class="icon-btn" data-pact="restore" data-pid="${p.id}" title="Restaurar" aria-label="Restaurar participante">♻️</button>
+          <button class="icon-btn" data-pact="purge" data-pid="${p.id}" title="Eliminar para siempre" aria-label="Eliminar participante para siempre">🗑️</button>
         </td>
       </tr>`;
   }).join('');
