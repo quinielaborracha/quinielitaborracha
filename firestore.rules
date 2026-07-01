@@ -62,6 +62,50 @@ service cloud.firestore {
         && request.time > timestamp.value(fc + 'T' + (hc != '' ? hc : '23:59') + ':00Z');
     }
 
+    // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
+    // ¿Está abierto el registro de nuevos participantes? Mismo patrón que
+    // isPastDeadline() de arriba: si registro/meta todavía no existe, o
+    // existe pero nunca declaró registroAbierto, se trata como ABIERTO
+    // (comportamiento idéntico al de siempre para cualquier instalación
+    // existente -- el default en el cliente, RG_DEFAULT_CONFIG, también
+    // es registroAbierto:true). Solo un registroAbierto == false EXPLÍCITO
+    // (el admin cerró el registro desde su panel) bloquea altas nuevas.
+    function isRegistroAbierto() {
+      return !exists(/databases/$(database)/documents/registro/meta)
+             || _isRegistroAbiertoInner();
+    }
+    function _isRegistroAbiertoInner() {
+      return _metaConfigGlobal().get('registroAbierto', true) != false;
+    }
+
+    // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
+    // Antes, el único requisito para dar de alta un participante nuevo
+    // era que ownerUid fuera el uid de quien escribe -- cualquier sesión
+    // anónima (que se obtiene solo con visitar la página, sin acción del
+    // visitante) podía crear documentos con cualquier contenido, en
+    // cualquier cantidad, incluso con el registro ya cerrado por el
+    // admin. Esto valida la forma MÍNIMA de un alta real: los mismos
+    // campos y tipos que _rgPublicFieldsOf()/rgPushToFirestore/
+    // rgCreateParticipantConfirmed() en participantes.js escriben hoy
+    // (ver test_participantes_security.js, CASO 1 y CASO 8). NO exige
+    // predictions vacío a propósito: el primer sync de alguien que ya
+    // venía completando su quiniela offline (rgPushToFirestore, camino
+    // normal de autoguardado) puede legítimamente crear el documento CON
+    // predicciones ya cargadas -- ver CASO 1. No es tampoco una lista
+    // blanca exhaustiva de TODOS los campos (eso acoplaría esta regla a
+    // cada cambio futuro de forma del documento) -- es un piso mínimo
+    // contra basura evidente: nombre y código con tipo/tamaño razonable,
+    // estado inicial correcto, predicciones como mapa (no basura de otro
+    // tipo). El resto de la protección contra spam masivo la da
+    // isRegistroAbierto() de arriba, que bloquea altas nuevas apenas el
+    // admin cierra el registro (la mayor parte del torneo).
+    function esAltaValidaDeParticipante(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+             && d.codigo is string && d.codigo.size() <= 50
+             && d.estadoQuiniela == 'borrador'
+             && d.predictions is map;
+    }
+
     // ── RESULTADOS REALES, BONOS, BATALLAS — sin cambios respecto a
     // versiones anteriores. Solo el admin puede escribir; cualquiera
     // puede leer (el Ranking público lo necesita).
@@ -117,9 +161,25 @@ service cloud.firestore {
       // documento "a nombre de" alguien más con cualquier ownerUid (o
       // sin ninguno): esto cubre restaurar a alguien desde la papelera
       // (que vuelve tal cual estaba, sin un ownerUid nuevo asignado).
+      //
+      // v1.5.2 — Fase de Seguridad: antes, con solo declarar su propio
+      // ownerUid alcanzaba -- cualquier sesión anónima (se obtiene solo
+      // con visitar la página) podía crear documentos con cualquier
+      // contenido, en cualquier cantidad, incluso con el registro ya
+      // cerrado por el admin. El camino no-admin ahora exige además que
+      // el registro esté abierto (isRegistroAbierto()) y que el
+      // documento tenga la forma mínima de un alta real
+      // (esAltaValidaDeParticipante()). El camino admin (restaurar desde
+      // la papelera) sigue exactamente igual que antes, sin estas dos
+      // exigencias -- un registro restaurado puede legítimamente traer
+      // estadoQuiniela:'enviada' y predicciones ya cargadas.
       allow create: if request.auth != null
                     && (
-                         request.resource.data.ownerUid == request.auth.uid
+                         (
+                           request.resource.data.ownerUid == request.auth.uid
+                           && isRegistroAbierto()
+                           && esAltaValidaDeParticipante(request.resource.data)
+                         )
                          ||
                          request.auth.token.email == "quinielaborracha@gmail.com"
                        );
