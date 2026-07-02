@@ -174,7 +174,7 @@
       <img id="logo-img" src="" alt="QB" style="width:40px;height:40px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.0</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.1</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -290,10 +290,32 @@
       <button class="inner-tab on" onclick="battlesTab('active')" id="btab-active">⚔️ Activas</button>
       <button class="inner-tab" onclick="battlesTab('history')" id="btab-history">📜 Historial</button>
       <button class="inner-tab" onclick="battlesTab('ligas')" id="btab-ligas">🏅 Ligas</button>
+      <button class="inner-tab" onclick="battlesTab('rumble')" id="btab-rumble">👑 Rumble</button>
     </div>
     <div id="battles-active-wrap"><div id="battles-body"></div></div>
     <div id="battles-history-wrap" style="display:none"></div>
     <div id="battles-ligas-wrap" style="display:none"></div>
+    <div id="battles-rumble-wrap" style="display:none">
+      <div class="admin-only" style="display:none;margin-bottom:1rem;padding:.75rem;border:1px solid var(--qb-border);border-radius:10px;background:var(--qb-surface)">
+        <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">👑 Armar Royal Rumble</div>
+        <div style="font-size:10px;color:var(--qb-muted);margin-bottom:.375rem">Elegí quiénes participan (sin restricción de liga):</div>
+        <div id="rumble-participants-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--qb-border2);border-radius:6px;padding:.5rem;margin-bottom:.5rem"></div>
+        <input type="text" id="rumble-name" placeholder="Nombre (opcional) — ej: Rumble de la fecha 3" style="width:100%;font-size:12px;padding:6px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text);margin-bottom:4px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <label for="rumble-dias" style="font-size:10px;color:var(--qb-muted);white-space:nowrap">Días de duración</label>
+          <input type="number" id="rumble-dias" autocomplete="off" min="1" step="1" value="1" style="width:56px;font-size:12px;padding:6px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text)">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <label for="rumble-partidos" style="font-size:10px;color:var(--qb-muted);white-space:nowrap">Partidos de duración</label>
+          <input type="number" id="rumble-partidos" autocomplete="off" min="1" step="1" placeholder="—" style="width:56px;font-size:12px;padding:6px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text)">
+        </div>
+        <button class="btn btn-sm btn-blue" style="width:100%;margin-top:6px" onclick="startRumble()">👑 Iniciar Royal Rumble</button>
+        <button class="btn btn-sm" style="width:100%;margin-top:4px" onclick="resetRumble()">🏁 Terminar y guardar Rumble</button>
+      </div>
+      <div id="rumble-active-body"></div>
+      <div style="font-family:var(--ff-display);font-size:12px;font-weight:800;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin:1rem 0 .5rem">📜 Historial de Rumbles</div>
+      <div id="rumble-history-body"></div>
+    </div>
   </div>
 
   <!-- ═══ FIXTURE TAB — sub: Grupos + Eliminatoria ═══ -->
@@ -720,7 +742,7 @@
 <script defer src="app-live-sync.js?v=1.2"></script>
 <script defer src="app-tabs.js?v=1.3"></script>
 <script defer src="app-eliminatoria-data.js?v=1.0"></script>
-<script defer src="app-batallas.js?v=2.0"></script>
+<script defer src="app-batallas.js?v=2.1"></script>
 <script defer src="app-bracket-render.js?v=1.2"></script>
 <script defer src="app-bracket-compute.js?v=1.0"></script>
 <script defer src="app-bracket-espn-sync.js?v=1.2"></script>

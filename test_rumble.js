@@ -1,0 +1,188 @@
+// Test funcional de la Fase 4 del roadmap de Batallas: Royal Rumble.
+// Estructura propia (S.rumble = {participantes:[...]}, no una extensión
+// de p1/p2), sin restricción de Liga, y calcRumblePts = calcBattlePts +
+// Avanzado (a diferencia del 1v1, que excluye Avanzado a propósito).
+const { JSDOM } = require("jsdom");
+const fs = require("fs");
+const path = require("path");
+
+const FILES_IN_ORDER = [
+  "participantes.js","partidos-grupos.js","utils.js","scoring.js","totp.js",
+  "app-core-data.js","app-admin-auth.js","app-live-sync.js","app-tabs.js",
+  "app-eliminatoria-data.js","app-batallas.js","app-bracket-render.js",
+  "app-bracket-compute.js","app-bracket-espn-sync.js","app-bracket-view.js",
+  "app-bracket-espn-live.js","app-integridad.js","app-predicciones.js",
+  "app-estadisticas.js","app-admin-tools.js","app-bootstrap.js"
+];
+
+const html = `<!doctype html><html><body>
+  <div id="root"></div><div id="toast"></div><div id="integ-banner"></div>
+  <img id="logo-img"><span id="admin-indicator"></span>
+  <span id="hstat"></span><span id="hdr-master-badge"></span><span id="hdr-today"></span>
+  <table><tbody id="rb"></tbody></table>
+  <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
+  <div id="t-battles" style="display:block">
+    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
+    <input id="battle-slot1-dias"><input id="battle-slot1-partidos"><input id="battle-slot1-name">
+    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
+    <input id="battle-slot2-dias"><input id="battle-slot2-partidos"><input id="battle-slot2-name">
+    <div id="battles-postulados"></div><div id="battles-body"></div>
+    <div id="battles-ligas-wrap"></div>
+    <div id="rumble-participants-list"></div>
+    <input id="rumble-name"><input id="rumble-dias"><input id="rumble-partidos">
+    <div id="rumble-active-body"></div><div id="rumble-history-body"></div>
+  </div>
+</body></html>`;
+
+const dom = new JSDOM(html, { url: "https://example.org/", runScripts: "dangerously" });
+const { window } = dom;
+window.toast = (m,e) => {};
+window.setInterval = () => 0;
+window.confirm = () => true;
+window.alert = () => {};
+window.__fb = null;
+
+let ok = true;
+function check(label, cond){ console.log((cond?"✅ ":"❌ ")+label); if(!cond) ok=false; }
+
+for (const file of FILES_IN_ORDER){
+  const code = fs.readFileSync(path.join(__dirname, file), "utf8");
+  const script = window.document.createElement("script");
+  script.textContent = code;
+  try{ window.document.body.appendChild(script); }
+  catch(e){ console.log(`❌ ${file} lanzó un error al cargar: ${e.message}`); ok = false; }
+}
+
+const bridge = window.document.createElement("script");
+bridge.textContent = `
+  window.__test = {
+    DB, S, rebuildDynamicData, calcBattlePts, calcAdv, calcRumblePts,
+    startRumble, resetRumble, renderRumblePanel, getVentanaRumble,
+    getParticipantesSeleccionadosRumble, getLigaDe,
+  };
+`;
+window.document.body.appendChild(bridge);
+if (!window.__test){ console.error("❌ El bridge no se ejecutó."); process.exit(1); }
+const T = window.__test;
+const W = window;
+W.isAdmin = () => true; // reasignar DESPUÉS de cargar los archivos
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 1 — calcRumblePts: Básico + Avanzado + Eliminatoria (sin Bonos)
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── calcRumblePts() incluye Avanzado (a diferencia de calcBattlePts) ──");
+
+T.DB.participants = [{id:"p0", name:"Rumbler", city:"C", country:"P"}];
+T.DB.predictions = {p0:{}};
+T.rebuildDynamicData();
+
+T.S.matchTimes[1] = Date.now() + 3600000;
+T.S.scores[1] = {h:2, a:0};
+T.DB.predictions.p0[1] = {h:2, a:0}; // acierta exacto
+T.rebuildDynamicData();
+
+T.S.reality = {champ:"Argentina",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountryGoals:0,mostConceded:""};
+T.S.adv["Rumbler"] = {champ:"Argentina"}; // acierta campeón -> calcAdv > 0
+
+const battlePts = T.calcBattlePts("Rumbler", [1], []);
+const advPts = T.calcAdv("Rumbler");
+const rumblePts = T.calcRumblePts("Rumbler", [1], []);
+
+check("calcAdv() da puntos (>0) por acertar el campeón", advPts > 0);
+check("calcRumblePts() = calcBattlePts() + calcAdv() (a diferencia de calcBattlePts solo, que excluye Avanzado)",
+  rumblePts === battlePts + advPts);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 2 — startRumble(): validaciones, estructura propia, sin
+   restricción de Liga
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── startRumble() ──");
+
+T.DB.participants = [
+  {id:"g0", name:"Campeon1", city:"C", country:"P"}, // va a terminar en Champions
+  {id:"g1", name:"Rival1",   city:"C", country:"P"},
+  {id:"n0", name:"NuevoA",   city:"C", country:"P"}, // nunca peleó -> Premier
+  {id:"n1", name:"NuevoB",   city:"C", country:"P"}, // nunca peleó -> Premier
+];
+T.DB.predictions = {g0:{}, g1:{}, n0:{}, n1:{}};
+T.S.battleHistory = [{name:"h1", p1:"Campeon1", p2:"Rival1", winner:"Campeon1", date:"d"}];
+T.rebuildDynamicData();
+
+check("Campeon1 y NuevoA quedan en ligas DISTINTAS (champions vs premier) -- setup previo a probar que el Rumble las ignora",
+  T.getLigaDe("Campeon1") !== T.getLigaDe("NuevoA"));
+
+let avisoPocos = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoPocos = true; };
+T.startRumble(); // sin ningún checkbox tildado
+check("startRumble() sin participantes seleccionados avisa en vez de arrancar uno vacío", avisoPocos === true);
+check("No se creó S.rumble", !T.S.rumble);
+
+// Tildar a los 4 (2 de Champions/Premier distintas, cruzando ligas libremente).
+["Campeon1","Rival1","NuevoA","NuevoB"].forEach(n=>{
+  const cb = W.document.createElement("input");
+  cb.type="checkbox"; cb.className="js-rumble-check"; cb.value=n; cb.checked=true;
+  W.document.getElementById("rumble-participants-list").appendChild(cb);
+});
+W.document.getElementById("rumble-dias").value = "1";
+T.S.matchTimes[2] = Date.now() + 3600000; // partido futuro para que la ventana no quede vacía
+
+T.startRumble();
+check("S.rumble se creó con los 4 participantes, CRUZANDO ligas sin ningún rechazo",
+  T.S.rumble && T.S.rumble.participantes.length === 4);
+check("S.rumble.participantes incluye tanto a Campeon1 (Champions) como a NuevoA (Premier) -- sin restricción de Liga",
+  T.S.rumble.participantes.includes("Campeon1") && T.S.rumble.participantes.includes("NuevoA"));
+
+let avisoYaActivo = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoYaActivo = true; };
+T.startRumble();
+check("Con un Rumble ya activo, startRumble() avisa en vez de crear un segundo",
+  avisoYaActivo === true);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 3 — resetRumble(): gana quien más puntos suma; se guarda en
+   S.rumbleHistory; limpia S.rumble
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── resetRumble(): ganador y guardado en historial ──");
+
+// Predicciones para que Campeon1 saque más puntos que el resto (acierta
+// el partido 2; los demás no tienen predicción para ese mid).
+T.S.scores[2] = {h:1, a:0};
+T.DB.predictions.g0[2] = {h:1, a:0};
+T.rebuildDynamicData();
+
+T.resetRumble();
+check("S.rumble quedó null tras terminar (Rumble cerrado)", T.S.rumble === null);
+check("Se agregó 1 entrada a S.rumbleHistory", T.S.rumbleHistory.length === 1);
+check("El ganador guardado es Campeon1 (acertó de más que el resto)",
+  T.S.rumbleHistory[0].winner === "Campeon1");
+check("El registro guarda los puntos de los 4 participantes",
+  Object.keys(T.S.rumbleHistory[0].puntos).length === 4);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 4 — Empate: si 2+ participantes quedan con el mismo máximo,
+   el ganador guardado es "Empate" (mismo criterio que las Batallas 1v1)
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── resetRumble(): empate entre 2+ participantes ──");
+
+T.DB.participants = [
+  {id:"e0", name:"Empate1", city:"C", country:"P"},
+  {id:"e1", name:"Empate2", city:"C", country:"P"},
+];
+T.DB.predictions = {e0:{}, e1:{}};
+T.rebuildDynamicData(); // ninguno tiene predicciones -> ambos con 0pts, calcAdv también 0
+
+const cbs = W.document.getElementById("rumble-participants-list");
+cbs.innerHTML = "";
+["Empate1","Empate2"].forEach(n=>{
+  const cb = W.document.createElement("input");
+  cb.type="checkbox"; cb.className="js-rumble-check"; cb.value=n; cb.checked=true;
+  cbs.appendChild(cb);
+});
+W.document.getElementById("rumble-dias").value = "1";
+T.startRumble();
+T.resetRumble();
+check("Con 2 participantes empatados en puntos, el ganador guardado es 'Empate'",
+  T.S.rumbleHistory[0].winner === "Empate");
+
+console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
+process.exit(ok ? 0 : 1);

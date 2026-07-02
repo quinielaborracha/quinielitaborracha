@@ -220,6 +220,152 @@ function resetBattle(slot){
   toast(`Batalla ${slot} terminada y guardada`);
 }
 
+// ══════════════════════════════════════════════════════════════
+// ROYAL RUMBLE (Fase 4) — v2.1
+// ══════════════════════════════════════════════════════════════
+// Modo de juego NUEVO, no una extensión de las Batallas 1v1: estructura
+// propia (S.rumble = {participantes:[...nombres], ...} -- un array, no
+// p1/p2 sueltos). El admin elige específicamente quiénes participan (no
+// automático) y cuántos días/partidos dura (mismo mecanismo de la Fase 2).
+// Cruza ligas libremente -- a propósito NO tiene la restricción de la
+// Fase 3, que solo aplica a duelos 1v1. Un solo Rumble activo a la vez.
+function ensureRumbleState(){
+  if(S.rumble===undefined)S.rumble=null;
+  if(!S.rumbleHistory)S.rumbleHistory=[];
+}
+
+// Básico + Avanzado + Eliminatoria, SIN Bonos -- a diferencia de
+// calcBattlePts (que excluye Avanzado a propósito para duelos 1v1), acá
+// el brief de la Fase 4 pide expresamente incluirlo. Avanzado (campeón/
+// goleador/etc) no tiene "ventana" propia -- es una predicción de todo
+// el torneo -- así que se suma entera, no recortada a groupMids/elimMids.
+function calcRumblePts(name,groupMids,elimMids){
+  return calcBattlePts(name,groupMids,elimMids)+calcAdv(name);
+}
+
+function populateRumbleChecklist(){
+  if(!isAdmin())return;
+  const wrap=document.getElementById("rumble-participants-list");
+  if(!wrap)return;
+  ensureRumbleState();
+  const yaJugando=new Set(S.rumble?S.rumble.participantes:[]);
+  const names=PL.slice().sort();
+  wrap.innerHTML=names.map(n=>`<label style="display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0">
+      <input type="checkbox" class="js-rumble-check" value="${esc(n)}" ${yaJugando.has(n)?"checked disabled":""}> ${esc(n)}
+    </label>`).join("");
+}
+
+function getParticipantesSeleccionadosRumble(){
+  return Array.from(document.querySelectorAll(".js-rumble-check:checked"))
+    .filter(el=>!el.disabled) // los ya jugando en un Rumble activo aparecen tildados pero no se re-seleccionan
+    .map(el=>el.value);
+}
+
+function getVentanaRumble(){
+  const partidosEl=document.getElementById("rumble-partidos");
+  const partidos=parseInt(partidosEl?.value);
+  if(partidos>0)return{modo:"partidos",valor:partidos,...getMatchIdsByCount(partidos)};
+  const diasEl=document.getElementById("rumble-dias");
+  const dv=parseInt(diasEl?.value);
+  const dias=(dv>0)?dv:1;
+  return{modo:"dias",valor:dias,...getMatchIdsInWindow(dias)};
+}
+
+function startRumble(){
+  if(!isAdmin())return;
+  ensureRumbleState();
+  if(S.rumble){toast("Ya hay un Royal Rumble activo -- terminalo primero",true);return;}
+  const seleccionados=getParticipantesSeleccionadosRumble();
+  if(seleccionados.length<2){toast("Elegí al menos 2 participantes para el Rumble",true);return;}
+  const{modo,valor,groupMids,elimMids}=getVentanaRumble();
+  if(groupMids.length===0&&elimMids.length===0){
+    toast(`No hay partidos disponibles para esa ventana (${descripVentana(modo,valor)})`,true);return;
+  }
+  const nameInput=document.getElementById("rumble-name");
+  let name=(nameInput?.value||"").trim();
+  if(!name)name="Royal Rumble";
+  S.rumble={participantes:seleccionados,name,ventanaModo:modo,ventanaValor:valor,groupMids,elimMids,startedAt:Date.now()};
+  save();renderRumblePanel();
+  toast(`👑 Royal Rumble iniciado con ${seleccionados.length} participantes (${descripVentana(modo,valor)})`);
+}
+
+function resetRumble(){
+  if(!isAdmin())return;
+  ensureRumbleState();
+  const r=S.rumble;
+  if(r){
+    const puntos={};
+    r.participantes.forEach(n=>{puntos[n]=calcRumblePts(n,r.groupMids,r.elimMids);});
+    const max=Math.max(...Object.values(puntos));
+    const ganadores=r.participantes.filter(n=>puntos[n]===max);
+    const winner=ganadores.length===1?ganadores[0]:"Empate";
+    S.rumbleHistory.unshift({
+      name:r.name||"Royal Rumble",
+      participantes:r.participantes,
+      puntos,winner,
+      date:new Date().toLocaleDateString("es",{day:"2-digit",month:"short",year:"numeric"})
+    });
+  }
+  S.rumble=null;
+  save();renderRumblePanel();
+  toast("Royal Rumble terminado y guardado");
+}
+
+function renderRumblePanel(){
+  ensureRumbleState();
+  populateRumbleChecklist();
+  const wrap=document.getElementById("rumble-active-body");
+  if(wrap){
+    if(!S.rumble){
+      wrap.innerHTML=`<div style="text-align:center;padding:1.5rem 1rem;color:var(--qb-muted);font-size:12px">👑 No hay ningún Royal Rumble activo.${isAdmin()?" Elegí participantes arriba y arrancá uno.":""}</div>`;
+    }else{
+      const r=S.rumble;
+      const filas=r.participantes
+        .map(n=>({name:n,pts:calcRumblePts(n,r.groupMids,r.elimMids)}))
+        .sort((a,b)=>b.pts-a.pts);
+      const done=areBattleMatchesDone(r.groupMids,r.elimMids);
+      wrap.innerHTML=`
+        <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${esc(r.name)} · ${descripVentana(r.ventanaModo,r.ventanaValor)} · ${r.participantes.length} participantes</div>
+        <table class="rt" style="width:100%">
+          <thead><tr><th>#</th><th>Participante</th><th style="text-align:right">Puntos</th></tr></thead>
+          <tbody>
+            ${filas.map((f,i)=>`<tr>
+              <td>${i===0?'<span style="font-size:18px">👑</span>':`<span class="rk">${i+1}</span>`}</td>
+              <td>${esc(f.name)}</td>
+              <td style="text-align:right;font-weight:800">${f.pts}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+        ${done?'<div style="text-align:center;margin-top:.5rem;font-size:10px;color:var(--qb-muted)">✓ Todos los partidos de la ventana ya se jugaron.</div>':""}
+      `;
+    }
+  }
+  renderRumbleHistory();
+}
+
+function renderRumbleHistory(){
+  const wrap=document.getElementById("rumble-history-body");
+  if(!wrap)return;
+  ensureRumbleState();
+  if(!S.rumbleHistory.length){
+    wrap.innerHTML=`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">Todavía no hay Rumbles cerrados.</div>`;
+    return;
+  }
+  wrap.innerHTML=S.rumbleHistory.map(h=>{
+    const filas=Object.entries(h.puntos).sort((a,b)=>b[1]-a[1]);
+    return`<div style="border:1px solid var(--qb-border);border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:var(--qb-surface)">
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--qb-text)">
+        <span>${esc(h.name)}</span><span style="color:var(--qb-muted)">${h.date}</span>
+      </div>
+      <div style="margin-top:.375rem;font-size:11px">${h.winner==="Empate"?"🤝 Empate":`👑 ${esc(h.winner)}`}</div>
+      <details style="margin-top:.375rem">
+        <summary style="font-size:10px;color:var(--qb-muted);cursor:pointer">${filas.length} participantes</summary>
+        <div style="margin-top:.375rem">${filas.map(([n,p])=>`<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--qb-muted)"><span>${esc(n)}</span><span>${p}pts</span></div>`).join("")}</div>
+      </details>
+    </div>`;
+  }).join("");
+}
+
 // v1.7.2 — BUG REPORTADO: alguien se postulaba y nunca aparecía en
 // Postulados, incluso después de una recarga completa. Causa: al recargar
 // (F5), el navegador restaura solo los <select> de "Armar batalla" con lo
@@ -538,11 +684,14 @@ function battlesTab(id){
   document.getElementById("battles-active-wrap").style.display=id==="active"?"block":"none";
   document.getElementById("battles-history-wrap").style.display=id==="history"?"block":"none";
   document.getElementById("battles-ligas-wrap").style.display=id==="ligas"?"block":"none";
+  document.getElementById("battles-rumble-wrap").style.display=id==="rumble"?"block":"none";
   document.getElementById("btab-active").classList.toggle("on",id==="active");
   document.getElementById("btab-history").classList.toggle("on",id==="history");
   document.getElementById("btab-ligas").classList.toggle("on",id==="ligas");
+  document.getElementById("btab-rumble").classList.toggle("on",id==="rumble");
   if(id==="history")renderBattleHistory();
   if(id==="ligas")renderLigasPanel();
+  if(id==="rumble")renderRumblePanel();
 }
 
 function renderBattleHistory(){
