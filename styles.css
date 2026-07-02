@@ -290,6 +290,15 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
   padding: 8px 7px;
   border-bottom: 1px solid var(--qb-border);
   vertical-align: middle;
+  /* v1.9 — Antes esta celda no declaraba color propio (dependía de
+     heredarlo del body). En Chrome/Windows eso alcanzaba para el texto
+     normal, pero la bandera-emoji del País (ver flagEmoji() en utils.js)
+     caía al fallback de "iniciales" en 2 letras que Windows dibuja con su
+     propio color por defecto (negro) en vez de heredar el de la página --
+     y como el fondo de la tabla también es oscuro, quedaba negro sobre
+     negro. Declarar el color acá explícito (no heredado) es lo único que
+     esos glifos de fallback SÍ respetan. */
+  color: var(--qb-text);
 }
 .rt tr:last-child td { border-bottom: none; }
 .rt tbody tr { transition: background .1s, transform .45s cubic-bezier(.4,0,.2,1), opacity .3s; will-change: transform; }

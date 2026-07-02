@@ -1244,6 +1244,21 @@ function flushAutosave(){
       if(Object.keys(obj).length) cleaned[key] = obj;
     }
   });
+  // v1.9 — BUG REPORTADO: el admin editaba las llaves de un participante
+  // (ya "enviada", vía ADMIN_OVERRIDE) y cambiaba el campeón resultante,
+  // pero la bandera/avatar seguían mostrando el país viejo en Ranking/
+  // Batallas/Estadísticas. Causa: campeon/subcampeon/tercer solo se
+  // "quemaban" en preds.special UNA vez, al enviar por primera vez (ver
+  // el paso 'review' más abajo) -- getDynamicSpec() (scoring.js), y por lo
+  // tanto flagOfChampion()/avatarOfChampion() (app-core-data.js), leen
+  // ese valor congelado, no el bracket en vivo. Fix: recalcularlos acá,
+  // en CADA autoguardado (no solo al enviar), así preds.special.campeon
+  // nunca queda desactualizado sin importar cuándo ni quién edite las
+  // llaves. computeAutoSpecial() ya devuelve "" para los 3 campos si el
+  // bracket todavía no está completo (bracket.ready===false), así que
+  // esto no inventa un campeón antes de tiempo.
+  const autoSpDraft = computeAutoSpecial(computeBracket(cleaned));
+  cleaned.special = {...(cleaned.special||{}), ...autoSpDraft};
   DB.predictions[DRAFT_PID] = cleaned;
   DRAFT_PREDS = JSON.parse(JSON.stringify(cleaned));
   p.lastStep = WIZ_STEP;
@@ -1981,11 +1996,25 @@ function renderParticipantDashboard(pid){
   const switchAccountLink = (!PREVIEW_AS_PARTICIPANT && !ADMIN_OVERRIDE)
     ? `<button class="rg-btn rg-btn-ghost" id="dash_logout_btn" style="font-size:11px;padding:6px 10px">🚪 No soy ${esc((p.name||'').split(' ')[0]||'yo')} · Salir</button>`
     : '';
-  const topActionsRow = (postularBtn || switchAccountLink)
-    ? `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:.5rem">
-         <span>${postularBtn}</span><span>${switchAccountLink}</span>
-       </div>`
-    : '';
+  // v1.9 — Avatar de campeón siempre visible arriba a la izquierda de Mi
+  // Quiniela (junto al nombre y al botón de postularse), no solo dentro de
+  // la sub-pestaña Perfil -- se calcula acá directo del bracket de ESTE
+  // participante (computeAutoSpecial/computeBracket, mismo criterio que ya
+  // usa generarPDF() para la portada del PDF) en vez de depender de
+  // PM[p.name] -- así nunca queda desactualizado por timing de sync con
+  // Firestore. Sin avatar todavía para ese país, queda solo el nombre (sin
+  // placeholder genérico), mismo criterio que en el resto de la app.
+  const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
+  const champAvatarFileDash = (champValDash && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champValDash]||'') : '';
+  const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px">
+         ${avatarImg(champAvatarFileDash, 52)}
+         <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
+         ${postularBtn}
+       </div>`;
+  const topActionsRow = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.75rem;flex-wrap:wrap">
+         ${dashIdentityHtml}
+         <span>${switchAccountLink}</span>
+       </div>`;
 
   const tabsHtml = DASH_TABS.map(t=>
     `<button class="inner-tab ${DASH_TAB===t.key?'on':''}" data-dtab="${t.key}">${t.icon} ${esc(t.label)}</button>`

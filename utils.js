@@ -90,7 +90,15 @@ function flagD(c,s=20){const f=FLAGS2[c]||"🌐";return`<span style="font-size:$
 // el de flagOfChampion(), calculado contra ALL_FLAGS en vez de FLAGS2) en
 // lugar de un nombre de país. Evita repetir el wrapper <span> en cada
 // sitio que necesita mostrar la bandera del campeón predicho.
-function flagEmoji(emoji,s=20){return`<span style="font-size:${s}px;line-height:1">${emoji||"🌐"}</span>`;}
+// v1.9 — color:var(--qb-text) explícito (antes el span no declaraba
+// ninguno, solo heredaba). En Windows/Chrome, banderas sin glifo emoji de
+// color (Escocia, RD Congo, etc.) caen al fallback de 2 letras que el SO
+// dibuja con SU PROPIO color por defecto en vez de heredar el de la
+// página -- sobre el fondo oscuro de la app, texto negro sobre negro.
+// Sin garantía de que esto arregle el fallback en sí (es un glifo del
+// sistema, no siempre reconfigurable por CSS), pero es lo mínimo que el
+// span puede declarar para no ser la causa.
+function flagEmoji(emoji,s=20){return`<span style="font-size:${s}px;line-height:1;color:var(--qb-text)">${emoji||"🌐"}</span>`;}
 
 // v1.8 — Avatar de campeón (perfil, batallas, Royal Rumble, tarjeta de
 // estadísticas): recibe el nombre de archivo ya resuelto por
