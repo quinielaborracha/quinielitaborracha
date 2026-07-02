@@ -1,2 +1,14 @@
 node_modules/
 npm-debug.log*
+
+# Backups automáticos que algunas operaciones del panel Admin descargan
+# al navegador del que hace la acción (Integridad, importar info de
+# participantes, etc.) -- si alguna vez terminan sueltos en la carpeta
+# del proyecto por trabajar localmente, no deberían subirse: pueden traer
+# datos reales de participantes (correo/clave).
+backup_*.json
+
+# Archivos de sistema operativo / editor comunes.
+.DS_Store
+Thumbs.db
+*.swp
