@@ -117,6 +117,12 @@ function getPostuladosDisponibles(){
       if(sel && sel.value) ocupados.add(sel.value);
     });
   });
+  // DEBUG POSTULADOS (temporal, sacar cuando se resuelva) — qué ve esta
+  // función de DB.participants justo antes de filtrar, y qué excluyó el
+  // set de "ocupados" (batallas activas + selects ya cargados).
+  console.log("[DEBUG postulados] getPostuladosDisponibles() — DB.participants:",
+    (DB.participants||[]).map(p=>({name:p.name, quierePelear:p.quierePelear})),
+    "ocupados:", [...ocupados]);
   return (DB.participants||[])
     .filter(p=>p.quierePelear && !ocupados.has(p.name))
     .map(p=>p.name)
