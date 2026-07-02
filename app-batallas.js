@@ -26,8 +26,11 @@
 // del dispositivo). Un partido que arranca 11pm y cruza medianoche
 // sigue contando como "de hoy" porque se ancla a la hora de inicio.
 
-// Puntos Básicos+Avanzado (sin Bonos) que 'name' ganó específicamente
-// en los partidos de hoy — ni snapshot ni resta, suma directa.
+// Puntos de Básico + Eliminatoria (sin Avanzado ni Bonos, a propósito: una
+// batalla mide quién predijo mejor los partidos de esa ventana puntual, no
+// apuestas de todo el torneo como campeón/goleador o premios acumulados)
+// que 'name' ganó específicamente en los partidos de hoy — ni snapshot ni
+// resta, suma directa.
 
 // ¿Ya se jugaron TODOS los partidos de hoy? (criterio de cierre del duelo)
 // IMPORTANTE: un resultado "live" (partido en curso) NO cuenta como terminado.
