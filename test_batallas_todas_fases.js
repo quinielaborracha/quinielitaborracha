@@ -16,7 +16,7 @@ const FILES_IN_ORDER = [
   "participantes.js","partidos-grupos.js","utils.js","app-state.js","scoring.js","totp.js",
   "app-core-data.js","app-admin-auth.js","app-live-sync.js","app-tabs.js",
   "app-eliminatoria-data.js","app-batallas.js","app-bracket-render.js",
-  "app-bracket-compute.js","app-bracket-espn-sync.js","app-bracket-view.js",
+  "app-bracket-annexc.js","app-bracket-compute.js","app-bracket-espn-sync.js","app-bracket-view.js",
   "app-bracket-espn-live.js","app-integridad.js","app-predicciones.js",
   "app-estadisticas.js","app-admin-tools.js","app-bootstrap.js","registro.js"
 ];

@@ -12,7 +12,7 @@ participantes.js → partidos-grupos.js → utils.js → app-state.js →
   scoring.js → totp.js →
   app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
   app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
-  app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
+  app-bracket-annexc.js → app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
   app-bracket-espn-live.js → app-integridad.js → app-predicciones.js →
   app-estadisticas.js → app-admin-tools.js → app-bootstrap.js →
   registro.js
@@ -34,6 +34,7 @@ participantes.js → partidos-grupos.js → utils.js → app-state.js →
   - `app-eliminatoria-data.js` — datos/constantes de la fase eliminatoria + config de Bonos
   - `app-batallas.js` — duelos diarios 1 vs 1
   - `app-bracket-render.js` — fixture de eliminatoria + editor manual de llaves + simulación
+  - `app-bracket-annexc.js` — declara `ANNEX_C`, la tabla oficial de FIFA con las 495 combinaciones de terceros de grupo. Puro dato, sin funciones; va justo antes de `app-bracket-compute.js`, su único consumidor.
   - `app-bracket-compute.js` — cálculo automático de llaves de dieciseisavos
   - `app-bracket-espn-sync.js` — sync ESPN de eliminatoria + conflicto de llave
   - `app-bracket-view.js` — render del bracket por participante

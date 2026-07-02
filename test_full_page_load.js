@@ -28,6 +28,7 @@ const FILES_IN_ORDER = [
   "app-eliminatoria-data.js",
   "app-batallas.js",
   "app-bracket-render.js",
+  "app-bracket-annexc.js",
   "app-bracket-compute.js",
   "app-bracket-espn-sync.js",
   "app-bracket-view.js",

@@ -39,7 +39,7 @@ publicar empezó a colgarse y fallar de forma repetida sin causa visible).
 
 ### Carga de scripts: orden fijo, scope global compartido
 
-`index.html` carga ~23 archivos `<script defer src="...">` (no ES modules,
+`index.html` carga ~24 archivos `<script defer src="...">` (no ES modules,
 salvo el bloque inline de Firebase). Todos comparten el mismo scope global
 del navegador — no hay imports/exports; una función o variable de nivel
 superior declarada en un archivo está disponible en cualquiera que cargue
@@ -50,7 +50,7 @@ participantes.js → partidos-grupos.js → utils.js → app-state.js →
 scoring.js → totp.js →
 app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
 app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
-app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
+app-bracket-annexc.js → app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
 app-bracket-espn-live.js → app-integridad.js → app-predicciones.js →
 app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
 ```
@@ -73,7 +73,10 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   únicamente `S` (el estado mutable compartido: resultados reales,
   checksums, bonos, batallas, snapshots — lo que persiste en
   `quiniela/estado`) y va justo antes que `scoring.js`, su mayor
-  consumidor.
+  consumidor. Mismo patrón en `app-bracket-annexc.js`: declara únicamente
+  `ANNEX_C` (las 495 combinaciones oficiales de FIFA para asignar los
+  mejores terceros de grupo a su cruce de Dieciseisavos) y va justo antes
+  que `app-bracket-compute.js`, su único consumidor.
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
