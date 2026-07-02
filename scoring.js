@@ -150,6 +150,34 @@ function getPredWinner(name,pid,wantLoser=false){
   return wantLoser?loser:winner;
 }
 
+// v1.9 — NUEVO: "¿Quién avanza?" (pestaña ⚡ En vivo). A diferencia de
+// isLlaveCorrecta()/findCruceValido() (que exigen que el cruce COMPLETO
+// -- los 2 equipos puntuales -- coincida con un cruce real, para otorgar
+// puntos), acá alcanza con que el participante tenga a ESE equipo
+// jugando en ALGÚN cruce de SU PROPIO bracket predicho dentro de la misma
+// ronda, sin importar contra quién: cada participante arma su bracket
+// desde SUS PROPIOS resultados de grupo, así que puede no coincidir con
+// el cruce real (ej. su versión de Portugal-vs-alguien puede no ser
+// Portugal-vs-Croacia) y aun así haber apostado claramente a que Portugal
+// pasa. roundIds = todos los pids de esa ronda (ELIM_ROUNDS) — se
+// recorren todos porque no sabemos a priori en qué slot cada participante
+// tiene a ese equipo. Devuelve los nombres (sin abreviar) de quienes
+// predijeron que "teamName" gana su cruce.
+function getTeamAdvancePickers(teamName,roundIds){
+  const tn=n(teamName);
+  const names=[];
+  PL.forEach(name=>{
+    for(const pid of roundIds){
+      const teams=getElimTeams(name,pid);if(!teams)continue;
+      if(n(teams.h)!==tn&&n(teams.a)!==tn)continue;
+      const winner=getPredWinner(name,pid);
+      if(winner&&n(winner)===tn)names.push(name);
+      break; // ya encontramos el cruce de este participante con ese equipo
+    }
+  });
+  return names;
+}
+
 function getRealElimTeams(pid){
   // v1.2 — antes esto era "if(ELIM_1_16_IDS.includes(pid))", hardcodeado a
   // Dieciseisavos. getManualTeamPids() devuelve eso MISMO cuando todas las
