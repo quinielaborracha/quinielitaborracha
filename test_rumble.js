@@ -76,7 +76,11 @@ T.DB.participants = [{id:"p0", name:"Rumbler", city:"C", country:"P"}];
 T.DB.predictions = {p0:{}};
 T.rebuildDynamicData();
 
-T.S.matchTimes[1] = Date.now() + 3600000;
+// Ancla a "hoy al mediodía" (no "ahora + 1h") -- getMatchIdsInWindow(1)
+// mira el día calendario, y "+1h" cruza a mañana si el test corre tarde
+// a la noche, dejando la ventana vacía sin querer.
+const hoyMediodiaP1 = new Date(); hoyMediodiaP1.setHours(12,0,0,0);
+T.S.matchTimes[1] = hoyMediodiaP1.getTime();
 T.S.scores[1] = {h:2, a:0};
 T.DB.predictions.p0[1] = {h:2, a:0}; // acierta exacto
 T.rebuildDynamicData();
@@ -124,7 +128,8 @@ check("No se creó S.rumble", !T.S.rumble);
   W.document.getElementById("rumble-participants-list").appendChild(cb);
 });
 W.document.getElementById("rumble-dias").value = "1";
-T.S.matchTimes[2] = Date.now() + 3600000; // partido futuro para que la ventana no quede vacía
+const hoyMediodiaP2 = new Date(); hoyMediodiaP2.setHours(12,0,0,0);
+T.S.matchTimes[2] = hoyMediodiaP2.getTime(); // partido "de hoy" para que la ventana no quede vacía
 
 T.startRumble();
 check("S.rumble se creó con los 4 participantes, CRUZANDO ligas sin ningún rechazo",

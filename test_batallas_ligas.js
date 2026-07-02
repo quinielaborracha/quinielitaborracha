@@ -175,7 +175,13 @@ check("No se creó ninguna batalla en la ranura 1", !T.S.battles[1]);
 // Ahora 2 participantes de la MISMA liga (Premier, los 2 nuevos) sí deben poder pelear.
 W.document.getElementById("battle-slot1-p1").value = "Nuevo1";
 W.document.getElementById("battle-slot1-p2").value = "Nuevo2";
-T.S.matchTimes[1] = Date.now() + 3600000; // 1 partido futuro para que la ventana no quede vacía
+// Ancla a "hoy al mediodía" en vez de "ahora + 1h": getMatchIdsInWindow(1)
+// solo mira el DÍA calendario (medianoche a medianoche), no si el partido
+// es futuro o pasado -- pero "ahora + 1h" cruza a mañana si el test corre
+// tarde a la noche, dejando la ventana vacía (bug de fragilidad ya
+// atrapado antes en test_batallas_duracion_matchmaker.js).
+const hoyMediodia1 = new Date(); hoyMediodia1.setHours(12,0,0,0);
+T.S.matchTimes[1] = hoyMediodia1.getTime(); // partido "de hoy" para que la ventana no quede vacía
 let avisoLigaOk = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoLigaOk = true; };
 T.startBattle(1);
