@@ -45,6 +45,94 @@ function ensureBattlesState(){
 const BATTLE_AUTO_NAMES=["Batalla del día","Duelo de titanes","Choque de gigantes","La gran rivalidad","Cara a cara"];
 let _editingHistIdx=null; // índice del registro de historial de batallas en edición (null = ninguno)
 
+// ══════════════════════════════════════════════════════════════
+// LIGAS DE BATALLAS (Fase 3, sistema estilo suizo) — v2.0
+// ══════════════════════════════════════════════════════════════
+// 3 grupos dinámicos (Champions/Premier/Serie B), recalculados en cada
+// render a partir de S.battleHistory -- no se persiste a qué liga
+// pertenece cada quien, se recalcula siempre desde cero (la misma idea
+// que ya usa getRank() con el ranking general: una sola fuente de verdad,
+// nunca puede desincronizarse).
+const LIGAS=[
+  {key:"champions",label:"🏆 Champions League"},
+  {key:"premier",label:"⚽ Premier League"},
+  {key:"serieb",label:"🥉 Serie B"},
+];
+
+// Recuento de victorias/derrotas/partidos jugados por participante, leído
+// de S.battleHistory (el mismo array que ya llena resetBattle()). Un
+// "Empate" no suma a wins ni a losses de nadie, pero SÍ cuenta como
+// "jugadas" -- alguien que solo empató ya compitió, no es lo mismo que
+// alguien que nunca peleó ninguna batalla (ver getLigaGroups).
+function computeBattleRecord(){
+  const rec={};
+  const ensure=(name)=>{ if(!rec[name])rec[name]={wins:0,losses:0,jugadas:0}; return rec[name]; };
+  (S.battleHistory||[]).forEach(h=>{
+    ensure(h.p1).jugadas++;
+    ensure(h.p2).jugadas++;
+    if(h.winner && h.winner!=="Empate"){
+      ensure(h.winner).wins++;
+      const loser=h.winner===h.p1?h.p2:h.p1;
+      ensure(loser).losses++;
+    }
+  });
+  return rec;
+}
+
+// Standings de TODOS los participantes activos, ordenados por el criterio
+// de la Liga: más victorias primero; empate en victorias, menos derrotas;
+// sigue empatado, el ranking general de predicciones (Básico+Avanzado+
+// Eliminatoria+Bonos, el mismo total que ya muestra getRank()) como
+// último desempate.
+function getLigaStandings(){
+  const record=computeBattleRecord();
+  const rankTotal={};
+  getRank().forEach(p=>{rankTotal[p.name]=p.total;});
+  const rows=PL.map(name=>{
+    const r=record[name]||{wins:0,losses:0,jugadas:0};
+    return{name,wins:r.wins,losses:r.losses,jugadas:r.jugadas,total:rankTotal[name]||0};
+  });
+  rows.sort((a,b)=>{
+    if(b.wins!==a.wins)return b.wins-a.wins;
+    if(a.losses!==b.losses)return a.losses-b.losses;
+    return b.total-a.total;
+  });
+  return rows;
+}
+
+// Reparte los standings en las 3 ligas. Criterio (default acordado, ver
+// brief de la Fase 3):
+//   - Tamaños: Champions = top 10 por victorias (de quienes YA jugaron al
+//     menos una batalla); Premier = la mitad de los restantes; Serie B =
+//     el resto.
+//   - Quien todavía NO jugó ninguna batalla (jugadas===0, ni ganó, ni
+//     perdió, ni empató nunca) arranca SIEMPRE en Premier League, sin
+//     importar el tamaño que eso le sume -- no compite por los tamaños de
+//     arriba hasta jugar su primera batalla.
+function getLigaGroups(){
+  const standings=getLigaStandings();
+  const jugaron=standings.filter(p=>p.jugadas>0);
+  const nuncaJugaron=standings.filter(p=>p.jugadas===0);
+  const n=jugaron.length;
+  const champSize=Math.min(10,n);
+  const restoSize=n-champSize;
+  const premSize=Math.ceil(restoSize/2);
+  const champions=jugaron.slice(0,champSize);
+  const premier=jugaron.slice(champSize,champSize+premSize).concat(nuncaJugaron);
+  const serieb=jugaron.slice(champSize+premSize);
+  return{champions,premier,serieb};
+}
+
+// A qué liga pertenece un participante puntual -- usado para la
+// restricción de "solo misma liga" al armar una batalla 1v1.
+function getLigaDe(name){
+  const groups=getLigaGroups();
+  for(const {key} of LIGAS){
+    if(groups[key].some(p=>p.name===name))return key;
+  }
+  return null;
+}
+
 // Días configurados para la ranura (input numérico "battle-slotN-dias" en
 // index.html) — número libre, sin límite fijo. Sin valor cargado o valor
 // inválido, cae a 1 día (mismo comportamiento de siempre: "los partidos
@@ -89,6 +177,16 @@ function startBattle(slot){
   const p1=document.getElementById(`battle-slot${slot}-p1`).value;
   const p2=document.getElementById(`battle-slot${slot}-p2`).value;
   if(!p1||!p2||p1===p2){toast("Elige 2 participantes distintos",true);return;}
+  // Fase 3 — restricción de Liga: en 1v1 solo se pueden enfrentar
+  // participantes de la MISMA liga (el Royal Rumble de la Fase 4 no tiene
+  // esta restricción, cruza libremente).
+  const liga1=getLigaDe(p1),liga2=getLigaDe(p2);
+  if(liga1&&liga2&&liga1!==liga2){
+    const lbl1=LIGAS.find(l=>l.key===liga1)?.label||liga1;
+    const lbl2=LIGAS.find(l=>l.key===liga2)?.label||liga2;
+    toast(`${p1} (${lbl1}) y ${p2} (${lbl2}) están en ligas distintas -- en 1v1 solo pueden pelear entre sí`,true);
+    return;
+  }
   const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
   if(groupMids.length===0&&elimMids.length===0){
     toast(`No hay partidos disponibles para esa ventana (${descripVentana(modo,valor)})`,true);return;
@@ -255,11 +353,14 @@ function sugerirRival(slot){
   let mejor=null,mejorDiff=-1;
   for(let i=0;i<candidatos.length;i++){
     for(let j=i+1;j<candidatos.length;j++){
+      // Fase 3 — restricción de Liga: no sugerir un par que 1v1 no podría
+      // pelear igual (misma restricción que ya aplica startBattle()).
+      if(getLigaDe(candidatos[i])!==getLigaDe(candidatos[j]))continue;
       const d=calcularDiffPrediccion(candidatos[i],candidatos[j],groupMids,elimMids);
       if(d>mejorDiff){mejorDiff=d;mejor=[candidatos[i],candidatos[j]];}
     }
   }
-  if(!mejor){toast("No se pudo calcular ninguna sugerencia",true);return;}
+  if(!mejor){toast("No se pudo sugerir ningún par (¿todos los postulados están en ligas distintas?)",true);return;}
   p1Sel.value=mejor[0];
   p2Sel.value=mejor[1];
   renderPostuladosPanel();
@@ -384,6 +485,39 @@ function renderOneBattle(slot){
   </div>`;
 }
 
+// Panel nuevo (Fase 3): las 3 tablas de la Liga de Batallas, misma onda
+// visual que el Ranking general (reusa la clase "rt" -- ver #rank-table
+// en index.html/styles.css -- para no duplicar estilos de tabla).
+function renderLigaTable(rows){
+  if(!rows.length){
+    return`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">Sin participantes en esta liga todavía.</div>`;
+  }
+  const rki=["🥇","🥈","🥉"];
+  return`<table class="rt" style="width:100%">
+    <thead><tr><th>#</th><th>Participante</th><th style="text-align:center">Ganadas</th><th style="text-align:center">Perdidas</th></tr></thead>
+    <tbody>
+      ${rows.map((p,i)=>`<tr>
+        <td>${i<3?`<span style="font-size:18px">${rki[i]}</span>`:`<span class="rk">${i+1}</span>`}</td>
+        <td>${esc(p.name)}</td>
+        <td style="text-align:center">${p.wins}</td>
+        <td style="text-align:center">${p.losses}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function renderLigasPanel(){
+  const wrap=document.getElementById("battles-ligas-wrap");
+  if(!wrap)return;
+  const groups=getLigaGroups();
+  wrap.innerHTML=LIGAS.map(({key,label})=>`
+    <div style="margin-bottom:1rem">
+      <div style="font-family:var(--ff-display);font-size:12px;font-weight:800;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${label}</div>
+      ${renderLigaTable(groups[key])}
+    </div>
+  `).join("");
+}
+
 function renderBattlesPanel(){
   ensureBattlesState();
   populateBattleSelects();
@@ -403,9 +537,12 @@ function renderBattlesPanel(){
 function battlesTab(id){
   document.getElementById("battles-active-wrap").style.display=id==="active"?"block":"none";
   document.getElementById("battles-history-wrap").style.display=id==="history"?"block":"none";
+  document.getElementById("battles-ligas-wrap").style.display=id==="ligas"?"block":"none";
   document.getElementById("btab-active").classList.toggle("on",id==="active");
   document.getElementById("btab-history").classList.toggle("on",id==="history");
+  document.getElementById("btab-ligas").classList.toggle("on",id==="ligas");
   if(id==="history")renderBattleHistory();
+  if(id==="ligas")renderLigasPanel();
 }
 
 function renderBattleHistory(){
