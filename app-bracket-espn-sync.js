@@ -64,6 +64,7 @@ async function fetchESPNElim(){
     results.forEach(r=>{if(r.status==="fulfilled"&&r.value?.events)r.value.events.forEach(ev=>evts.push(ev));});
 
     let updated=0,live=0,teamsLoaded=0,teamsCorrected=0;
+    const changedPids=[]; // v2.3 — mejora visual: qué filas flashear tras renderElim()
     _elimConflictQueue=[];
     const pidsEnConflicto=new Set();
 
@@ -139,8 +140,10 @@ async function fetchESPNElim(){
           orientable=false; // fase previa todavía no resuelta/cerrada
         }
         if(orientable&&(!existing||existing.live)){
+          const changed=!existing||existing.h!==finalH||existing.a!==finalA||!!existing.live!==(state==="in");
           S.elimScores[pid]={h:finalH,a:finalA,live:state==="in"};
           updated++;if(state==="in")live++;
+          if(changed)changedPids.push(pid);
         }
       }
     });
@@ -157,6 +160,7 @@ async function fetchESPNElim(){
       openElimConflict(first.pid,first.current,first.espn);
     }else{
       renderElim();renderBracket();renderRank();autoFillRealityFromElim();
+      flashRows("data-pid",changedPids);
       toast(updated>0||teamsLoaded>0||teamsCorrected>0?`✓ ${updated} resultados · ${teamsLoaded} nuevos · ${teamsCorrected} corregidos`:"Sin datos nuevos");
     }
   }catch(e){setES(`<span class="sbadge err">⚠️ Error: ${e.message}</span>`);toast("Error ESPN",true);}

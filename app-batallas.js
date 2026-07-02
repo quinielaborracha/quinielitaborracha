@@ -348,7 +348,7 @@ function renderRumbleHistory(){
   if(!wrap)return;
   ensureRumbleState();
   if(!S.rumbleHistory.length){
-    wrap.innerHTML=`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">Todavía no hay Rumbles cerrados.</div>`;
+    wrap.innerHTML=`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">👑 Ningún Royal Rumble todavía. La corona sigue esperando dueño.</div>`;
     return;
   }
   wrap.innerHTML=S.rumbleHistory.map(h=>{
@@ -420,7 +420,7 @@ function renderPostuladosPanel(){
   if(!wrap || !isAdmin())return;
   const disponibles=getPostuladosDisponibles();
   if(!disponibles.length){
-    wrap.innerHTML=`<div style="font-size:10px;color:var(--qb-muted);margin-top:.5rem">🥊 Nadie postulado por ahora.</div>`;
+    wrap.innerHTML=`<div style="font-size:10px;color:var(--qb-muted);margin-top:.5rem">🦗 Se escuchan los grillos. Nadie se anotó para pelear todavía.</div>`;
     return;
   }
   wrap.innerHTML=`
@@ -636,7 +636,7 @@ function renderOneBattle(slot){
 // en index.html/styles.css -- para no duplicar estilos de tabla).
 function renderLigaTable(rows){
   if(!rows.length){
-    return`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">Sin participantes en esta liga todavía.</div>`;
+    return`<div style="text-align:center;padding:1rem;color:var(--qb-muted);font-size:11px">🏟️ Esta liga está más vacía que una cancha un lunes a la mañana.</div>`;
   }
   const rki=["🥇","🥈","🥉"];
   return`<table class="rt" style="width:100%">
@@ -673,7 +673,8 @@ function renderBattlesPanel(){
   const slots=[1,2].filter(s=>S.battles[s]);
   if(!slots.length){
     body.innerHTML=`<div style="text-align:center;padding:2rem 1rem;color:var(--qb-muted);font-size:12px">
-      ⚔️ No hay batallas activas hoy.${isAdmin()?" Armá una arriba.":""}
+      <div style="font-size:32px;margin-bottom:.5rem">😌</div>
+      Tranquilo, hoy no hay ningún duelo. Paz mundial momentánea.${isAdmin()?" Armá una arriba, si te aburrís.":""}
     </div>`;
     return;
   }
@@ -700,7 +701,10 @@ function renderBattleHistory(){
   ensureBattlesState();
   const hist=S.battleHistory||[];
   if(!hist.length){
-    wrap.innerHTML=`<div style="text-align:center;padding:2rem 1rem;color:var(--qb-muted);font-size:12px">📜 Todavía no hay batallas cerradas.</div>`;
+    wrap.innerHTML=`<div style="text-align:center;padding:2rem 1rem;color:var(--qb-muted);font-size:12px">
+      <div style="font-size:32px;margin-bottom:.5rem">📜</div>
+      El historial está en blanco. Nadie se peleó por nada todavía.
+    </div>`;
     return;
   }
   wrap.innerHTML=hist.map((h,idx)=>{

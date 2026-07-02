@@ -101,7 +101,7 @@ function renderElim(){
       // Llave pts preview
       const llavePrev=teamsReady?PL.filter(nm=>isLlaveCorrecta(nm,pid)).length:0;
       const llaveTag=teamsReady?`<span style="font-size:8px;color:var(--qb-blue);margin-top:1px">🔑 ${llavePrev}/27</span>`:"";
-      html+=`<div class="${rowCls}" style="${!teamsReady?"opacity:.55":""}">
+      html+=`<div class="${rowCls}" data-pid="${pid}" style="${!teamsReady?"opacity:.55":""}">
         <div class="th"><span class="tn">${hN}</span></div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
           <div style="display:flex;align-items:center;gap:3px">${scoreInputs}</div>

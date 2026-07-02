@@ -170,12 +170,19 @@ function renderBracket(){
         }
       }
 
+      // v2.3 — Mejora visual: data-team habilita el hover-highlight del
+      // "camino" de un equipo a través de las rondas (ver listener
+      // delegado al final del archivo). Solo se marca cuando el equipo ya
+      // se conoce (predTeams) -- el placeholder "⏳ Por resolver" no debe
+      // ser "resaltable", no es un equipo real.
+      const teamHAttr=predTeams?` data-team="${esc(n(pH))}"`:"";
+      const teamAAttr=predTeams?` data-team="${esc(n(pA))}"`:"";
       html+=`<div style="display:grid;grid-template-columns:1fr auto;align-items:start;gap:6px;padding:7px 9px;border:1px solid ${borderCol};border-radius:8px;margin-bottom:5px;background:${rowBg}">
         <div>
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
-            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${pH}</span>
+            <span class="bteam" style="font-size:11px;font-weight:600;color:var(--qb-text)"${teamHAttr}>${pH}</span>
             <span style="font-size:10px;color:var(--qb-muted)">vs</span>
-            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${pA}</span>
+            <span class="bteam" style="font-size:11px;font-weight:600;color:var(--qb-text)"${teamAAttr}>${pA}</span>
           </div>
           <div style="font-size:10px;color:var(--qb-muted)">Predicción: <strong style="color:var(--qb-muted2)">${pScoreStr}</strong> · P${pid}</div>
           ${realBlock}
@@ -202,6 +209,25 @@ function toggleHideParticipant(name){
 // Posiciones previas para animar reordenamientos del ranking
 const _prevRankPos={};
 
+// v2.3 — Mejora visual: cuando el Total de alguien cambia, el número
+// cuenta hacia arriba/abajo (~220ms) en vez de aparecer de golpe -- misma
+// idea que rankUp/rankDown, pero sobre el valor en sí. Respeta
+// prefers-reduced-motion (deja el valor final quieto, sin animar).
+function animateCountUp(el,from,to){
+  if(from===to)return;
+  const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce)return; // el innerHTML ya dejó "to" puesto, no hace falta tocar nada
+  el.textContent=from;
+  const dur=220,start=performance.now();
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    const eased=1-Math.pow(1-t,3); // ease-out cúbico
+    el.textContent=Math.round(from+(to-from)*eased);
+    if(t<1)requestAnimationFrame(step);else el.textContent=to;
+  }
+  requestAnimationFrame(step);
+}
+
 function renderRank(){
   // Revisar si hay fases nuevas cerradas antes de renderizar
   checkAndAwardBonos();
@@ -214,10 +240,14 @@ function renderRank(){
   const rki=["🥇","🥈","🥉"];
   const tbody=document.getElementById("rb");
 
-  // Snapshot de posiciones ANTES del redibujado (para saber qué filas subieron/bajaron)
+  // Snapshot de posiciones Y totales ANTES del redibujado (para animar
+  // reordenamientos y el conteo del Total, respectivamente)
   const prevPos={};
+  const prevTotals={};
   Array.from(tbody.querySelectorAll("tr[data-rkey]")).forEach((tr,i)=>{
     prevPos[tr.dataset.rkey]=i;
+    const span=tr.querySelector(".ptb");
+    if(span)prevTotals[tr.dataset.rkey]=parseInt(span.textContent)||0;
   });
 
   tbody.innerHTML=ranked.map((p,i)=>{
@@ -258,7 +288,7 @@ function renderRank(){
       <td data-label="Avanzado"><span class="pill pg">${p.av}</span></td>
       <td data-label="Elim"><span class="pill" style="background:rgba(124,58,237,.18);color:#c4b5fd;border:1px solid rgba(124,58,237,.35)">${p.elim}</span></td>
       <td data-label="Bonos">${bonBadge}</td>
-      <td data-label="Total" style="text-align:right"><span class="ptb">${p.total}</span></td>
+      <td data-label="Total" style="text-align:right"><span class="ptb" data-target="${p.total}">${p.total}</span></td>
       ${adminActions}
     </tr>`;
   }).join("");
@@ -272,6 +302,12 @@ function renderRank(){
       void tr.offsetWidth; // forzar reflow para reiniciar animación si ya tenía una
       tr.classList.add(moved);
       tr.addEventListener("animationend",()=>tr.classList.remove(moved),{once:true});
+    }
+    // Contar hacia arriba/abajo el Total si cambió desde el render anterior
+    const span=tr.querySelector(".ptb");
+    if(span){
+      const target=parseInt(span.dataset.target);
+      if(key in prevTotals && prevTotals[key]!==target)animateCountUp(span,prevTotals[key],target);
     }
   });
 
@@ -304,7 +340,7 @@ function renderFix(){
       }
       const inpS="width:28px;text-align:center;font-size:13px;font-weight:700;padding:2px 3px;border-radius:4px;background:var(--qb-surface2);color:var(--qb-text);border:1px solid "+(played?(checksumOk?"var(--qb-green)":"var(--qb-yellow)"):"var(--qb-border2)");
       const rowS=live?"border:1px solid var(--qb-red);background:rgba(212,0,26,.07)":(!checksumOk?"border:1px solid var(--qb-yellow);background:rgba(245,166,35,.05)":"");
-      return`<div class="mr" style="${rowS}">
+      return`<div class="mr" data-mid="${mid}" style="${rowS}">
         <div class="th"><span class="tn">${hN}</span><span style="font-size:14px">${hF}</span></div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
           <div style="display:flex;align-items:center;gap:3px">
@@ -379,5 +415,39 @@ document.addEventListener("click", (ev) => {
   const hideBtn = ev.target.closest(".js-toggle-hide-participant");
   if (hideBtn) { toggleHideParticipant(hideBtn.dataset.pname); return; }
 });
+
+// v2.3 — Mejora visual: bracket interactivo. Al pasar el mouse por un
+// equipo (.bteam[data-team]) en la vista de llaves de un participante
+// (renderBracket()), resalta ese MISMO equipo en todas las rondas donde
+// vuelve a aparecer (su "camino" hacia la final) -- puramente visual, no
+// lee ni calcula nada de app-bracket-compute.js. Delegado en document,
+// mismo patrón que el listener de arriba: sigue vivo aunque
+// renderBracket() reemplace el HTML en cada render.
+// Mouse: mouseover/mouseout (no mouseenter/mouseleave) porque estos SÍ
+// burbujean, necesario para delegar en document sin re-engancharse.
+document.addEventListener("mouseover", (ev) => {
+  const el = ev.target.closest(".bteam[data-team]");
+  if (!el) return;
+  document.querySelectorAll(`.bteam[data-team="${CSS.escape(el.dataset.team)}"]`).forEach(x => x.classList.add("team-hl"));
+});
+document.addEventListener("mouseout", (ev) => {
+  const el = ev.target.closest(".bteam[data-team]");
+  if (!el) return;
+  document.querySelectorAll(`.bteam[data-team="${CSS.escape(el.dataset.team)}"]`).forEach(x => x.classList.remove("team-hl"));
+});
+// Touch: no hay "hover" real, así que un toque resalta el camino durante
+// un momento y lo suelta solo -- confirma qué se tocó sin necesitar un
+// segundo toque para "soltar" el resaltado.
+let _bteamTouchTimer = null;
+document.addEventListener("touchstart", (ev) => {
+  const el = ev.target.closest(".bteam[data-team]");
+  document.querySelectorAll(".bteam.team-hl").forEach(x => x.classList.remove("team-hl"));
+  if (!el) return;
+  if (_bteamTouchTimer) clearTimeout(_bteamTouchTimer);
+  document.querySelectorAll(`.bteam[data-team="${CSS.escape(el.dataset.team)}"]`).forEach(x => x.classList.add("team-hl"));
+  _bteamTouchTimer = setTimeout(() => {
+    document.querySelectorAll(".bteam.team-hl").forEach(x => x.classList.remove("team-hl"));
+  }, 1800);
+}, {passive: true});
 
 // ══════════════════════════════════════════════════════════════

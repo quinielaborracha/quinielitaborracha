@@ -22,8 +22,22 @@
   --qb-text:    #F0F2F7;
   --qb-muted:   #6B7384;
   --qb-muted2:  #9299AC;
-  --ff-display: 'Barlow Condensed', sans-serif;
-  --ff-body:    'Inter', sans-serif;
+  /* v2.3 — Fix de banderas invisibles en iOS: las banderas son emoji de
+     secuencia (2 "regional indicator" combinados en un solo glifo), no un
+     carácter simple. Cuando el font-family declarado (Barlow Condensed /
+     Inter, ninguno con glifos de emoji) no termina en una fuente que sepa
+     armar esa secuencia, Chrome/Firefox igual hacen fallback automático a
+     la fuente de emoji del sistema -- pero WebKit en iOS es mucho más
+     estricto con el fallback de secuencias multi-codepoint dentro de un
+     font-family declarado, y no muestra nada en vez de conseguir el
+     glifo por su cuenta. Agregar las fuentes de emoji del sistema ACÁ, al
+     final de los 2 stacks base, no cambia un solo píxel del texto normal
+     (las tipografías de emoji no tienen glifos latinos, así que el
+     navegador jamás las usa para texto corriente) y resuelve el problema
+     en TODOS los lugares donde se muestra una bandera (Ranking, Bracket,
+     Batallas, Predicciones, Estadísticas), sin tocar ningún .js.
+  --ff-display: 'Barlow Condensed', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  --ff-body:    'Inter', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
 
 /* ── LIGHT MODE ── */
@@ -77,7 +91,7 @@
 /* Force dark background on the root element */
 #root { background: var(--qb-black) !important; transition: background-color .25s ease; }
 
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 
 .app{
   max-width:1100px;
@@ -307,10 +321,45 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
   100% { transform: translateY(0);    background: transparent; }
 }
 
-/* Top 3 accent */
-.rt tbody tr:nth-child(1) { border-left: 3px solid var(--qb-gold); }
-.rt tbody tr:nth-child(2) { border-left: 3px solid #C0C0C0; }
-.rt tbody tr:nth-child(3) { border-left: 3px solid #cd7f32; }
+/* Top 3 accent — "podio": antes solo un borde de color a la izquierda,
+   ahora suma un degradé sutil (oro/plata/bronce) que se apaga hacia la
+   derecha, para que se sienta un trato distinto, no solo un detalle. El
+   :hover existente (background:var(--qb-surface2)) sigue pisando este
+   degradé al pasar el mouse -- mismo comportamiento que ya tenía el
+   borde-left con :hover, nada nuevo que resolver ahí. */
+.rt tbody tr:nth-child(1) { border-left: 3px solid var(--qb-gold); background: linear-gradient(90deg, rgba(255,215,0,.10), transparent 45%); }
+.rt tbody tr:nth-child(2) { border-left: 3px solid #C0C0C0; background: linear-gradient(90deg, rgba(192,192,192,.09), transparent 45%); }
+.rt tbody tr:nth-child(3) { border-left: 3px solid #cd7f32; background: linear-gradient(90deg, rgba(205,127,50,.09), transparent 45%); }
+:root.light .rt tbody tr:nth-child(1) { background: linear-gradient(90deg, rgba(200,149,0,.10), transparent 45%); }
+:root.light .rt tbody tr:nth-child(2) { background: linear-gradient(90deg, rgba(140,140,140,.12), transparent 45%); }
+:root.light .rt tbody tr:nth-child(3) { background: linear-gradient(90deg, rgba(180,100,40,.10), transparent 45%); }
+
+/* ── PULSO EN VIVO — mejora visual v2.3 ────────────────────────────
+   Dos disparadores: el badge "🟢 En vivo" del header cuando llega un
+   cambio remoto real (no en la conexión inicial), y la fila de un
+   partido puntual cuando ESPN trae un resultado nuevo/actualizado. Se
+   anima box-shadow (no background), para no competir con el
+   background inline que ya trae cada fila de partido (rowS en renderFix). */
+@keyframes qb-badge-pulse{
+  0%{transform:scale(1)}
+  30%{transform:scale(1.18)}
+  60%{transform:scale(.97)}
+  100%{transform:scale(1)}
+}
+#live-badge.pulse{animation:qb-badge-pulse .5s ease-out}
+@keyframes qb-row-flash{
+  0%{box-shadow:0 0 0 2px rgba(0,200,83,.55)}
+  100%{box-shadow:0 0 0 0 rgba(0,200,83,0)}
+}
+.mr.flash,.elim-row.flash{animation:qb-row-flash 1.2s ease-out}
+
+/* ── BRACKET INTERACTIVO — mejora visual v2.3 ──────────────────────
+   .bteam es cada nombre de equipo predicho dentro de la vista de llaves
+   de un participante (renderBracket()). El JS (app-bracket-view.js)
+   agrega/saca .team-hl al pasar el mouse/tocar -- acá solo el estilo. */
+.bteam{transition:background-color .15s ease,color .15s ease;border-radius:4px;padding:1px 3px;margin:-1px -3px}
+.bteam[data-team]{cursor:default}
+.bteam.team-hl{background-color:var(--qb-gold-dim);color:#f5c842!important}
 
 .rk{
   font-family: var(--ff-display);
@@ -995,4 +1044,10 @@ body.test-mode-active #root{
   .rg-scope .pick-btn:active,.rg-scope .step-dot:active,.rg-scope .filter-chip:active,.rg-scope .switch:active,.rg-btn:active{transform:none}
   /* #qb-loader/.qb-skel viven en index.html con su propio bloque inline
      (tienen que funcionar ANTES de que este archivo termine de cargar). */
+  /* v2.3 — nuevas animaciones de esta pasada: el conteo del Total ya se
+     resuelve en JS (animateCountUp chequea matchMedia y no anima si hay
+     reducción de movimiento activada, ver app-bracket-view.js) -- acá solo
+     las que son puramente CSS. */
+  #live-badge.pulse{animation:none}
+  .mr.flash,.elim-row.flash{animation:none}
 }

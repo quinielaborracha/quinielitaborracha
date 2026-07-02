@@ -92,6 +92,23 @@ function flagD(c,s=20){const f=FLAGS2[c]||"🌐";return`<span style="font-size:$
 // sitio que necesita mostrar la bandera del campeón predicho.
 function flagEmoji(emoji,s=20){return`<span style="font-size:${s}px;line-height:1">${emoji||"🌐"}</span>`;}
 
+// v2.3 — Mejora visual: flash breve (clase .flash, keyframe en
+// styles.css) sobre los elementos [attr="id"] que matcheen alguno de los
+// ids dados -- usado para marcar qué filas de partido cambiaron tras una
+// sincronización ESPN (fetchESPN/fetchESPNElim). Puramente decorativo,
+// no lee ni cambia ningún dato.
+function flashRows(attr,ids){
+  if(!ids||!ids.length)return;
+  ids.forEach(id=>{
+    const el=document.querySelector(`[${attr}="${id}"]`);
+    if(!el)return;
+    el.classList.remove("flash");
+    void el.offsetWidth; // forzar reflow para reiniciar la animación si ya tenía una
+    el.classList.add("flash");
+    el.addEventListener("animationend",()=>el.classList.remove("flash"),{once:true});
+  });
+}
+
 // v1.1 — Ciudad + país combinados para mostrar bajo el nombre del
 // participante (ranking, export de imagen, perfil): "Maracaibo, Venezuela".
 // Si falta alguno de los dos, devuelve solo el que haya (o "" si no hay nada).

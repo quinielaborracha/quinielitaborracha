@@ -2267,7 +2267,7 @@ function buildEvolucionRankingCardHtml(name,days,rankNow,outOf){
     .concat([{label:'Hoy',value:rankNow}]);
   const chart = days.length
     ? buildSvgLineChart(chartPoints,{maxValue:outOf,minValue:1})
-    : `<div class="muted" style="padding:.75rem 0;text-align:center;font-size:12.5px">Todavía no hay suficientes jornadas para graficar.</div>`;
+    : `<div class="muted" style="padding:.75rem 0;text-align:center;font-size:12.5px">📉 Un solo punto no hace un gráfico. Volvé cuando haya más partidos jugados.</div>`;
   const diffTxt = !posInicio ? ''
     : diff>0 ? `Has subido <b style="color:var(--qb-green)">${diff}</b> posición${diff===1?'':'es'} desde el inicio del torneo.`
     : diff<0 ? `Has bajado <b style="color:#ef4444">${Math.abs(diff)}</b> posición${Math.abs(diff)===1?'':'es'} desde el inicio del torneo.`
@@ -2306,7 +2306,7 @@ function buildEvolucionJornadaCardHtml(name,days){
     return `
       <div class="card">
         <div class="card-title">🎖️ Puntos por Jornada</div>
-        <div class="muted" style="font-size:13px">Todavía no hay jornadas jugadas.</div>
+        <div class="muted" style="font-size:13px">😴 Ni una jornada jugada todavía. Esto se llena solo, no hace falta que recargues la página cada 5 minutos.</div>
       </div>`;
   }
   const points = days.map((d,i)=>({
@@ -2356,9 +2356,9 @@ function buildDashEvolucionHtml(p){
   if(!events.length){
     return `
       <div class="card center" style="padding:2rem 1rem">
-        <div style="font-size:32px;margin-bottom:.5rem">📈</div>
+        <div style="font-size:32px;margin-bottom:.5rem">🍿</div>
         <div class="card-title" style="justify-content:center">Evolución</div>
-        <div class="muted">Todavía no hay partidos jugados. Esta sección se va llenando con cada fecha del Mundial.</div>
+        <div class="muted">Pipocas listas, pero todavía no arrancó ni un partido. Esto se va llenando solo, fecha a fecha.</div>
       </div>`;
   }
   const stats = getDashStatsInfo(p);
@@ -3258,10 +3258,14 @@ function buildParticipantsRowsHtml(filterText, filterMode){
     .sort((a,b)=> a.name.localeCompare(b.name));
 
   if(!list.length){
+    const icon = DB.participants.length ? '🔍' : '👻';
     const msg = DB.participants.length
-      ? 'Ningún participante coincide con la búsqueda/filtro.'
-      : 'Aún no hay participantes registrados.';
-    return `<div class="muted center" style="padding:1.5rem 0">${msg}</div>`;
+      ? 'Buscaste tan específico que ni vos aparecerías. Probá con menos filtro.'
+      : 'Ni un alma registrada todavía. ¿Mandaste el link o lo tenés guardado "para después"?';
+    return `<div class="muted center" style="padding:1.5rem 0">
+      <div style="font-size:32px;margin-bottom:.5rem">${icon}</div>
+      <div>${msg}</div>
+    </div>`;
   }
 
   const rows = list.map(p=>{
