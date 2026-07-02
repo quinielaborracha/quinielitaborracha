@@ -12,6 +12,14 @@ name: Tests
   pull_request:
     branches: [main]
 
+# v1.7 — Explícito en vez de heredar el default del repo: este workflow
+# solo corre tests, nunca necesita escribir nada. Sin esto, al haber
+# subido "Read and write permissions" como default del repo (lo pedía
+# deploy-pages.yml para poder publicar), este workflow heredaba ese
+# mismo permiso amplio sin necesitarlo -- principio de mínimo privilegio.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
