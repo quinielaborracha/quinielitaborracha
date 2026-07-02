@@ -596,10 +596,6 @@ function rgWireFirestoreSync(){
 // vez que cambie el estado de auth (ver wireFirebaseAuth en app.js).
 let _rgPrivadoSyncWired = false;
 function rgWirePrivadoSyncIfAdmin(){
-  // DEBUG POSTULADOS (temporal, sacar cuando se resuelva) — para saber si
-  // esta función se está llamando y por qué retorna antes de conectar el
-  // listener (guard de "ya conectado" vs isAdmin()===false vs fb no listo).
-  console.log("[DEBUG postulados] rgWirePrivadoSyncIfAdmin() llamada — wired:", _rgPrivadoSyncWired, "isAdmin():", typeof isAdmin==="function"?isAdmin():"(sin isAdmin)");
   if(_rgPrivadoSyncWired) return;
   if(typeof isAdmin !== "function" || !isAdmin()) return;
   const fb = window.__fb;
@@ -609,14 +605,7 @@ function rgWirePrivadoSyncIfAdmin(){
     const byOwner = {};
     snap.docs.forEach(d=>{ byOwner[d.id] = d.data() || {}; });
     _rgLatestPrivadoByOwner = byOwner;
-    // DEBUG POSTULADOS (temporal) — cuántos documentos privados llegaron y
-    // cuáles tienen quierePelear:true, ANTES de mezclarlos a DB.participants.
-    console.log("[DEBUG postulados] snapshot de registro_privado:", snap.docs.length, "documento(s). Con quierePelear:true ->",
-      Object.entries(byOwner).filter(([id,v])=>v.quierePelear).map(([id])=>id));
     _rgMergeKnownPrivadoFields();
-    // DEBUG POSTULADOS (temporal) — estado de DB.participants DESPUÉS del merge.
-    console.log("[DEBUG postulados] DB.participants tras el merge:",
-      (DB.participants||[]).map(p=>({id:p.id, name:p.name, quierePelear:p.quierePelear})));
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }catch(e){}
     notifyParticipantesChange();
   }, (err)=>{ console.error("Error de sincronización Firestore (privado/admin):", err); });

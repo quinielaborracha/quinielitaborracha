@@ -84,6 +84,16 @@ function resetBattle(slot){
   toast(`Batalla ${slot} terminada y guardada`);
 }
 
+// v1.7.2 — BUG REPORTADO: alguien se postulaba y nunca aparecía en
+// Postulados, incluso después de una recarga completa. Causa: al recargar
+// (F5), el navegador restaura solo los <select> de "Armar batalla" con lo
+// último que tenían seleccionado ANTES del reload (comportamiento nativo
+// del navegador, no algo que este código dispare) -- y como
+// getPostuladosDisponibles() trata "ya cargado en un <select>" como
+// "ocupado" (a propósito, para que desaparezca apenas se lo asigna), un
+// nombre restaurado por el navegador quedaba tapando a un postulado real
+// sin que el admin hubiera tocado nada. Fix real: `autocomplete="off"` en
+// los 4 <select> de index.html, para que el navegador no los restaure.
 function populateBattleSelects(){
   if(!isAdmin())return;
   const names=PL.slice().sort();
@@ -117,12 +127,6 @@ function getPostuladosDisponibles(){
       if(sel && sel.value) ocupados.add(sel.value);
     });
   });
-  // DEBUG POSTULADOS (temporal, sacar cuando se resuelva) — qué ve esta
-  // función de DB.participants justo antes de filtrar, y qué excluyó el
-  // set de "ocupados" (batallas activas + selects ya cargados).
-  console.log("[DEBUG postulados] getPostuladosDisponibles() — DB.participants:",
-    (DB.participants||[]).map(p=>({name:p.name, quierePelear:p.quierePelear})),
-    "ocupados:", [...ocupados]);
   return (DB.participants||[])
     .filter(p=>p.quierePelear && !ocupados.has(p.name))
     .map(p=>p.name)
