@@ -101,6 +101,17 @@ onParticipantesChange(()=>{
     if(typeof renderBracket==="function")renderBracket();
     if(typeof renderAdv==="function")renderAdv();
   }
+  // v1.7 — FIX: el panel de Postulados (Fase 1 de Batallas) solo se
+  // pintaba al cambiar A la pestaña Batallas (tab("battles")) o al
+  // llegar un cambio de quiniela/estado con esa pestaña ya abierta (ver
+  // el otro hook en app-live-sync.js). Pero quierePelear vive en
+  // registro_privado -- un documento DISTINTO -- así que si el admin ya
+  // tenía Batallas abierta cuando alguien se postuló, nunca se enteraba
+  // sin cambiar de pestaña y volver. Mismo patrón que el bloque de #t-pred
+  // de arriba: si la pestaña ya está abierta, repintarla también acá.
+  if(typeof renderBattlesPanel==="function"&&document.getElementById("t-battles")?.style.display==="block"){
+    renderBattlesPanel();
+  }
 });
 
 // Arrancamos Firebase Auth + sincronización en vivo en cuanto el módulo esté listo.

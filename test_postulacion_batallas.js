@@ -33,9 +33,14 @@ const html = `<!doctype html><html><body>
   <div id="exitModal" style="display:none"></div><div id="blockModal" style="display:none"></div>
   <div id="blockModalText"></div><div id="pdfPoster"></div>
   <div id="root"></div><div id="integ-banner"></div><img id="logo-img"><span id="admin-indicator"></span>
-  <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
-  <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
-  <div id="battles-postulados"></div><div id="battles-body"></div>
+  <span id="hstat"></span><span id="hdr-master-badge"></span><span id="hdr-today"></span>
+  <table><tbody id="rb"></tbody></table>
+  <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
+  <div id="t-battles" style="display:block">
+    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
+    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
+    <div id="battles-postulados"></div><div id="battles-body"></div>
+  </div>
 </body></html>`;
 
 const dom = new JSDOM(html, { url: "https://example.org/", runScripts: "dangerously" });
@@ -63,7 +68,7 @@ if (closeIdx === -1) throw new Error("No se encontró el cierre de la IIFE en re
 const bridge = `
 window.__test = {
   DB, S, get DRAFT_PID(){ return DRAFT_PID; }, set DRAFT_PID(v){ DRAFT_PID = v; },
-  render, renderParticipantDashboard,
+  render, renderParticipantDashboard, notifyParticipantesChange,
   _rgPublicFieldsOf, _rgPrivadoFieldsOf, _rgMergeKnownPrivadoFields,
   _rgLatestPrivadoByOwner: null, // se completa a mano abajo (variable interna de participantes.js)
 };
@@ -194,6 +199,37 @@ W.document.getElementById("battle-slot2-p2").value = "Beto"; // simula la últim
 W.asignarPostulado("Fede");
 check("Con las 4 ranuras ocupadas, asignarPostulado() avisa en vez de pisar algo",
   avisoLlenoMostrado === true);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 3b — BUG REPORTADO EN PRODUCCIÓN: alguien se postuló y nunca
+   apareció en el panel del admin. Causa: el panel de Batallas solo se
+   repintaba al CAMBIAR a esa pestaña, o al llegar un cambio de
+   quiniela/estado con la pestaña ya abierta -- pero quierePelear vive en
+   registro_privado, un documento DISTINTO, así que si el admin ya tenía
+   la pestaña abierta, la postulación de otro participante nunca se veía
+   sin salir y volver a entrar a Batallas. Fix: app-bootstrap.js ahora
+   repinta el panel de Batallas dentro de onParticipantesChange() (mismo
+   patrón que ya usa para #t-pred), si esa pestaña ya está abierta.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Repintado en vivo con la pestaña Batallas ya abierta (fix del bug reportado) ──");
+
+T.DB.participants.push({id:"pG", name:"Gonzalo", city:"C", country:"P", quierePelear:false});
+W.rebuildDynamicData();
+W.renderBattlesPanel(); // deja el panel pintado SIN Gonzalo (todavía no se postuló)
+check("Antes de postularse, Gonzalo NO aparece en Postulados",
+  !W.document.getElementById("battles-postulados").innerHTML.includes("Gonzalo"));
+
+// Simula exactamente lo que pasa en producción: Gonzalo se postula desde
+// SU sesión, eso llega por Firestore a la sesión del admin, se mezcla en
+// DB.participants (_rgMergeKnownPrivadoFields, ya probado en la Parte 2) y
+// dispara notifyParticipantesChange() -- CON la pestaña Batallas ya
+// abierta (id="t-battles" en display:block en el fixture de este test) Y
+// SIN que nada llame a renderBattlesPanel()/renderPostuladosPanel() a mano.
+T.DB.participants.find(p=>p.name==="Gonzalo").quierePelear = true;
+T.notifyParticipantesChange();
+
+check("Tras postularse (notifyParticipantesChange, sin re-render manual), Gonzalo YA aparece en Postulados",
+  W.document.getElementById("battles-postulados").innerHTML.includes("Gonzalo"));
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 4 — Botón "Quiero pelear 🥊" en el Dashboard del participante
