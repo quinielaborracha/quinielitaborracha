@@ -98,6 +98,72 @@ function populateBattleSelects(){
   });
 }
 
+// v1.7 — POSTULADOS (Fase 1 del roadmap de Batallas): quién marcó "Quiero
+// pelear 🥊" en Mi Quiniela (participantes.js::quierePelear, persiste en
+// registro_privado) y todavía está disponible -- ni ya emparejado en una
+// batalla activa, ni ya cargado (sin confirmar) en alguno de los 4
+// <select> de "Armar batalla". Esto último es a propósito: apenas el
+// admin clickea un postulado y lo carga en una ranura, desaparece de la
+// lista de inmediato (no recién al apretar "Iniciar duelo"), para que no
+// lo pueda cargar dos veces por error en el mismo duelo.
+function getPostuladosDisponibles(){
+  ensureBattlesState();
+  const ocupados=new Set();
+  [1,2].forEach(slot=>{
+    const b=S.battles[slot];
+    if(b){ ocupados.add(b.p1); ocupados.add(b.p2); }
+    [1,2].forEach(p=>{
+      const sel=document.getElementById(`battle-slot${slot}-p${p}`);
+      if(sel && sel.value) ocupados.add(sel.value);
+    });
+  });
+  return (DB.participants||[])
+    .filter(p=>p.quierePelear && !ocupados.has(p.name))
+    .map(p=>p.name)
+    .sort();
+}
+
+function renderPostuladosPanel(){
+  const wrap=document.getElementById("battles-postulados");
+  if(!wrap || !isAdmin())return;
+  const disponibles=getPostuladosDisponibles();
+  if(!disponibles.length){
+    wrap.innerHTML=`<div style="font-size:10px;color:var(--qb-muted);margin-top:.5rem">🥊 Nadie postulado por ahora.</div>`;
+    return;
+  }
+  wrap.innerHTML=`
+    <div style="font-size:10px;color:var(--qb-muted);margin:.5rem 0 .25rem">🥊 Postulados — click para cargar en la próxima ranura libre</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${disponibles.map(name=>`<button class="btn btn-sm js-postulado-chip" data-pname="${esc(name)}">🥊 ${esc(name)}</button>`).join("")}
+    </div>`;
+}
+
+// Carga a `name` en la primera ranura libre (en orden ranura1-p1,
+// ranura1-p2, ranura2-p1, ranura2-p2), sin repetirlo dentro del mismo
+// duelo. Si las 2 ranuras ya están llenas, avisa en vez de pisar algo.
+function asignarPostulado(name){
+  if(!isAdmin())return;
+  const orden=[[1,1,2],[1,2,1],[2,1,2],[2,2,1]];
+  for(const [slot,pnum,otherPnum] of orden){
+    const sel=document.getElementById(`battle-slot${slot}-p${pnum}`);
+    const otherSel=document.getElementById(`battle-slot${slot}-p${otherPnum}`);
+    if(sel && !sel.value && !(otherSel && otherSel.value===name)){
+      sel.value=name;
+      renderPostuladosPanel();
+      return;
+    }
+  }
+  toast("Las 2 ranuras ya están llenas",true);
+}
+
+// Delegado en document (mismo patrón que .js-edit-participant en
+// app-bracket-view.js): un solo listener, siempre vivo, no depende de que
+// #battles-postulados ya exista cuando este script corre.
+document.addEventListener("click", (ev)=>{
+  const chip=ev.target.closest(".js-postulado-chip");
+  if(chip){ asignarPostulado(chip.dataset.pname); }
+});
+
 function renderBattleCountdown(groupMids,elimMids,big){
   // Encuentra la hora de fin estimada del ÚLTIMO partido de hoy (inicio + ~2h como estimado)
   const times=[];
@@ -203,6 +269,7 @@ function renderOneBattle(slot){
 function renderBattlesPanel(){
   ensureBattlesState();
   populateBattleSelects();
+  renderPostuladosPanel();
   const body=document.getElementById("battles-body");
   if(!body)return;
   const slots=[1,2].filter(s=>S.battles[s]);

@@ -1974,9 +1974,21 @@ function renderParticipantDashboard(pid){
   // persona pueda entrar con SU correo+Clave. Solo se muestra en una
   // sesión real de participante (no en vista previa/edición de admin,
   // que ya tienen su propio botón "Volver" en la tabla de Admin).
+  // v1.7 — "Quiero pelear 🥊": autopostulación a Batallas (Fase 1 del
+  // roadmap de Batallas). Solo en una sesión real de participante (mismo
+  // gate que switchAccountLink) -- no tiene sentido postular a alguien
+  // desde una vista previa/edición de admin. Persiste en registro_privado
+  // (quierePelear), visible solo para el dueño y el admin -- ver
+  // _rgPrivadoFieldsOf en participantes.js.
+  const postularBtn = (!PREVIEW_AS_PARTICIPANT && !ADMIN_OVERRIDE)
+    ? `<button class="rg-btn ${p.quierePelear?'rg-btn-gold':'rg-btn-ghost'}" id="dash_postular_btn" style="font-size:11px;padding:6px 10px">${p.quierePelear?'🥊 Postulado · Bajarme':'🥊 Quiero pelear'}</button>`
+    : '';
   const switchAccountLink = (!PREVIEW_AS_PARTICIPANT && !ADMIN_OVERRIDE)
-    ? `<div style="text-align:right;margin-bottom:.5rem">
-         <button class="rg-btn rg-btn-ghost" id="dash_logout_btn" style="font-size:11px;padding:6px 10px">🚪 No soy ${esc((p.name||'').split(' ')[0]||'yo')} · Salir</button>
+    ? `<button class="rg-btn rg-btn-ghost" id="dash_logout_btn" style="font-size:11px;padding:6px 10px">🚪 No soy ${esc((p.name||'').split(' ')[0]||'yo')} · Salir</button>`
+    : '';
+  const topActionsRow = (postularBtn || switchAccountLink)
+    ? `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:.5rem">
+         <span>${postularBtn}</span><span>${switchAccountLink}</span>
        </div>`
     : '';
 
@@ -2023,7 +2035,7 @@ function renderParticipantDashboard(pid){
 
   c.innerHTML = `
     ${previewBanner}
-    ${switchAccountLink}
+    ${topActionsRow}
     <div class="inner-tabs" id="dash-tabs">${tabsHtml}</div>
     <div id="dash-content">${bodyHtml}</div>
   `;
@@ -2051,6 +2063,13 @@ function renderParticipantDashboard(pid){
     const doSalir = ()=>{ clearDraft(); render(); };
     if(DRAFT_PID && WIZ_DIRTY){ showExitModal(doSalir); return; }
     doSalir();
+  });
+  document.getElementById('dash_postular_btn')?.addEventListener('click', ()=>{
+    p.quierePelear = !p.quierePelear;
+    p.fechaActualizacion = Date.now();
+    saveData(DB);
+    toast(p.quierePelear ? '🥊 Te anotaste para Batallas — el admin ya te puede elegir' : 'Te bajaste de la lista de postulados');
+    renderParticipantDashboard(pid);
   });
 }
 

@@ -247,11 +247,14 @@ function _rgEmailHash(email){
   return norm ? crc32(norm) : '';
 }
 function _rgPublicFieldsOf(p){
-  const { clave, email, ...rest } = p;
+  // v1.7 — quierePelear (postulación a Batallas) viaja SOLO al documento
+  // privado (ver _rgPrivadoFieldsOf): si quedara acá, cualquiera podría
+  // leer quién se postuló (registro_participants es de lectura pública).
+  const { clave, email, quierePelear, ...rest } = p;
   return { ...rest, emailHash: _rgEmailHash(email) };
 }
 function _rgPrivadoFieldsOf(p){
-  return { ownerUid: p.ownerUid || null, clave: p.clave || '', email: p.email || '' };
+  return { ownerUid: p.ownerUid || null, clave: p.clave || '', email: p.email || '', quierePelear: !!p.quierePelear };
 }
 
 let _rgSyncWired = false;
@@ -515,6 +518,7 @@ function _rgMergeKnownPrivadoFields(){
     if(!priv) return;
     p.clave = priv.clave || '';
     p.email = priv.email || '';
+    p.quierePelear = !!priv.quierePelear;
     _rgLastKnownPrivadoJSON[p.id] = JSON.stringify(priv);
   });
 }
@@ -632,6 +636,7 @@ function rgHydrateOwnPrivado(pid){
       if(p){
         p.clave = priv.clave || '';
         p.email = priv.email || '';
+        p.quierePelear = !!priv.quierePelear;
         _rgLastKnownPrivadoJSON[pid] = JSON.stringify(_rgPrivadoFieldsOf(p));
         // v6.9 — igual que en rgPushToFirestore/rgClaimOwnership: este
         // registro tiene que sobrevivir a cualquier reconstrucción
