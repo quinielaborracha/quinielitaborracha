@@ -28,6 +28,13 @@ cada push/PR contra `main`.
 No hay build step para producción: GitHub Pages sirve los archivos del repo
 tal cual. `package.json` existe únicamente para el tooling de test (jsdom).
 
+El deploy a GitHub Pages corre vía `.github/workflows/deploy-pages.yml`
+(`actions/deploy-pages`, en cada push a `main`) — requiere que en Settings →
+Pages → Build and deployment → Source esté puesto "GitHub Actions" (no
+"Deploy from a branch"; ese método legacy, con Jekyll de por medio pese a
+que el sitio no lo necesita, se dejó de usar en v1.7 porque el paso de
+publicar empezó a colgarse y fallar de forma repetida sin causa visible).
+
 ## Arquitectura
 
 ### Carga de scripts: orden fijo, scope global compartido

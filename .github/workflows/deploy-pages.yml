@@ -1,0 +1,52 @@
+name: Deploy Pages
+
+# v1.7 — Reemplaza el pipeline "legacy" de GitHub Pages (Settings → Pages
+# → "Deploy from a branch"), que pasa cada push por un contenedor Jekyll
+# que este proyecto no necesita para nada (sitio 100% estático, sin
+# templating) y cuyo paso final "Deploy to GitHub Pages" empezó a
+# colgarse ~10min y fallar de forma repetida (3/3 intentos) sin que
+# cambiara nada en el repo -- sin acceso a los logs (requieren auth) no
+# se pudo determinar la causa exacta del lado de GitHub, así que en vez
+# de seguir reintentando a ciegas se cambia al método moderno
+# (actions/deploy-pages), que además da visibilidad real de cada paso.
+#
+# Requiere UN cambio manual en Settings → Pages → Build and deployment →
+# Source: pasar de "Deploy from a branch" a "GitHub Actions" (no se
+# puede hacer vía API sin un token con permisos de admin del repo).
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Como máximo un deploy a la vez -- si llega un push nuevo mientras uno
+# está en curso, se encola (no se cancela el que ya está corriendo).
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir el sitio completo como artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
