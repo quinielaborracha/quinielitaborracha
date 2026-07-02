@@ -283,12 +283,121 @@ document.addEventListener("click",(ev)=>{
   if(rmBtn){rmS(rmBtn.dataset.sname);}
 });
 
+// v1.7 — Antes esta pestaña mostraba listas fijas (BRULES/ELIMRULES/
+// LASTRULES, hoy eliminadas de app-core-data.js) sin ninguna relación con
+// DB.configGlobal.reglas: activar/desactivar una regla o cambiarle el
+// puntaje en Admin → Configuración del torneo no se reflejaba acá, lo
+// cual no era transparente para los participantes (podían estar jugando
+// bajo reglas que la pestaña "Reglas" ni mencionaba, o al revés). Ahora
+// cada sección se arma en vivo desde DB.configGlobal.reglas, con los
+// mismos helpers que ya usa el motor de puntaje real (scoring.js:
+// getReglasGrupos/getReglasElim/getFaseValor/getMultiplicadorFase/
+// isFasePuntosActiva/isFaseLastPtsActiva/getActivePhases) — así es
+// imposible que la pestaña diga algo distinto de lo que realmente se
+// puntúa. Toda regla desactivada desaparece de acá (no se lista en gris);
+// las secciones opcionales (Multiplicador/Racha/Racha de desaciertos/MVP)
+// se ocultan enteras mientras el admin no las prenda. Ya estaba cableado
+// para refrescarse solo: updateReglaValor()/toggleReglaSwitch()/
+// toggleFaseActiva() (app-admin-tools.js) llaman a renderRules() en cada
+// guardado.
 function renderRules(){
-  const ruleRow=(r,color)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${r.l}</span><span class="pill" style="background:${color.bg};color:${color.fg};border:1px solid ${color.bc}">${r.p} pts</span></div>`;
-  document.getElementById("rbasic").innerHTML=BRULES.map(r=>ruleRow(r,{bg:"var(--qb-blue-dim)",fg:"#6ab8f7",bc:"rgba(20,120,200,.35)"})).join("");
-  document.getElementById("radv").innerHTML=ARULES.map(r=>ruleRow(r,{bg:"var(--qb-green-dim)",fg:"#4dde8c",bc:"rgba(0,200,83,.35)"})).join("");
-  document.getElementById("relim").innerHTML=ELIMRULES.map(r=>ruleRow(r,{bg:"rgba(124,58,237,.18)",fg:"#c4b5fd",bc:"rgba(124,58,237,.35)"})).join("");
-  document.getElementById("rlast").innerHTML=LASTRULES.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${r.l}</span><span class="pill" style="background:rgba(245,166,35,.14);color:#f5c842;border:1px solid rgba(245,166,35,.35)">${r.p} pts</span></div>`).join("");
+  // Guardas nulas: index.html siempre tiene estos IDs, pero varios
+  // test_*.js cargan un DOM mínimo propio (sin estas secciones) para
+  // ejercitar otras partes de la app — si esto tirara con esos fixtures,
+  // cortaría en seco la ejecución de app-bootstrap.js a mitad de camino
+  // (renderRules() se llama ahí antes de registrar el listener de
+  // onParticipantesChange), dejando ese listener sin registrar.
+  const setHTML=(id,html)=>{ const el=document.getElementById(id); if(el)el.innerHTML=html; };
+  const setDisplay=(id,val)=>{ const el=document.getElementById(id); if(el)el.style.display=val; };
+  const ruleRow=(label,txt,color)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--qb-border);font-size:11px;color:var(--qb-text)"><span>${label}</span><span class="pill" style="background:${color.bg};color:${color.fg};border:1px solid ${color.bc}">${txt}</span></div>`;
+  const offNote=msg=>`<div class="muted" style="padding:7px 0;font-size:11px">${msg}</div>`;
+
+  const COL_BASIC={bg:"var(--qb-blue-dim)",fg:"#6ab8f7",bc:"rgba(20,120,200,.35)"};
+  const COL_ADV={bg:"var(--qb-green-dim)",fg:"#4dde8c",bc:"rgba(0,200,83,.35)"};
+  const COL_ELIM={bg:"rgba(124,58,237,.18)",fg:"#c4b5fd",bc:"rgba(124,58,237,.35)"};
+  const COL_LAST={bg:"rgba(245,166,35,.14)",fg:"#f5c842",bc:"rgba(245,166,35,.35)"};
+  const COL_RACHA={bg:"var(--qb-green-dim)",fg:"#4dde8c",bc:"rgba(0,200,83,.35)"};
+  const COL_RACHA_D={bg:"rgba(245,166,35,.14)",fg:"#f5c842",bc:"rgba(245,166,35,.35)"};
+
+  const R=DB.configGlobal.reglas;
+
+  // ── Reglas básicas — Fase de Grupos ──
+  const Rg=getReglasGrupos();
+  setHTML("rbasic", Rg.activo===false
+    ? offNote("Sin puntaje: se puede predecir la fase de grupos, pero no otorga puntos.")
+    : [
+        ruleRow("Acertar ganador del partido",`${Rg.ganador} pts`,COL_BASIC),
+        ruleRow("Acertar empate",`${Rg.empate} pts`,COL_BASIC),
+        ruleRow("Marcador exacto (adicional)",`${Rg.exacto} pts`,COL_BASIC)
+      ].join(""));
+
+  // ── Reglas avanzadas — puntos fijos del juego, sin switch en
+  // Configuración del torneo, así que no cambian con esta pestaña.
+  setHTML("radv", ARULES.map(r=>ruleRow(r.l,`${r.p} pts`,COL_ADV)).join(""));
+
+  // ── Reglas de eliminatoria ──
+  const Re=getReglasElim();
+  const elimPhases=getActivePhases().filter(p=>p.elimPhase);
+  const multOn=!!R.multiplicador.activo;
+  let relimRows="";
+  if(Re.activo===false){
+    relimRows+=offNote("Puntos de resultado (ganador/empate/marcador exacto) desactivados en Eliminatoria.");
+  }else{
+    relimRows+=ruleRow("Acertar ganador del partido",`${Re.ganador} pts`,COL_ELIM);
+    relimRows+=ruleRow("Acertar empate",`${Re.empate} pts`,COL_ELIM);
+    relimRows+=ruleRow("Marcador exacto (adicional)",`${Re.exacto} pts`,COL_ELIM);
+  }
+  elimPhases.forEach(ph=>{
+    if(!isFasePuntosActiva(ph.key))return; // fase sin puntaje: no se lista
+    const llave=getFaseValor(ph,"llavePts");
+    const clasif=getFaseValor(ph,"classifiedPts");
+    if(llave>0)relimRows+=ruleRow(`Acertar llave — ${ph.label}`,`${llave} pts`,COL_ELIM);
+    if(clasif>0)relimRows+=ruleRow(`Clasificado — ${ph.label} (por equipo)`,`${clasif} pts`,COL_ELIM);
+  });
+  setHTML("relim-note", (Re.activo!==false&&multOn)
+    ? "⭐ El multiplicador por ronda está activo: Ganador/Empate/Marcador exacto valen más en fases avanzadas — ver \"Multiplicador por ronda\" más abajo."
+    : "");
+  setHTML("relim", relimRows);
+
+  // ── Multiplicador por ronda (opcional) ──
+  setDisplay("rmult-sec", multOn?"":"none");
+  setDisplay("rmult", multOn?"":"none");
+  if(multOn){
+    setHTML("rmult", elimPhases.map(ph=>ruleRow(ph.label,`×${getMultiplicadorFase(ph.key)}`,COL_ELIM)).join(""));
+  }
+
+  // ── Racha de aciertos (opcional) ──
+  const rachaOn=!!R.racha.activo;
+  setDisplay("rracha-sec", rachaOn?"":"none");
+  setDisplay("rracha", rachaOn?"":"none");
+  if(rachaOn){
+    setHTML("rracha", (R.racha.hitos||[]).map(h=>ruleRow(`${h.n} aciertos consecutivos`,`+${h.pts} pts`,COL_RACHA)).join(""));
+  }
+
+  // ── Racha de desaciertos (opcional) ──
+  const rachaDOn=!!R.rachaDesaciertos.activo;
+  setDisplay("rrachad-sec", rachaDOn?"":"none");
+  setDisplay("rrachad", rachaDOn?"":"none");
+  if(rachaDOn){
+    setHTML("rrachad", (R.rachaDesaciertos.hitos||[]).map(h=>ruleRow(`${h.n} fallos consecutivos`,`+${h.pts} pts`,COL_RACHA_D)).join(""));
+  }
+
+  // ── MVP de la jornada (opcional) ──
+  const mvpOn=!!R.mvp.activo;
+  setDisplay("rmvp-sec", mvpOn?"":"none");
+  setDisplay("rmvp", mvpOn?"":"none");
+  if(mvpOn){
+    setHTML("rmvp", ruleRow("Bono por día ganado (empatable)",`+${R.mvp.pts} pts`,COL_LAST));
+  }
+
+  // ── Bonos de último lugar ──
+  const lastRows=getActivePhases().map(phase=>{
+    if(!isFaseLastPtsActiva(phase))return "";
+    const pts=getFaseValor(phase,"lastPts");
+    if(!pts)return "";
+    return ruleRow(`Último al cierre de ${phase.label}`,`*${pts} pts`,COL_LAST);
+  }).join("");
+  setHTML("rlast", lastRows || offNote("Sin bonos de último lugar configurados."));
 }
 
 // ══════════════════════════════════════════════════════════════

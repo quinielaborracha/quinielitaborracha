@@ -3291,6 +3291,7 @@ function buildParticipantsRowsHtml(filterText, filterMode){
           <button class="icon-btn" data-act="pdf" data-id="${p.id}" title="Generar PDF" aria-label="Generar PDF">📄</button>
           <button class="icon-btn" data-act="regen-clave" data-id="${p.id}" title="Regenerar clave" aria-label="Regenerar clave">🔑</button>
           <button class="icon-btn ${hasNota?'icon-btn-has-note':''}" data-act="nota" data-id="${p.id}" title="${hasNota?esc(p.notaAdmin):'Agregar nota interna'}" aria-label="${hasNota?'Editar nota interna':'Agregar nota interna'}">${hasNota?'🗒️':'📝'}</button>
+          <button class="icon-btn" data-act="dup" data-id="${p.id}" title="Duplicar (para pruebas)" aria-label="Duplicar participante para pruebas">📋</button>
           <button class="icon-btn" data-act="del" data-id="${p.id}" title="Eliminar" aria-label="Eliminar participante">🗑️</button>
         </td>
       </tr>`;
@@ -3364,6 +3365,35 @@ function wireParticipantsTable(){
         p.fechaActualizacion = Date.now();
         saveData(DB);
         toast(p.notaAdmin ? 'Nota guardada.' : 'Nota eliminada.');
+        refreshAdminTable();
+
+      }else if(el.dataset.act==='dup'){
+        // v1.7 — Duplicar participante (con toda su quiniela) para poder
+        // probar el Ranking/Estadísticas/Bracket con varios participantes
+        // sin llenar el wizard a mano cada vez. La copia es un
+        // participante 100% independiente (id/código/clave propios): se
+        // arma igual que un alta real, solo que a mano y con las
+        // predicciones ya clonadas. Se limpian correo y clave (email en
+        // blanco, clave regenerada) para que nunca choque con el
+        // buscador de correo duplicado ni permita "reclamar" la copia con
+        // la clave del original.
+        const clone = JSON.parse(JSON.stringify(p));
+        const baseName = `${p.name} (copia)`;
+        let name = baseName, n = 2;
+        while(DB.participants.some(x=>norm(x.name)===norm(name))){ name = `${baseName} ${n}`; n++; }
+        clone.id = uid();
+        clone.codigo = nextCode();
+        clone.name = name;
+        clone.email = '';
+        clone.clave = genClave();
+        clone.ownerUid = null;
+        clone.notaAdmin = '';
+        clone.fechaCreacion = Date.now();
+        clone.fechaActualizacion = Date.now();
+        DB.participants.push(clone);
+        DB.predictions[clone.id] = JSON.parse(JSON.stringify(DB.predictions[id] || {}));
+        saveData(DB);
+        toast(`"${name}" creado como copia de "${p.name}".`);
         refreshAdminTable();
 
       }else if(el.dataset.act==='del'){
