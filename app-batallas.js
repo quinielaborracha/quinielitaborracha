@@ -234,13 +234,15 @@ function ensureRumbleState(){
   if(!S.rumbleHistory)S.rumbleHistory=[];
 }
 
-// Básico + Avanzado + Eliminatoria, SIN Bonos -- a diferencia de
-// calcBattlePts (que excluye Avanzado a propósito para duelos 1v1), acá
-// el brief de la Fase 4 pide expresamente incluirlo. Avanzado (campeón/
-// goleador/etc) no tiene "ventana" propia -- es una predicción de todo
-// el torneo -- así que se suma entera, no recortada a groupMids/elimMids.
+// Básico + Avanzado + Eliminatoria (clasificados incluidos), SIN Bonos.
+// v1.9 — calcBattlePts() ya suma Avanzado por su cuenta (mismo criterio
+// que acá: no tiene "ventana" propia, se cuenta entero) -- antes esta
+// función lo volvía a sumar POR SEPARADO, así que un Rumble contaba
+// Avanzado dos veces. Ahora calcRumblePts() y calcBattlePts() dan
+// exactamente lo mismo; queda como alias por claridad semántica (Rumble
+// vs Batalla 1v1) y porque otros archivos ya llaman a calcRumblePts().
 function calcRumblePts(name,groupMids,elimMids){
-  return calcBattlePts(name,groupMids,elimMids)+calcAdv(name);
+  return calcBattlePts(name,groupMids,elimMids);
 }
 
 function populateRumbleChecklist(){

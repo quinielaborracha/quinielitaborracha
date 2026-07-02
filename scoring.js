@@ -302,28 +302,34 @@ function calcElimMatchPts(name,pid){
   return calcElimMatchBreakdown(name,pid).reduce((sum,item)=>sum+item.pts,0);
 }
 
-function calcClassifiedPtsForPhase(name,phase){
+// v1.9 — Extraído de calcClassifiedPtsForPhase() para poder otorgar el
+// bono de "clasificado" de UN partido puntual (no toda la fase de una
+// sola vez) — lo necesita calcBattlePts() para poder atribuirle a una
+// Batalla/Rumble el bono de clasificado SOLO de los pids que realmente
+// caen dentro de su ventana de partidos (groupMids/elimMids), sin sumar
+// de más el resto de la fase que quedó afuera de esa ventana.
+function calcClassifiedPtsForPid(name,pid){
+  const phase=phaseForPid(pid);
+  if(!phase||!phase.elimPhase)return 0;
   const classifiedPts=getFaseValor(phase,'classifiedPts');
   if(!classifiedPts)return 0;
   if(!isFaseActiva(phase.key))return 0; // v1.2 — fase desactivada: no existe, no puntúa
   if(!isFasePuntosActiva(phase.key))return 0; // v1.2 (fase 2) — puntos de esta fase apagados a propósito
   if(!isPrevPhaseClosed(phase))return 0;
+  const predTeams=getElimTeams(name,pid);if(!predTeams)return 0;
+  const pred=elimPred(name,pid);if(!pred)return 0;
+  let predWinner;
+  if(pred.h>pred.a)predWinner=predTeams.h;
+  else if(pred.a>pred.h)predWinner=predTeams.a;
+  else predWinner=predTeams.h;
+  if(!predWinner)return 0;
+  // Check if predWinner is in real advancers (team, not llave)
+  return getRealAdvancers(phase).has(n(predWinner))?classifiedPts:0;
+}
+
+function calcClassifiedPtsForPhase(name,phase){
   if(!phase.elimPhase)return 0;
-  // Build set of real advancers from this phase
-  const realAdvancers=getRealAdvancers(phase);
-  let pts=0;
-  // For each match in this phase, check predicted winner
-  phase.mids.forEach(pid=>{
-    const predTeams=getElimTeams(name,pid);if(!predTeams)return;
-    const pred=elimPred(name,pid);if(!pred)return;
-    let predWinner;
-    if(pred.h>pred.a)predWinner=predTeams.h;
-    else if(pred.a>pred.h)predWinner=predTeams.a;
-    else predWinner=predTeams.h;
-    // Check if predWinner is in real advancers (team, not llave)
-    if(predWinner&&realAdvancers.has(n(predWinner)))pts+=classifiedPts;
-  });
-  return pts;
+  return phase.mids.reduce((sum,pid)=>sum+calcClassifiedPtsForPid(name,pid),0);
 }
 
 function calcElimPts(name){
@@ -799,6 +805,22 @@ function getMatchIdsByCount(count){
   return{groupMids,elimMids};
 }
 
+// v1.9 — BUG REPORTADO: el marcador de una Batalla no sumaba el bono de
+// "clasificado" (+Npts por predecir el equipo que YA de hecho pasó de
+// fase, ej. +3 cuando España avanzó de Dieciseisavos) ni Avanzado —
+// ambos SÍ cuentan en el Ranking general (calcElimPts()/calcAdv(), vía
+// getRank()) pero calcBattlePts() nunca los tocaba: antes era una
+// decisión deliberada del brief ("Avanzado y Bonos quedan siempre afuera
+// de Batallas"), pero el pedido explícito ahora es que una Batalla sume
+// TODO lo que sumen básicos + eliminatoria + avanzado, solo Bonos
+// (último lugar/racha/MVP) queda afuera. Fix:
+//   - calcClassifiedPtsForPid(pid) para cada elimMid de la ventana (NO
+//     toda la fase — solo los partidos puntuales que caen dentro de esta
+//     Batalla, para no sumarle de más partidos que quedaron afuera de su
+//     ventana).
+//   - calcAdv(name) entero (campeón/goleador/etc. no tiene "ventana"
+//     propia, es una predicción de todo el torneo — mismo criterio que ya
+//     usa calcRumblePts()).
 function calcBattlePts(name,groupMids,elimMids){
   let pts=0;
   const R=getReglasGrupos();
@@ -811,7 +833,8 @@ function calcBattlePts(name,groupMids,elimMids){
       if(rR===pR){pts+=rR==="D"?R.empate:R.ganador;if(p.h===s.h&&p.a===s.a)pts+=R.exacto;}
     });
   }
-  elimMids.forEach(pid=>{pts+=calcElimMatchPts(name,pid);});
+  elimMids.forEach(pid=>{pts+=calcElimMatchPts(name,pid)+calcClassifiedPtsForPid(name,pid);});
+  pts+=calcAdv(name);
   return pts;
 }
 

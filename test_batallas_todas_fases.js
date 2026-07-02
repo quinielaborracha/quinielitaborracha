@@ -1,10 +1,13 @@
 // Test funcional de Batallas (Fase 0 del brief de evolución): confirma que
 // calcBattlePts() da el puntaje correcto en TODAS las fases del torneo
 // (Grupos + las 6 rondas de Eliminatoria: Dieciseisavos, Octavos, Cuartos,
-// Semifinales, Tercer/cuarto lugar, Gran Final), y que Avanzado y Bonos
-// quedan SIEMPRE afuera del cálculo de una batalla (decisión tomada en el
-// brief: una batalla mide la ventana puntual de partidos de ese día, no
-// apuestas de todo el torneo ni premios acumulados).
+// Semifinales, Tercer/cuarto lugar, Gran Final), que el bono de
+// "clasificado" (equipo predicho que YA de hecho pasó de fase) se suma
+// cuando el partido cae dentro de la ventana de la batalla, que Avanzado
+// se suma siempre (v1.9 — antes quedaba afuera a propósito, pero el
+// pedido explícito ahora es que una batalla sume TODO lo que sumen
+// básicos + eliminatoria + avanzado), y que solo Bonos (último lugar/
+// racha/MVP) queda SIEMPRE afuera del cálculo de una batalla.
 //
 // Carga los 22 archivos de producción en el mismo orden que index.html,
 // mismo patrón de bridge que ya usan test_full_page_load.js/test_v1_6_ajustes.js.
@@ -143,16 +146,29 @@ jugarRonda(T.BONUS_PHASES.find(p=>p.key==="sf").mids, "qf", "sf");
 jugarRonda(T.BONUS_PHASES.find(p=>p.key==="final").mids, "sf", "final");
 jugarRonda(T.BONUS_PHASES.find(p=>p.key==="third").mids, "sf", "third");
 
-console.log("\n── Eliminatoria dentro de Batallas, ronda por ronda ──");
+// v1.9 — Cada partido de jugarRonda() predice EXACTO el resultado real
+// (h:2,a:1 siempre), así que el equipo predicho para ganar SIEMPRE es el
+// que de hecho avanzó -- eso significa que, además de llave+ganador+
+// exacto, también gana el bono de "clasificado" de esa fase (si su fase
+// previa ya está cerrada, que acá siempre lo está — ver jugarRonda()).
+// classifiedPerMatch sale de BONUS_PHASES (Dieciseisavos=3, Octavos=4,
+// Cuartos=6, Semis=6, Final/Tercer=0), mismo dato que ya usa el Ranking.
+console.log("\n── Eliminatoria dentro de Batallas, ronda por ronda (incluye clasificado) ──");
 T.ELIM_ROUNDS.forEach(round=>{
-  const esperado = round.ids.length * PTS_POR_PARTIDO_ELIM;
+  const phase=T.BONUS_PHASES.find(p=>p.elimPhase&&p.mids.includes(round.ids[0]));
+  const classifiedPerMatch=phase?phase.classifiedPts:0;
+  const esperado = round.ids.length * (PTS_POR_PARTIDO_ELIM+classifiedPerMatch);
   const real = T.calcBattlePts(NAME, [], round.ids);
   check(`${round.lbl} (${round.ids.length} partido(s)): ${esperado}pts en una batalla de esa ventana`,
     real === esperado);
 });
 
-const elimEsperadoTotal = ALL_ELIM_IDS.length * PTS_POR_PARTIDO_ELIM;
-check(`Eliminatoria completa (${ALL_ELIM_IDS.length} partidos, todas las rondas): ${elimEsperadoTotal}pts`,
+const classifiedTotal = ALL_ELIM_IDS.reduce((sum,pid)=>{
+  const phase=T.BONUS_PHASES.find(p=>p.elimPhase&&p.mids.includes(pid));
+  return sum+(phase?phase.classifiedPts:0);
+},0);
+const elimEsperadoTotal = ALL_ELIM_IDS.length * PTS_POR_PARTIDO_ELIM + classifiedTotal;
+check(`Eliminatoria completa (${ALL_ELIM_IDS.length} partidos, todas las rondas, incluye clasificado): ${elimEsperadoTotal}pts`,
   T.calcBattlePts(NAME, [], ALL_ELIM_IDS) === elimEsperadoTotal);
 
 const totalEsperado = basicoEsperado + elimEsperadoTotal;
@@ -160,23 +176,26 @@ check(`Básico + Eliminatoria combinados (una batalla que cruza Grupos y Elimina
   T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalEsperado);
 
 /* ════════════════════════════════════════════════════════════════
-   Avanzado y Bonos: deben quedar SIEMPRE afuera del cálculo de Batallas
-   (decisión del brief), aunque el participante tenga puntos ahí.
+   Avanzado (v1.9 — SÍ suma en Batallas, pedido explícito: básicos +
+   eliminatoria + avanzado, todo menos Bonos) y Bonos (SIGUE afuera
+   SIEMPRE: último lugar/racha/MVP no son "lo que pasó en la cancha").
    ════════════════════════════════════════════════════════════════ */
-console.log("\n── Avanzado y Bonos quedan afuera de Batallas ──");
+console.log("\n── Avanzado SÍ suma en Batallas; Bonos sigue afuera ──");
 
 T.S.reality = {champ:"Argentina",runner:"Francia",third:"Brasil",topScorer:"Messi",topScorerGoals:8,topCountry:"Argentina",topCountryGoals:15,mostConceded:"Alemania"};
 T.S.adv[NAME] = {champ:"Argentina",runner:"Francia",third:"Brasil",scorer:"Messi",scorerGoals:8,topCountry:"Argentina",topCountryGoals:15,mostConceded:"Alemania"};
+const advPtsPerfectos = T.calcAdv(NAME);
 check("calcAdv() efectivamente da puntos (>0) con esta predicción avanzada perfecta",
-  T.calcAdv(NAME) > 0);
-check("calcBattlePts() NO se mueve al agregar Avanzado con puntos reales",
-  T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalEsperado);
+  advPtsPerfectos > 0);
+const totalConAvanzado = totalEsperado + advPtsPerfectos;
+check(`calcBattlePts() SÍ suma Avanzado (v1.9): ${totalConAvanzado}pts`,
+  T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalConAvanzado);
 
 T.S.bonos.lastPlace.grupos = {name:NAME, pts:8, total:0, phase:"Fase de Grupos"};
 check("calcBonos() efectivamente da puntos (>0) con este Bono de último lugar",
   T.calcBonos(NAME) > 0);
-check("calcBattlePts() NO se mueve al agregar Bonos con puntos reales",
-  T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalEsperado);
+check("calcBattlePts() NO se mueve al agregar Bonos con puntos reales (Bonos sigue siempre afuera)",
+  T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalConAvanzado);
 
 /* ════════════════════════════════════════════════════════════════
    Fase desactivada por el admin: una batalla sobre esa ventana da 0,
@@ -185,19 +204,26 @@ check("calcBattlePts() NO se mueve al agregar Bonos con puntos reales",
 console.log("\n── Fase desactivada dentro de Batallas ──");
 T.DB.configGlobal.fasesActivas = T.DB.configGlobal.fasesActivas || {};
 T.DB.configGlobal.fasesActivas.final = false;
-check("Con 'Final' desactivada por el admin, una batalla sobre P104 da 0pts",
-  T.calcBattlePts(NAME, [], [104]) === 0);
+// v1.9 — "0pts" ya no aplica: Avanzado (advPtsPerfectos, seteado arriba)
+// no tiene switch de fase activa/desactivada (calcAdv() no depende de
+// isFaseActiva), así que sigue sumando aunque "Final" esté apagada — solo
+// la parte de Eliminatoria de ese pid puntual se apaga.
+check("Con 'Final' desactivada por el admin, una batalla sobre P104 solo trae Avanzado (Eliminatoria de ese pid da 0)",
+  T.calcBattlePts(NAME, [], [104]) === advPtsPerfectos);
 T.DB.configGlobal.fasesActivas.final = true; // reactivar para no afectar lo que sigue
 
 /* ════════════════════════════════════════════════════════════════
    Multiplicador por ronda (Cuartos ×2): debe aplicar sobre
-   Ganador/Empate + Marcador exacto, pero NUNCA sobre Llave.
+   Ganador/Empate + Marcador exacto, pero NUNCA sobre Llave ni sobre
+   Clasificado/Avanzado.
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── Multiplicador por ronda dentro de Batallas ──");
 T.DB.configGlobal.reglas.multiplicador = {activo:true, fases:{qf:2}};
 const ptsQfConMultiplicador = RE.llave + (RE.ganador*2) + (RE.exacto*2); // 2 + 4 + 6 = 12
-check(`Cuartos con multiplicador ×2: P97 da ${ptsQfConMultiplicador}pts (llave sin multiplicar + ganador/exacto ×2) en una batalla`,
-  T.calcBattlePts(NAME, [], [97]) === ptsQfConMultiplicador);
+const qfClassifiedPts = T.BONUS_PHASES.find(p=>p.key==="qf").classifiedPts; // 6
+const esperadoP97 = ptsQfConMultiplicador + qfClassifiedPts + advPtsPerfectos;
+check(`Cuartos con multiplicador ×2: P97 da ${esperadoP97}pts (llave sin multiplicar + ganador/exacto ×2 + clasificado + avanzado) en una batalla`,
+  T.calcBattlePts(NAME, [], [97]) === esperadoP97);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);

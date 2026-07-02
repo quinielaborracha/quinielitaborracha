@@ -93,8 +93,13 @@ const advPts = T.calcAdv("Rumbler");
 const rumblePts = T.calcRumblePts("Rumbler", [1], []);
 
 check("calcAdv() da puntos (>0) por acertar el campeón", advPts > 0);
-check("calcRumblePts() = calcBattlePts() + calcAdv() (a diferencia de calcBattlePts solo, que excluye Avanzado)",
-  rumblePts === battlePts + advPts);
+// v1.9 — calcBattlePts() ahora suma Avanzado por su cuenta (antes lo
+// excluía a propósito para duelos 1v1); calcRumblePts() dejó de sumarlo
+// aparte para no contarlo dos veces -- ver nota en app-batallas.js.
+check("calcBattlePts() ya incluye Avanzado (v1.9): da al menos los puntos de acertar el campeón",
+  battlePts >= advPts);
+check("calcRumblePts() = calcBattlePts() (ya no se duplica Avanzado)",
+  rumblePts === battlePts);
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 2 — startRumble(): validaciones, estructura propia, sin
