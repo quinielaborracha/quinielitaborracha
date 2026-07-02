@@ -331,7 +331,7 @@ function renderRumblePanel(){
           <tbody>
             ${filas.map((f,i)=>`<tr>
               <td>${i===0?'<span style="font-size:18px">👑</span>':`<span class="rk">${i+1}</span>`}</td>
-              <td>${esc(f.name)}</td>
+              <td><div class="pn" style="display:flex;align-items:center;gap:6px">${avatarImg((PM[f.name]||{}).champAvatar,20)}${esc(f.name)}</div></td>
               <td style="text-align:right;font-weight:800">${f.pts}</td>
             </tr>`).join("")}
           </tbody>
@@ -357,7 +357,7 @@ function renderRumbleHistory(){
       <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--qb-text)">
         <span>${esc(h.name)}</span><span style="color:var(--qb-muted)">${h.date}</span>
       </div>
-      <div style="margin-top:.375rem;font-size:11px">${h.winner==="Empate"?"🤝 Empate":`👑 ${esc(h.winner)}`}</div>
+      <div style="margin-top:.375rem;font-size:11px;display:flex;align-items:center;gap:6px">${h.winner==="Empate"?"🤝 Empate":`👑 ${avatarImg((PM[h.winner]||{}).champAvatar,18)}${esc(h.winner)}`}</div>
       <details style="margin-top:.375rem">
         <summary style="font-size:10px;color:var(--qb-muted);cursor:pointer">${filas.length} participantes</summary>
         <div style="margin-top:.375rem">${filas.map(([n,p])=>`<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--qb-muted)"><span>${esc(n)}</span><span>${p}pts</span></div>`).join("")}</div>
@@ -594,15 +594,18 @@ function renderOneBattle(slot){
     })
   ];
   const battleName=esc(name||"Batalla del día");
+  const m1=PM[p1]||{},m2=PM[p2]||{};
   return`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:var(--qb-surface);${done?"border-color:rgba(245,166,35,.5)":""}">
     <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName} · ${descripVentana(ventanaModo,ventanaValor)}</div>
     <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center">
       <div>
+        ${m1.champAvatar?`<div style="margin-bottom:4px">${avatarImg(m1.champAvatar,44)}</div>`:""}
         <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p1)}</div>
         <div style="font-size:24px;font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</div>
       </div>
       <div style="font-family:var(--ff-display);font-size:18px;font-weight:900;color:var(--qb-red)">VS</div>
       <div>
+        ${m2.champAvatar?`<div style="margin-bottom:4px">${avatarImg(m2.champAvatar,44)}</div>`:""}
         <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p2)}</div>
         <div style="font-size:24px;font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</div>
       </div>
@@ -733,9 +736,9 @@ function renderBattleHistory(){
         <span style="font-size:10px;color:var(--qb-muted)">${h.date}</span>
       </div>
       <div style="display:flex;justify-content:center;align-items:center;gap:10px;font-size:13px;font-weight:800">
-        <span>${esc(h.p1)}</span><span style="color:${h.pts1>=h.pts2?'#f5c842':'var(--qb-text)'}">${h.pts1}</span>
+        ${avatarImg((PM[h.p1]||{}).champAvatar,20)}<span>${esc(h.p1)}</span><span style="color:${h.pts1>=h.pts2?'#f5c842':'var(--qb-text)'}">${h.pts1}</span>
         <span style="color:var(--qb-red);font-size:11px">VS</span>
-        <span style="color:${h.pts2>=h.pts1?'#f5c842':'var(--qb-text)'}">${h.pts2}</span><span>${esc(h.p2)}</span>
+        <span style="color:${h.pts2>=h.pts1?'#f5c842':'var(--qb-text)'}">${h.pts2}</span><span>${esc(h.p2)}</span>${avatarImg((PM[h.p2]||{}).champAvatar,20)}
       </div>
       <div style="text-align:center;margin-top:.375rem;font-size:11px">${winnerLine}</div>
       ${editControls}
@@ -795,10 +798,11 @@ function renderBattlesBanner(){
       const b=S.battles[s];
       const pts1=calcBattlePts(b.p1,b.groupMids,b.elimMids);
       const pts2=calcBattlePts(b.p2,b.groupMids,b.elimMids);
+      const m1=PM[b.p1]||{},m2=PM[b.p2]||{};
       return`<div style="display:flex;align-items:center;justify-content:center;gap:10px;font-size:11px;padding:.375rem 0;cursor:pointer" onclick="tab('battles')">
-        <span style="font-weight:700">${esc(b.p1)}</span><span style="font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</span>
+        ${avatarImg(m1.champAvatar,22)}<span style="font-weight:700">${esc(b.p1)}</span><span style="font-weight:900;color:${pts1>=pts2?'#f5c842':'var(--qb-text)'}">${pts1}</span>
         <span style="color:var(--qb-red);font-weight:800">VS</span>
-        <span style="font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</span><span style="font-weight:700">${esc(b.p2)}</span>
+        <span style="font-weight:900;color:${pts2>=pts1?'#f5c842':'var(--qb-text)'}">${pts2}</span><span style="font-weight:700">${esc(b.p2)}</span>${avatarImg(m2.champAvatar,22)}
       </div>`;
     }).join("")}
   </div>`;

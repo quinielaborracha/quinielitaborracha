@@ -92,6 +92,20 @@ function flagD(c,s=20){const f=FLAGS2[c]||"🌐";return`<span style="font-size:$
 // sitio que necesita mostrar la bandera del campeón predicho.
 function flagEmoji(emoji,s=20){return`<span style="font-size:${s}px;line-height:1">${emoji||"🌐"}</span>`;}
 
+// v1.8 — Avatar de campeón (perfil, batallas, Royal Rumble, tarjeta de
+// estadísticas): recibe el nombre de archivo ya resuelto por
+// avatarOfChampion() (m.champAvatar, app-core-data.js), no el nombre del
+// país -- así este helper no necesita conocer AVATAR_MAP. Sin avatar
+// todavía para ese país (la mayoría, por ahora) → file es "" → no
+// devuelve nada, a propósito: mejor vacío que mostrar un genérico que no
+// representa a nadie (mismo criterio que avatarOfChampion()). A propósito
+// NO se usa en el Ranking (rd. app-bracket-view.js) -- ahí solo va la
+// bandera, como siempre.
+function avatarImg(file,s=40){
+  if(!file)return"";
+  return`<img class="qb-avatar" src="${AVATAR_DIR}${encodeURIComponent(file)}" width="${s}" height="${s}" alt="" loading="lazy" style="width:${s}px;height:${s}px">`;
+}
+
 // v1.1 — Ciudad + país combinados para mostrar bajo el nombre del
 // participante (ranking, export de imagen, perfil): "Maracaibo, Venezuela".
 // Si falta alguno de los dos, devuelve solo el que haya (o "" si no hay nada).

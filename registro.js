@@ -3872,12 +3872,29 @@ function generarPDF(p){
   const bracket = computeBracket(preds);
   const estadoLabel = p.estadoQuiniela==='enviada' ? 'Enviada' : 'Borrador';
 
+  // v1.8 — Avatar de campeón en la portada del PDF: mismo campeón que se
+  // imprime más abajo en "Preguntas especiales" (computeAutoSpecial(bracket)
+  // -- Campeón/Subcampeón/3er lugar SIEMPRE se calculan del bracket, nunca
+  // se leen de preds.special directo, ver nota AUTO_SPECIAL_IDS arriba) y
+  // mismo AVATAR_MAP que ya usa avatarOfChampion() (app-core-data.js) para
+  // el resto de la app. Todavía no hay avatar para todos los países -- sin
+  // uno, champAvatarFile queda "" y no se imprime nada (mismo criterio que
+  // en el resto de la app: mejor vacío que un avatar que no corresponde).
+  const champVal = computeAutoSpecial(bracket).campeon;
+  const champAvatarFile = (champVal && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champVal]||'') : '';
+  const posterAvatarHtml = champAvatarFile
+    ? `<img class="pp-avatar" src="${AVATAR_DIR}${encodeURIComponent(champAvatarFile)}" alt="" crossorigin="anonymous">`
+    : '';
+
   const poster = document.getElementById('pdfPoster');
   poster.innerHTML = `
     <div class="pp-header">
-      <div>
-        <div class="pp-title">⚔️ Quinielita Borracha</div>
-        <div class="pp-subtitle">${esc(p.name)}</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        ${posterAvatarHtml}
+        <div>
+          <div class="pp-title">⚔️ Quinielita Borracha</div>
+          <div class="pp-subtitle">${esc(p.name)}</div>
+        </div>
       </div>
       <div class="pp-meta-grid">
         <div><span class="pp-meta-label">Ciudad</span><span class="pp-meta-val">${esc(p.city)}</span></div>

@@ -89,11 +89,31 @@ function flagOfChampion(name, residenceCountry){
   }
 }
 
+// v1.8 — Avatar del participante: la ilustración de AVATAR_MAP para el país
+// que predijo como campeón (misma fuente que flagOfChampion(), getDynamicSpec
+// vía SPECIAL_FIELD_MAP_V62 o S.adv[name].champ para migrados legacy). A
+// diferencia de flagOfChampion(), NO tiene fallback a la bandera de
+// residencia: si el país elegido todavía no tiene avatar en AVATAR_MAP (la
+// mayoría, por ahora -- ver app-static-data.js), devuelve "" a propósito,
+// para que quien lo consuma no muestre nada en vez de un avatar que no
+// corresponde. Mismo try/catch que flagOfChampion() y mismo motivo: esta
+// función se llama desde rebuildDynamicData() en su invocación top-level,
+// antes de que getDynamicSpec()/AVATAR_MAP terminen de existir.
+function avatarOfChampion(name){
+  try{
+    const spec = (typeof getDynamicSpec==='function') ? getDynamicSpec(name) : null;
+    const champ = spec && spec.champ ? spec.champ : '';
+    return (champ && typeof AVATAR_MAP!=='undefined' && AVATAR_MAP[champ]) || '';
+  }catch(e){
+    return '';
+  }
+}
+
 function rebuildDynamicData(){
   PL = (DB.participants||[]).map(p=>p.name).filter(Boolean);
   PM = {};
   (DB.participants||[]).forEach(p=>{
-    PM[p.name] = {city:p.city, country:p.country, champFlag: flagOfChampion(p.name, p.country)};
+    PM[p.name] = {city:p.city, country:p.country, champFlag: flagOfChampion(p.name, p.country), champAvatar: avatarOfChampion(p.name)};
   });
   MD = {}; MIDS = [];
   for(let mid=1; mid<=72; mid++){
