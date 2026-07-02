@@ -28,23 +28,9 @@
 // archivo las lee ni las escribe.
 let _elimConflictQueue=[],_elimConflictCurrent=null;
 
-// Traducción de nombres ESPN (en) → español para los equipos
-const ESPN_NAME_ES={
-  "Mexico":"México","South Korea":"Corea del Sur","Czech Republic":"República Checa","Czechia":"República Checa",
-  "Bosnia and Herzegovina":"Bosnia y Herzegovina","Qatar":"Catar","Switzerland":"Suiza",
-  "Brazil":"Brasil","Morocco":"Marruecos","Haiti":"Haití","Scotland":"Escocia",
-  "United States":"Estados Unidos","USA":"Estados Unidos","Turkey":"Turquía","Turkiye":"Turquía","Türkiye":"Turquía",
-  "Germany":"Alemania","Ivory Coast":"Costa de Marfil","Cote d'Ivoire":"Costa de Marfil","Côte d'Ivoire":"Costa de Marfil","Ecuador":"Ecuador",
-  "Netherlands":"Países Bajos","Japan":"Japón","Sweden":"Suecia","Tunisia":"Túnez",
-  "Saudi Arabia":"Arabia Saudita","Uruguay":"Uruguay","Spain":"España","Cape Verde":"Cabo Verde",
-  "Iran":"Irán","New Zealand":"Nueva Zelanda","Belgium":"Bélgica","Egypt":"Egipto",
-  "France":"Francia","Senegal":"Senegal","Iraq":"Irak","Norway":"Noruega",
-  "Argentina":"Argentina","Algeria":"Argelia","Austria":"Austria","Jordan":"Jordania",
-  "Portugal":"Portugal","DR Congo":"RD Congo","Congo DR":"RD Congo","Congo":"RD Congo","Uzbekistan":"Uzbekistán",
-  "Colombia":"Colombia","England":"Inglaterra","Croatia":"Croacia","Ghana":"Ghana","Panama":"Panamá",
-  "Paraguay":"Paraguay","Australia":"Australia","Korea Republic":"Corea del Sur","Curacao":"Curazao","Curaçao":"Curazao",
-  "Canada":"Canadá","Bosnia-Herzegovina":"Bosnia y Herzegovina","South Africa":"Sudáfrica",
-};
+// v1.7 — ESPN_NAME_ES se movió a app-static-data.js (carga antes que
+// este archivo) -- es dato de referencia puro, sin relación con el
+// sync de resultados. Mismo global, cero cambio de comportamiento.
 
 // Rango de fechas usado para consultar el scoreboard de ESPN — ya NO se
 // usa para identificar el slot (eso es directo por ESPN_GAMEID_TO_PID, ver

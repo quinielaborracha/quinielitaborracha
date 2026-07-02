@@ -22,21 +22,10 @@
 // Basado en standings reales de grupos + Annex C (FIFA Official)
 // ══════════════════════════════════════════════════════════════
 
-// Nombre canónico de cada equipo para comparaciones
-const TEAM_NAMES = {
-  "MEX":"México","RSA":"Sudáfrica","KOR":"Corea del Sur","CZE":"Chequia",
-  "CAN":"Canadá","BIH":"Bosnia y Herzegovina","QAT":"Catar","SUI":"Suiza",
-  "BRA":"Brasil","MAR":"Marruecos","HAI":"Haití","SCO":"Escocia",
-  "USA":"Estados Unidos","PAR":"Paraguay","AUS":"Australia","TUR":"Turquía",
-  "GER":"Alemania","CIV":"Costa de Marfil","ECU":"Ecuador","CUR":"Curazao",
-  "NED":"Países Bajos","JPN":"Japón","SWE":"Suecia","TUN":"Túnez",
-  "KSA":"Arabia Saudita","URU":"Uruguay","ESP":"España","CPV":"Cabo Verde",
-  "IRN":"Irán","NZL":"Nueva Zelanda","BEL":"Bélgica","EGY":"Egipto",
-  "FRA":"Francia","SEN":"Senegal","IRQ":"Irak","NOR":"Noruega",
-  "ARG":"Argentina","ALG":"Argelia","AUT":"Austria","JOR":"Jordania",
-  "ENG":"Inglaterra","CRO":"Croacia","GHA":"Ghana","PAN":"Panamá",
-  "POR":"Portugal","CGO":"RD Congo","UZB":"Uzbekistán","COL":"Colombia",
-};
+// v1.7 — TEAM_NAMES se movió a app-static-data.js (carga antes que
+// este archivo) -- es dato de referencia puro, sin relación con el
+// motor de cálculo de llaves. Mismo global, cero cambio de
+// comportamiento.
 
 // Mapa completo: abreviatura → nombre completo (desde MID_ABBRS)
 

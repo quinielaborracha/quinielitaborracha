@@ -12,6 +12,7 @@ const FILES_IN_ORDER = [
   "participantes.js",
   "partidos-grupos.js",
   "utils.js",
+  "app-static-data.js",
   "app-state.js",
   "scoring.js",
   "totp.js",

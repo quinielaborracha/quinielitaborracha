@@ -39,15 +39,15 @@ publicar empezó a colgarse y fallar de forma repetida sin causa visible).
 
 ### Carga de scripts: orden fijo, scope global compartido
 
-`index.html` carga ~24 archivos `<script defer src="...">` (no ES modules,
+`index.html` carga ~25 archivos `<script defer src="...">` (no ES modules,
 salvo el bloque inline de Firebase). Todos comparten el mismo scope global
 del navegador — no hay imports/exports; una función o variable de nivel
 superior declarada en un archivo está disponible en cualquiera que cargue
 después. El orden importa y es exactamente este:
 
 ```
-participantes.js → partidos-grupos.js → utils.js → app-state.js →
-scoring.js → totp.js →
+participantes.js → partidos-grupos.js → utils.js → app-static-data.js →
+app-state.js → scoring.js → totp.js →
 app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
 app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
 app-bracket-annexc.js → app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
@@ -67,10 +67,15 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   el primer render (`load()`, `renderRank()`, etc.) llamando funciones
   definidas en todos los módulos anteriores, y arranca Firebase Auth +
   sincronización en vivo.
-- `participantes.js`, `partidos-grupos.js`, `utils.js`, `app-state.js`,
-  `scoring.js`, `totp.js` cargan antes que los `app-*.js` porque son la
-  capa de datos/estado/helpers que estos consumen. `app-state.js` declara
-  únicamente `S` (el estado mutable compartido: resultados reales,
+- `participantes.js`, `partidos-grupos.js`, `utils.js`, `app-static-data.js`,
+  `app-state.js`, `scoring.js`, `totp.js` cargan antes que los `app-*.js`
+  porque son la capa de datos/estado/helpers que estos consumen.
+  `app-static-data.js` declara datos de referencia puros que nunca
+  cambian con el torneo (equipos, grupos, banderas, mapeos de ESPN,
+  puntos fijos de "Reglas avanzadas") — consolidado ahí porque `utils.js`
+  ya depende de varios de esos globals (`TEAM_NAMES`/`MID_ABBRS`/
+  `ESPN_NAME_ES`) en `abbr2name()`/`espnNameES()`. `app-state.js` declara
+  únicamente `S` (el estado MUTABLE compartido: resultados reales,
   checksums, bonos, batallas, snapshots — lo que persiste en
   `quiniela/estado`) y va justo antes que `scoring.js`, su mayor
   consumidor. Mismo patrón en `app-bracket-annexc.js`: declara únicamente
