@@ -55,23 +55,50 @@ function getDiasRanura(slot){
   return (v>0)?v:1;
 }
 
+// v1.9 — "Partidos de duración" (input "battle-slotN-partidos" en
+// index.html), alternativa a "Días de duración": si tiene un número
+// válido (>0) cargado, la ventana se arma por CANTIDAD de partidos
+// (getMatchIdsByCount) en vez de por días calendario (getMatchIdsInWindow)
+// -- gana ella sobre "días" cuando ambas están cargadas, porque es el
+// campo que el admin llenó más específicamente a propósito. Vacía (o en
+// 0), se ignora y se usa "días" como siempre.
+function getPartidosRanura(slot){
+  const el=document.getElementById(`battle-slot${slot}-partidos`);
+  const v=parseInt(el?.value);
+  return (v>0)?v:null;
+}
+
+// Ventana de partidos (grupos+elim) que le toca a esta ranura, según cuál
+// de los 2 campos de duración esté cargado. Única función que arma la
+// ventana para toda la ranura -- startBattle() y sugerirRival() la usan
+// para no poder desincronizarse entre sí sobre qué ventana le toca a cuál.
+function getVentanaRanura(slot){
+  const partidos=getPartidosRanura(slot);
+  if(partidos!==null)return{modo:"partidos",valor:partidos,...getMatchIdsByCount(partidos)};
+  const dias=getDiasRanura(slot);
+  return{modo:"dias",valor:dias,...getMatchIdsInWindow(dias)};
+}
+
+function descripVentana(modo,valor){
+  return modo==="partidos" ? `${valor} partido${valor===1?"":"s"}` : `${valor} día${valor===1?"":"s"}`;
+}
+
 function startBattle(slot){
   if(!isAdmin())return;
   ensureBattlesState();
   const p1=document.getElementById(`battle-slot${slot}-p1`).value;
   const p2=document.getElementById(`battle-slot${slot}-p2`).value;
   if(!p1||!p2||p1===p2){toast("Elige 2 participantes distintos",true);return;}
-  const dias=getDiasRanura(slot);
-  const{groupMids,elimMids}=getMatchIdsInWindow(dias);
+  const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
   if(groupMids.length===0&&elimMids.length===0){
-    toast(`No hay partidos programados en los próximos ${dias} día(s)`,true);return;
+    toast(`No hay partidos disponibles para esa ventana (${descripVentana(modo,valor)})`,true);return;
   }
   const nameInput=document.getElementById(`battle-slot${slot}-name`);
   let name=(nameInput?.value||"").trim();
   if(!name)name=BATTLE_AUTO_NAMES[Math.floor(Math.random()*BATTLE_AUTO_NAMES.length)];
-  S.battles[slot]={p1,p2,name,dias,groupMids,elimMids,startedAt:Date.now(),closed:false};
+  S.battles[slot]={p1,p2,name,ventanaModo:modo,ventanaValor:valor,groupMids,elimMids,startedAt:Date.now(),closed:false};
   save();renderBattlesPanel();
-  toast(`⚔️ Batalla ${slot} iniciada: ${p1} vs ${p2} (${dias} día${dias===1?"":"s"})`);
+  toast(`⚔️ Batalla ${slot} iniciada: ${p1} vs ${p2} (${descripVentana(modo,valor)})`);
 }
 
 function resetBattle(slot){
@@ -224,8 +251,7 @@ function sugerirRival(slot){
   if(p1Sel.value||p2Sel.value){toast("Vaciá esta ranura primero para poder sugerir un rival",true);return;}
   const candidatos=getPostuladosDisponibles();
   if(candidatos.length<2){toast("Hacen falta al menos 2 postulados disponibles para sugerir un duelo",true);return;}
-  const dias=getDiasRanura(slot);
-  const{groupMids,elimMids}=getMatchIdsInWindow(dias);
+  const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
   let mejor=null,mejorDiff=-1;
   for(let i=0;i<candidatos.length;i++){
     for(let j=i+1;j<candidatos.length;j++){
@@ -237,7 +263,7 @@ function sugerirRival(slot){
   p1Sel.value=mejor[0];
   p2Sel.value=mejor[1];
   renderPostuladosPanel();
-  toast(`🎯 Sugerido: ${mejor[0]} vs ${mejor[1]} (diferencia ${mejorDiff.toFixed(1)} en ${groupMids.length+elimMids.length} partido(s) de ${dias} día${dias===1?"":"s"})`);
+  toast(`🎯 Sugerido: ${mejor[0]} vs ${mejor[1]} (diferencia ${mejorDiff.toFixed(1)} en ${groupMids.length+elimMids.length} partido(s), ventana de ${descripVentana(modo,valor)})`);
 }
 
 // Delegado en document (mismo patrón que .js-edit-participant en
@@ -289,7 +315,12 @@ function renderOneBattle(slot){
   const b=S.battles[slot];
   if(!b)return"";
   const{p1,p2,groupMids,elimMids,name}=b;
-  const dias=b.dias||1; // batallas creadas antes de la Fase 2 no tienen este campo -- 1 día, mismo comportamiento de siempre
+  // Compat: batallas creadas antes de "partidos de duración" solo tienen
+  // b.dias (Fase 2 original); las creadas antes de la Fase 2 no tienen
+  // ninguno de los dos -- en ambos casos, mostrar "1 día" (comportamiento
+  // de siempre) es un fallback seguro.
+  const ventanaModo=b.ventanaModo||"dias";
+  const ventanaValor=b.ventanaValor??b.dias??1;
   const pts1=calcBattlePts(p1,groupMids,elimMids);
   const pts2=calcBattlePts(p2,groupMids,elimMids);
   const done=areBattleMatchesDone(groupMids,elimMids);
@@ -317,7 +348,7 @@ function renderOneBattle(slot){
   ];
   const battleName=esc(name||"Batalla del día");
   return`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:var(--qb-surface);${done?"border-color:rgba(245,166,35,.5)":""}">
-    <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName} · ${dias} día${dias===1?"":"s"}</div>
+    <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName} · ${descripVentana(ventanaModo,ventanaValor)}</div>
     <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center">
       <div>
         <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p1)}</div>

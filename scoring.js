@@ -776,6 +776,29 @@ function getMatchIdsInWindow(days){
   return{groupMids,elimMids};
 }
 
+// v1.9 (Fase 2, ajuste pedido) — Alternativa a getMatchIdsInWindow(): en
+// vez de "duración en días calendario", "duración en cantidad de
+// partidos". Toma los próximos N partidos (grupos + eliminatoria
+// mezclados, sin importar cuántos días calendario abarquen) en orden
+// cronológico A PARTIR DE AHORA -- a diferencia de la ventana por días
+// (que arranca a medianoche de HOY, así que un partido de esta mañana
+// también cuenta), acá "duración" es literal: desde el instante en que
+// se arma la batalla, cuenta el próximo partido, el siguiente, etc.
+// Partidos que ya arrancaron ANTES de este instante no se cuentan -- no
+// tendría sentido que una batalla "de 2 partidos" incluya uno que ya
+// estaba en curso o ya terminó cuando se armó.
+function getMatchIdsByCount(count){
+  const n=Math.max(1,parseInt(count)||1);
+  const now=Date.now();
+  const todos=[];
+  MIDS.forEach(mid=>{const ts=S.matchTimes[mid];if(ts)todos.push({tipo:"g",id:mid,ts});});
+  for(let pid=73;pid<=104;pid++){const ts=S.elimTimes[pid];if(ts)todos.push({tipo:"e",id:pid,ts});}
+  const futuros=todos.filter(m=>m.ts>=now).sort((a,b)=>a.ts-b.ts).slice(0,n);
+  const groupMids=futuros.filter(m=>m.tipo==="g").map(m=>m.id);
+  const elimMids=futuros.filter(m=>m.tipo==="e").map(m=>m.id);
+  return{groupMids,elimMids};
+}
+
 function calcBattlePts(name,groupMids,elimMids){
   let pts=0;
   const R=getReglasGrupos();

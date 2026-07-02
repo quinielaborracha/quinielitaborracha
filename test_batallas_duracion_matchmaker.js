@@ -25,9 +25,9 @@ const html = `<!doctype html><html><body>
   <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
   <div id="t-battles" style="display:block">
     <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
-    <input id="battle-slot1-dias"><input id="battle-slot1-name">
+    <input id="battle-slot1-dias"><input id="battle-slot1-partidos"><input id="battle-slot1-name">
     <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
-    <input id="battle-slot2-dias"><input id="battle-slot2-name">
+    <input id="battle-slot2-dias"><input id="battle-slot2-partidos"><input id="battle-slot2-name">
     <div id="battles-postulados"></div><div id="battles-body"></div>
   </div>
 </body></html>`;
@@ -55,8 +55,8 @@ const bridge = window.document.createElement("script");
 bridge.textContent = `
   window.__test = {
     DB, S, PID_TO_SLOT, ELIM_1_16_IDS,
-    rebuildDynamicData, getMatchIdsInWindow, areBattleMatchesDone,
-    calcularDiffPrediccion, sugerirRival, startBattle, asignarPostulado,
+    rebuildDynamicData, getMatchIdsInWindow, getMatchIdsByCount, areBattleMatchesDone,
+    calcularDiffPrediccion, sugerirRival, startBattle, asignarPostulado, getVentanaRanura,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -102,7 +102,44 @@ check("Con un valor inválido (negativo), cae a 1 día en vez de romper",
   JSON.stringify(wInvalido.groupMids) === JSON.stringify([1]));
 
 /* ════════════════════════════════════════════════════════════════
-   PARTE 2 — startBattle respeta el input de días y lo guarda en S.battles
+   PARTE 1b — getMatchIdsByCount(n): duración por CANTIDAD de partidos
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Duración por cantidad de partidos (getMatchIdsByCount) ──");
+
+// getMatchIdsByCount mira hacia ADELANTE desde AHORA MISMO (Date.now()),
+// no desde medianoche de hoy -- a propósito NO reusa los mids 1-5 de la
+// Parte 1 (eso rompería sus horarios fijados por día calendario) NI
+// horarios fijos tipo "mediodía": si el test corre después del mediodía,
+// el mid "de hoy" ya habría quedado en el pasado y jamás podría entrar en
+// una ventana que mira hacia adelante. Mids nuevos (30-34), offsets
+// relativos al instante real de ejecución.
+const nowMs = Date.now();
+T.S.matchTimes[30] = nowMs + 1*3600000;  // dentro de 1h
+T.S.matchTimes[31] = nowMs + 2*3600000;  // dentro de 2h
+T.S.matchTimes[32] = nowMs + 3*3600000;  // dentro de 3h
+T.S.matchTimes[33] = nowMs + 4*3600000;  // dentro de 4h
+T.S.matchTimes[34] = nowMs - 3600000;    // hace 1h (pasado) -- nunca debería entrar
+
+let c2 = T.getMatchIdsByCount(2);
+check("Con 2 partidos: toma los 2 más próximos en el futuro (mid 30 y 31), sin el pasado",
+  JSON.stringify(c2.groupMids) === JSON.stringify([30,31]));
+
+let c4 = T.getMatchIdsByCount(4);
+check("Con 4 partidos: toma los 4 próximos en orden cronológico (30,31,32,33), salta el pasado",
+  JSON.stringify(c4.groupMids) === JSON.stringify([30,31,32,33]));
+
+let cInvalido = T.getMatchIdsByCount(0);
+check("Con 0 (inválido), cae a 1 partido en vez de romper",
+  JSON.stringify(cInvalido.groupMids) === JSON.stringify([30]));
+
+// Limpiar para no contaminar la Parte 2 (que sigue usando mids 1-5 con
+// horarios fijados por día calendario).
+delete T.S.matchTimes[30];delete T.S.matchTimes[31];delete T.S.matchTimes[32];
+delete T.S.matchTimes[33];delete T.S.matchTimes[34];
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 2 — startBattle respeta el input de días/partidos y lo guarda en
+   S.battles (ventanaModo/ventanaValor)
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── startBattle() con duración configurable ──");
 
@@ -120,10 +157,41 @@ W.document.getElementById("battle-slot1-p2").value = "Beto";
 W.document.getElementById("battle-slot1-dias").value = "3";
 
 T.startBattle(1);
-check("S.battles[1].dias quedó guardado como 3 (el valor del input, no el default)",
-  T.S.battles[1] && T.S.battles[1].dias === 3);
+check("S.battles[1].ventanaModo quedó 'dias' y ventanaValor 3 (el valor del input, no el default)",
+  T.S.battles[1] && T.S.battles[1].ventanaModo==="dias" && T.S.battles[1].ventanaValor===3);
 check("S.battles[1].groupMids usó la ventana de 3 días (incluye mids 1,2,3)",
   T.S.battles[1] && JSON.stringify(T.S.battles[1].groupMids) === JSON.stringify([1,2,3]));
+delete T.S.battles[1];
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 2b — "Partidos de duración" tiene precedencia sobre "Días" si
+   ambos están cargados
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Precedencia de 'Partidos de duración' sobre 'Días' ──");
+
+// Igual que en la Parte 1b: mid 1/2 necesitan quedar en el futuro
+// GARANTIZADO relativo a AHORA (getMatchIdsByCount mira hacia adelante
+// desde Date.now(), no desde medianoche) -- se reasignan acá para no
+// depender de a qué hora del día corra el test.
+T.S.matchTimes[1] = Date.now() + 1*3600000;
+T.S.matchTimes[2] = Date.now() + 2*3600000;
+
+W.document.getElementById("battle-slot1-dias").value = "3"; // sigue cargado
+W.document.getElementById("battle-slot1-partidos").value = "2"; // ahora también
+
+T.startBattle(1);
+check("Con ambos campos cargados, gana 'partidos': ventanaModo='partidos', ventanaValor=2",
+  T.S.battles[1] && T.S.battles[1].ventanaModo==="partidos" && T.S.battles[1].ventanaValor===2);
+check("La ventana real son los 2 próximos partidos (mid 1 y 2), NO los 3 días (que serían 1,2,3)",
+  T.S.battles[1] && JSON.stringify(T.S.battles[1].groupMids) === JSON.stringify([1,2]));
+
+W.document.getElementById("battle-slot1-partidos").value = ""; // vacío -> vuelve a caer en "días"
+const ventanaSinPartidos = T.getVentanaRanura(1);
+check("Con 'partidos' vacío, getVentanaRanura() vuelve a usar 'días' (modo='dias')",
+  ventanaSinPartidos.modo==="dias" && ventanaSinPartidos.valor===3);
+
+delete T.S.battles[1];
+W.document.getElementById("battle-slot1-dias").value = "1";
 
 delete T.S.battles[1];
 
