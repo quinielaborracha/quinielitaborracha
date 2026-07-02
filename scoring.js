@@ -330,6 +330,29 @@ function calcElimMatchPts(name,pid){
   return calcElimMatchBreakdown(name,pid).reduce((sum,item)=>sum+item.pts,0);
 }
 
+// v1.9 — Diagnóstico legible de POR QUÉ un partido de eliminatoria da
+// 0pts para "name" -- mismos gates que calcElimMatchBreakdown()/
+// calcClassifiedPtsForPid(), en el mismo orden, pero devolviendo un
+// motivo en español en vez de silenciosamente [] o 0. Pensado para
+// mostrarse en la Cartelera de una Batalla (app-batallas.js) cuando el
+// admin necesita entender por qué el marcador no se mueve, sin tener que
+// ir a revisar Reglas/Bonos a mano partido por partido. Devuelve null si
+// no hay ningún motivo conocido para estar en 0 (o si de hecho da >0pts).
+function explainZeroElimPts(name,pid){
+  const phase=phaseForPid(pid);
+  if(!phase)return"partido no reconocido";
+  if(!isFaseActiva(phase.key))return`fase "${phase.label}" desactivada (Configuración del torneo → Fases activas)`;
+  if(!isPrevPhaseClosed(phase)){
+    const prev=getPhaseByKey(phase.prevPhase);
+    return`falta cerrar "${prev?.label||phase.prevPhase}" en el panel 🎁 Bonos`;
+  }
+  if(!isFasePuntosActiva(phase.key))return`puntos de "${phase.label}" desactivados (Reglas → Puntos por fase)`;
+  const sc=S.elimScores[pid]||S.elimScores[String(pid)];
+  if(!sc)return"todavía no hay resultado real cargado para este partido";
+  if(!isLlaveCorrecta(name,pid)&&!findCruceValido(name,pid))return"no tiene la llave (ni un cruce válido) de este partido";
+  return null; // llave/cruce ok y todo activo: si igual da 0, es que no acertó ganador/empate
+}
+
 // v1.9 — Extraído de calcClassifiedPtsForPhase() para poder otorgar el
 // bono de "clasificado" de UN partido puntual (no toda la fase de una
 // sola vez) — lo necesita calcBattlePts() para poder atribuirle a una

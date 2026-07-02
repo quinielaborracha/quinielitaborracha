@@ -589,10 +589,24 @@ function renderOneBattle(slot){
       const pr2=MD[mid]?.preds?.[p2];
       return{lbl:MD[mid]?.lbl||`Partido ${mid}`,played:!!s,real:s?`${s.h}-${s.a}`:null,pred1:fmtPred(pr1),pred2:fmtPred(pr2)};
     }),
+    // v1.9 — BUG REPORTADO: la Cartelera de una Batalla no mostraba NADA
+    // útil para partidos de eliminatoria ("pred1"/"pred2" siempre "—"),
+    // así que cuando el marcador de la batalla no se movía no había forma
+    // de ver POR QUÉ sin ir a revisar Reglas/Bonos a mano. Ahora muestra
+    // los puntos reales que cada quien sacó de ESE partido puntual
+    // (partido + clasificado, igual que calcBattlePts) y, si dio 0, el
+    // motivo concreto (explainZeroElimPts(), scoring.js) en vez de un
+    // "—" mudo.
     ...elimMids.map(pid=>{
       const es=S.elimScores[pid]||S.elimScores[String(pid)];
-      const teams=S.elimTeams[pid]||S.elimTeams[String(pid)];
-      return{lbl:`Eliminatoria #${pid}`,played:!!es,real:es?`${es.h}-${es.a}`:null,pred1:"—",pred2:"—"}; // bracket: predicción individual no aplica al marcador básico de la misma forma
+      const teams=getRealElimTeams(pid);
+      const lbl=teams?`${teams.h} vs ${teams.a}`:`Eliminatoria #${pid}`;
+      const pts1elim=calcElimMatchPts(p1,pid)+calcClassifiedPtsForPid(p1,pid);
+      const pts2elim=calcElimMatchPts(p2,pid)+calcClassifiedPtsForPid(p2,pid);
+      const reason1=pts1elim===0?explainZeroElimPts(p1,pid):null;
+      const reason2=pts2elim===0?explainZeroElimPts(p2,pid):null;
+      const fmtElim=(pts,reason)=>pts>0?`+${pts}pts`:(reason?`0 (${reason})`:"0");
+      return{lbl,played:!!es,real:es?`${es.h}-${es.a}`:null,pred1:fmtElim(pts1elim,reason1),pred2:fmtElim(pts2elim,reason2)};
     })
   ];
   const battleName=esc(name||"Batalla del día");
