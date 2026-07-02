@@ -38,23 +38,34 @@ function renderElim(){
     html+=`<div class="ib warn" style="margin-bottom:.75rem">⚠️ <strong>Equipos de ${manualPhaseLabel} no cargados</strong> (${loaded}/${manualPids.length}). Usa <strong>✏️ Editar llaves</strong> para ingresar los partidos manualmente, o <strong>🎲 Simular</strong> para cargar países random y probar el sistema. ${manualPhase&&manualPhase.key==="r16"?"Cuando termine la fase de grupos, ":""}<strong>⚡ ESPN Live</strong> los cargará automáticamente.</div>`;
   }
   getActiveElimRounds().forEach((round,ri)=>{
-    // Check if this round is blocked (prev bonos phase not closed) — una
-    // fase previa DESACTIVADA ya no bloquea (ver isPrevPhaseClosed).
+    // v1.9 — BUG REPORTADO: antes esto bloqueaba (y revertía, ver onESC())
+    // cualquier resultado REAL de eliminatoria mientras la fase previa no
+    // estuviera cerrada en el panel de Bonos -- pero "⚡ ESPN Live"
+    // (app-bracket-espn-sync.js) nunca respetó ese mismo candado, así que
+    // el resultado automático SÍ entraba y el manual NO: inconsistente, y
+    // encima dejaba el bracket sin reflejar un resultado real ya ocurrido
+    // (ej. España pasando de ronda) solo porque el admin no había cerrado
+    // la fase anterior a tiempo. Ahora cargar el resultado real NUNCA se
+    // bloquea (mismo criterio para manual y ESPN) -- lo único que sigue
+    // esperando a que cierres la fase anterior son los PUNTOS de esa
+    // ronda (ver isPrevPhaseClosed() en calcElimMatchBreakdown,
+    // scoring.js), que es lo que en verdad necesita esperar para no
+    // mover el bono de último lugar bajo los pies de nadie.
     const roundPhase=BONUS_PHASES.find(bp=>bp.elimPhase&&bp.mids.includes(round.ids[0]));
-    const roundBlocked=roundPhase&&!isPrevPhaseClosed(roundPhase);
-    const prevPhaseName=roundBlocked?(getPhaseByKey(roundPhase.prevPhase)?.label||"fase anterior"):"";
+    const ptsPending=roundPhase&&!isPrevPhaseClosed(roundPhase);
+    const prevPhaseName=ptsPending?(getPhaseByKey(roundPhase.prevPhase)?.label||"fase anterior"):"";
 
     html+=`<div class="rnd-hdr"><span>${round.lbl}</span>`;
     const llavesOk=round.ids.filter(pid=>getRealElimTeams(pid)).length;
     if(llavesOk<round.ids.length)html+=`<span style="font-size:9px;color:var(--qb-muted);margin-left:4px">${llavesOk}/${round.ids.length} llaves</span>`;
-    if(roundBlocked)html+=`<span style="font-size:9px;font-weight:700;color:var(--qb-red);margin-left:6px">🔒 BLOQUEADA</span>`;
+    if(ptsPending)html+=`<span style="font-size:9px;font-weight:700;color:var(--qb-yellow);margin-left:6px">⏳ PUNTOS PENDIENTES</span>`;
     html+=`</div>`;
-    if(roundBlocked){
-      html+=`<div style="margin-bottom:.625rem;padding:8px 12px;background:rgba(212,0,26,.06);border:1px solid rgba(212,0,26,.25);border-radius:8px;display:flex;align-items:center;gap:8px">
-        <span style="font-size:18px;flex-shrink:0">🔒</span>
+    if(ptsPending){
+      html+=`<div style="margin-bottom:.625rem;padding:8px 12px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:8px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px;flex-shrink:0">⏳</span>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--qb-red)">Fase bloqueada — no se pueden ingresar resultados</div>
-          <div style="font-size:10px;color:var(--qb-muted);margin-top:2px">Cierra <strong style="color:var(--qb-text)">${prevPhaseName}</strong> en el panel de 🎁 Bonos primero. Esto garantiza que el bono de último lugar se adjudique antes de activar los puntos de esta fase.</div>
+          <div style="font-size:11px;font-weight:700;color:var(--qb-yellow)">Podés cargar resultados igual — los puntos quedan pendientes</div>
+          <div style="font-size:10px;color:var(--qb-muted);margin-top:2px">El resultado se guarda y el bracket ya refleja quién pasó. Cierra <strong style="color:var(--qb-text)">${prevPhaseName}</strong> en el panel de 🎁 Bonos para que esta ronda empiece a sumar puntos.</div>
         </div>
       </div>`;
     }
@@ -118,25 +129,13 @@ function renderElim(){
 }
 
 const _epb={};
-// Check if the phase containing this pid is allowed to receive results
-// Rule: previous phase must be closed in bonos before entering results
-function canEnterElimResult(pid){
-  const phase=phaseForPid(pid);
-  if(!phase)return{ok:true}; // unknown phase, allow
-  if(isPrevPhaseClosed(phase))return{ok:true};
-  const prev=getPhaseByKey(phase.prevPhase);
-  return{ok:false,msg:`Debes cerrar la fase de <strong>${prev?.label||phase.prevPhase}</strong> en el panel de Bonos antes de ingresar resultados de ${phase.label}.`};
-}
-
+// v1.9 — canEnterElimResult() (bloqueaba entrar un resultado real mientras
+// la fase previa no estuviera cerrada) se eliminó de acá: ver la nota en
+// renderElim() más arriba. Cargar el resultado real de un partido de
+// eliminatoria ya nunca se bloquea, ni acá ni en ESPN Live (que de hecho
+// nunca pasó por este chequeo) -- solo los PUNTOS de esa ronda siguen
+// esperando a que cierres la fase anterior (isPrevPhaseClosed(), scoring.js).
 function onESC(pid,side,val){
-  // Block if previous bonos phase not closed
-  const check=canEnterElimResult(pid);
-  if(!check.ok){
-    toast(`🔒 ${check.msg.replace(/<[^>]+>/g,"")}`,true);
-    // Reset the input visually
-    renderElim();
-    return;
-  }
   if(!_epb[pid])_epb[pid]={};
   _epb[pid][side]=val===""?null:parseInt(val);
   const cur=S.elimScores[pid]||{};

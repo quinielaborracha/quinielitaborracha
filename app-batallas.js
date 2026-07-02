@@ -870,6 +870,23 @@ function renderBonosPanel(){
     const playedCount=phase.mids.filter(id=>phase.elimPhase
       ?!!(S.elimScores[id]||S.elimScores[String(id)])
       :!!(S.scores[id]||S.scores[String(id)])).length;
+    // v1.9 — BUG REPORTADO: el admin veía "71/72" en Grupos, no podía
+    // cerrar la fase, y no tenía forma de saber CUÁL de los 72 partidos
+    // era el que faltaba (¿uno sin jugar todavía? ¿uno que ESPN Live no
+    // pudo mapear/rechazó por validateScore() y quedó sin S.scores[mid]
+    // aunque en el fixture pareciera "cargado"?). Antes solo se mostraba
+    // el conteo; ahora, si la fase está incompleta, se listan los
+    // partidos puntuales que faltan (por nombre, no solo el número) para
+    // poder ir directo a revisarlos en vez de tener que comparar los 72
+    // uno por uno a mano.
+    const missingIds=(!closed&&!complete)?phase.mids.filter(id=>phase.elimPhase
+      ?!(S.elimScores[id]||S.elimScores[String(id)])
+      :!(S.scores[id]||S.scores[String(id)])):[];
+    const missingLbl=id=>{
+      if(!phase.elimPhase)return MD[id]?.lbl||`P${id}`;
+      const teams=getRealElimTeams(id);
+      return teams?`${teams.h} vs ${teams.a}`:`P${id}`;
+    };
 
     // Status badge
     let statusBadge;
@@ -905,6 +922,10 @@ function renderBonosPanel(){
           ${actionBtn}
         </div>
       </div>
+      ${missingIds.length?`
+        <div style="margin-top:6px;padding:5px 9px;background:rgba(107,115,132,.08);border-radius:6px;border:1px dashed var(--qb-border2);font-size:10px;color:var(--qb-muted)">
+          Falta resultado real de: ${missingIds.slice(0,6).map(id=>esc(missingLbl(id))).join(' · ')}${missingIds.length>6?` · +${missingIds.length-6} más`:''}
+        </div>`:""}
       ${closed&&S.bonos.lastPlace?.[phase.key]?`
         <div style="margin-top:6px;padding:5px 9px;background:rgba(245,166,35,.1);border-radius:6px;border:1px solid rgba(245,166,35,.25);font-size:11px;color:var(--qb-yellow)">
           🚑 Último lugar: <strong>${esc(S.bonos.lastPlace[phase.key].name)}</strong>
