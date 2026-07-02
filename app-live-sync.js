@@ -246,18 +246,6 @@ function setLiveBadge(connected){
 
 function applyRemoteState(p){
   if(!p)return;
-  // v2.3 — Mejora visual: esta función solo corre cuando llega un cambio
-  // remoto REAL (wireFirestoreSync ya filtra los ecos de nuestro propio
-  // guardado), así que es el punto correcto para avisar con un pulso que
-  // "algo acaba de sincronizar" -- a diferencia de setLiveBadge(true), que
-  // solo marca que HAY conexión, no que algo cambió recién.
-  const liveBadge=document.getElementById("live-badge");
-  if(liveBadge){
-    liveBadge.classList.remove("pulse");
-    void liveBadge.offsetWidth;
-    liveBadge.classList.add("pulse");
-    liveBadge.addEventListener("animationend",()=>liveBadge.classList.remove("pulse"),{once:true});
-  }
   S.scores=p.scores||{};
   S.checksums=p.checksums||{};
   S.elimScores=p.elimScores||{};

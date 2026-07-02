@@ -60,7 +60,6 @@ async function fetchESPN(){
   try{
     const evts=await fetchAllDates(ALL_DATES);
     let updated=0,live=0,conflicts=0;
-    const changedMids=[]; // v2.3 — mejora visual: qué filas flashear tras renderFix()
     _conflictQueue=[];
     evts.forEach(ev=>{
       const p=parseESPNEvent(ev);if(!p)return;
@@ -78,13 +77,9 @@ async function fetchESPN(){
           conflicts++;
           _conflictQueue.push({mid:p.mid,manual:existing,espn:{h:p.homeScore,a:p.awayScore,live:false}});
         } else {
-          // Sin conflicto: guardar directamente. Solo se marca para el
-          // flash visual si algo REALMENTE cambió (ESPN repreguntado con
-          // el mismo marcador no debería hacer parpadear la fila de nuevo).
-          const changed=!existing||existing.h!==p.homeScore||existing.a!==p.awayScore||!!existing.live!==(p.state==="in");
+          // Sin conflicto: guardar directamente
           saveScore(p.mid,p.homeScore,p.awayScore,{live:p.state==="in"});
           updated++;if(p.state==="in")live++;
-          if(changed)changedMids.push(p.mid);
         }
       }
     });
@@ -99,7 +94,6 @@ async function fetchESPN(){
       openConflict(first.mid,first.manual,first.espn);
     } else {
       renderFix();renderRank();updateGenerarBtn();
-      flashRows("data-mid",changedMids);
       toast(updated>0?`✓ ${updated} resultados`:"Sin resultados nuevos");
     }
   }catch(e){setFS(`<span class="sbadge err">⚠️ Error: ${e.message}</span>`);toast("Error ESPN",true);}
