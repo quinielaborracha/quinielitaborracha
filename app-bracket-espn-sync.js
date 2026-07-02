@@ -41,8 +41,9 @@ const ELIM_DATES=["20260628","20260629","20260630","20260701","20260702","202607
 // comparar orientación/identidad contra lo que reporta ESPN. Para 1/16
 // (73-88) viene de S.elimTeams; de Octavos en adelante viene de
 // getRealElimTeams(), que resuelve recursivamente contra ELIM_TREE y los
-// resultados de la fase previa (ya debería estar cerrada, ver
-// getFirstBlockedElimPhase()).
+// resultados reales ya cargados de la fase previa (puede o no estar
+// "cerrada" en Bonos -- v1.9, eso ya no bloquea cargar resultados, solo
+// los puntos).
 function equiposConocidosElim(pid){
   if(ELIM_1_16_IDS.includes(pid))return(S.elimTeams[pid]&&S.elimTeams[pid].h)?S.elimTeams[pid]:null;
   return getRealElimTeams(pid);

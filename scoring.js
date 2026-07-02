@@ -1009,15 +1009,13 @@ function closePhase(phaseKey){
   S.bonos.closed[phaseKey]=true;
 
   save();renderRank();renderBonosPanel();
-  // v1.7 — FIX: cerrar una fase es justo lo que desbloquea el botón "ESPN
-  // Live"/"Simular marcadores" de la SIGUIENTE fase (ver
-  // getFirstBlockedElimPhase()/updateElimBtns() en app-bracket-compute.js)
-  // -- pero nada llamaba a updateElimBtns() acá, así que el botón seguía
-  // viéndose deshabilitado hasta cambiar de pestaña (eso sí lo dispara,
-  // ver tab() en app-tabs.js) o hasta que llegara un snapshot remoto de
-  // Firestore. Guardado con typeof porque scoring.js carga ANTES que
-  // app-bracket-compute.js (donde vive updateElimBtns) — para cuando esto
-  // se INVOQUE (nunca al cargar el script) ya está definida.
+  // v1.9 — updateElimBtns() (app-bracket-compute.js) ya no deshabilita
+  // los botones de ESPN Live/Simular (ver nota ahí) -- se sigue llamando
+  // acá solo como reset, por si alguno hubiera quedado deshabilitado de
+  // una carga vieja de antes de ese fix. Guardado con typeof porque
+  // scoring.js carga ANTES que app-bracket-compute.js (donde vive
+  // updateElimBtns) — para cuando esto se INVOQUE (nunca al cargar el
+  // script) ya está definida.
   if(typeof updateElimBtns==="function")updateElimBtns();
 
   // Show who got last place bonus
@@ -1199,19 +1197,6 @@ function allGroupsComplete() {
     if (!S.scores[mid] && !S.scores[String(mid)]) return false;
   }
   return true;
-}
-
-function getFirstBlockedElimPhase(){
-  for(const phase of BONUS_PHASES){
-    if(!phase.elimPhase)continue;
-    if(!isFaseActiva(phase.key))continue; // v1.2 — fase desactivada: no existe en este torneo
-    if(!phase.prevPhase)continue;
-    // Only block if this phase has at least some teams loaded (is active)
-    const hasTeams=phase.mids.some(pid=>getRealElimTeams(pid));
-    if(!hasTeams)continue;
-    if(!isPrevPhaseClosed(phase))return phase;
-  }
-  return null;
 }
 
 function getRealAdvancers(phase){

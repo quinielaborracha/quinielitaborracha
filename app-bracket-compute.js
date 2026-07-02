@@ -208,41 +208,38 @@ function simularMarcadores(){
 // Actualizar estado del botón generar llaves según si grupos están completos
 // Check if ANY elim phase needs prev phase closed before allowing results
 
+// v1.9 — BUG REPORTADO: el botón ⚡ ESPN Live (y 🎲 Simular) se
+// deshabilitaba por completo apenas UNA fase futura tenía equipos
+// resolubles (ej. Octavos ya sabe quiénes juegan porque Dieciseisavos
+// terminó) pero su fase anterior todavía no estaba cerrada en Bonos --
+// bloqueando la carga de resultados de TODAS las fases, incluida la que
+// está en curso ahora mismo y no tiene nada que ver con ese candado. La
+// única forma de destrabarlo era borrar todo con 🗑️ Limpiar y volver a
+// cargar de cero. Mismo problema (y mismo criterio de arreglo) que ya se
+// destrabó para la carga MANUAL de resultados -- ver renderElim() en
+// app-bracket-render.js: cargar el resultado real nunca debería depender
+// de que el admin haya cerrado una fase a tiempo. Ahora fetchESPNElim()/
+// simularMarcadores() se llaman siempre, sin candado -- getFirstBlockedElimPhase()
+// se eliminó de scoring.js (era la única razón de ser de este bloqueo).
+// Solo los PUNTOS de una ronda siguen esperando el cierre de la fase
+// anterior (ver el aviso "⏳ PUNTOS PENDIENTES" en Eliminatoria).
 function fetchESPNElimChecked(){
-  const blocked=getFirstBlockedElimPhase();
-  if(blocked){
-    const prev=getPhaseByKey(blocked.prevPhase);
-    toast(`🔒 Cierra "${prev?.label||blocked.prevPhase}" en Bonos antes de cargar resultados de ${blocked.label}`,true);
-    return;
-  }
   fetchESPNElim();
 }
 
 function simularMarcadoresChecked(){
-  const blocked=getFirstBlockedElimPhase();
-  if(blocked){
-    const prev=getPhaseByKey(blocked.prevPhase);
-    toast(`🔒 Cierra "${prev?.label||blocked.prevPhase}" en Bonos antes de simular ${blocked.label}`,true);
-    return;
-  }
   simularMarcadores();
 }
 
-// Update elim buttons disabled state based on blocked phases
+// Los botones ahora quedan siempre habilitados (ver nota arriba) -- esta
+// función se conserva porque muchos otros lugares la siguen llamando
+// después de cerrar/reabrir una fase, y sirve como reset por si un botón
+// hubiera quedado deshabilitado de una carga vieja (antes de este fix).
 function updateElimBtns(){
-  const blocked=getFirstBlockedElimPhase();
   const espnBtn=document.getElementById("btn-espn-elim");
   const simBtn=document.getElementById("btn-simular");
-  if(espnBtn){
-    espnBtn.disabled=!!blocked;
-    espnBtn.style.opacity=blocked?"0.45":"1";
-    espnBtn.title=blocked?`Bloqueado: cierra ${getPhaseByKey(blocked?.prevPhase)?.label||""} primero`:"ESPN Live";
-  }
-  if(simBtn){
-    simBtn.disabled=!!blocked;
-    simBtn.style.opacity=blocked?"0.45":"1";
-    simBtn.title=blocked?`Bloqueado: cierra ${getPhaseByKey(blocked?.prevPhase)?.label||""} primero`:"Simular marcadores";
-  }
+  if(espnBtn){espnBtn.disabled=false;espnBtn.style.opacity="1";espnBtn.title="ESPN Live";}
+  if(simBtn){simBtn.disabled=false;simBtn.style.opacity="1";simBtn.title="Simular marcadores";}
 }
 
 function updateGenerarBtn(){
