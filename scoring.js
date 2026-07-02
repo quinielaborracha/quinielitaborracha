@@ -178,6 +178,40 @@ function getTeamAdvancePickers(teamName,roundIds){
   return names;
 }
 
+// v1.9 — BUG REAL encontrado (el motivo de fondo por el que Batallas no
+// sumaba "Clasificado" aunque el Ranking sí): calcClassifiedPtsForPid()
+// (la versión que usaba calcBattlePts hasta ahora) exige que el
+// participante haya llenado ESE MISMO pid oficial (ej. P73) con SU
+// PROPIO cruce -- pero cada participante arma su bracket desde sus
+// propios resultados de grupo, así que su predicción de "Portugal gana"
+// casi nunca cae exactamente en el pid oficial donde Portugal juega de
+// verdad (puede estar en cualquier otro slot de esa ronda). El Ranking
+// nunca tuvo este problema porque calcClassifiedPtsForPhase() suma TODOS
+// los pids de la fase de una sola vez (si no está en el pid 73, aparece
+// en algún otro) -- pero una Batalla solo mira los pids puntuales de su
+// ventana, así que ese "en algún otro pid" quedaba completamente fuera
+// de la cuenta. Fix: en vez de mirar el pid oficial puntual, se pregunta
+// "¿este participante predijo, en CUALQUIER slot de su propio bracket de
+// esa ronda, que el equipo que REALMENTE ganó este partido iba a ganar
+// el suyo?" -- reusa getTeamAdvancePickers() (la misma búsqueda por
+// equipo que ya usa "¿Quién avanza?" en En vivo), así ambas quedan
+// consistentes entre sí. calcClassifiedPtsForPid()/ForPhase() (el
+// Ranking) NO se tocan -- se dejan intactas a propósito para no mover el
+// puntaje ya otorgado a nadie a esta altura del torneo.
+function calcClassifiedPtsForRealMatch(name,pid){
+  const phase=phaseForPid(pid);
+  if(!phase||!phase.elimPhase)return 0;
+  const classifiedPts=getFaseValor(phase,'classifiedPts');
+  if(!classifiedPts)return 0;
+  if(!isFaseActiva(phase.key))return 0;
+  if(!isFasePuntosActiva(phase.key))return 0;
+  if(!isPrevPhaseClosed(phase))return 0;
+  const winner=getRealWinner(pid);if(!winner)return 0;
+  const round=(typeof ELIM_ROUNDS!=="undefined"?ELIM_ROUNDS:[]).find(r=>r.ids.includes(pid));
+  const roundIds=round?round.ids:phase.mids;
+  return getTeamAdvancePickers(winner,roundIds).includes(name)?classifiedPts:0;
+}
+
 function getRealElimTeams(pid){
   // v1.2 — antes esto era "if(ELIM_1_16_IDS.includes(pid))", hardcodeado a
   // Dieciseisavos. getManualTeamPids() devuelve eso MISMO cuando todas las
@@ -349,8 +383,31 @@ function explainZeroElimPts(name,pid){
   if(!isFasePuntosActiva(phase.key))return`puntos de "${phase.label}" desactivados (Reglas → Puntos por fase)`;
   const sc=S.elimScores[pid]||S.elimScores[String(pid)];
   if(!sc)return"todavía no hay resultado real cargado para este partido";
-  if(!isLlaveCorrecta(name,pid)&&!findCruceValido(name,pid))return"no tiene la llave (ni un cruce válido) de este partido";
+  if(!isLlaveCorrecta(name,pid)&&!findCruceValido(name,pid))return`no tiene la llave (ni un cruce válido) de este partido — ${describeOwnElimGuess(name,pid)}`;
   return null; // llave/cruce ok y todo activo: si igual da 0, es que no acertó ganador/empate
+}
+
+// v1.9 — Complemento de explainZeroElimPts(): cuando la llave falla, esto
+// dice CONCRETAMENTE qué predijo (o no) el participante para ese slot del
+// bracket, para poder distinguir a simple vista entre 3 causas muy
+// distintas: (1) predijo un cruce que simplemente no coincide con la
+// realidad (su fase de grupos salió distinta), (2) dejó ese cruce puntual
+// sin llenar pero sí completó otros de eliminatoria, o (3) nunca llegó a
+// completar NADA de eliminatoria (quiniela sin terminar/enviar). Las 3
+// dan "0pts" por igual, pero el motivo real (y lo que hay que corregir)
+// es completamente distinto.
+function describeOwnElimGuess(name,pid){
+  const person=(DB.participants||[]).find(p=>p.name===name);
+  if(!person)return"participante no encontrado en Mi Quiniela";
+  const preds=DB.predictions[person.id]||{};
+  const slot=PID_TO_SLOT[pid];
+  const rec=slot?preds[slot]:null;
+  if(rec&&rec._a&&rec._b&&rec._a!=="?"){
+    const w=getPredWinner(name,pid);
+    return`predijo ${rec._a} vs ${rec._b}${w?` (elige a ${w})`:''}`;
+  }
+  const tieneAlgunaKO=Object.keys(preds).some(k=>/^(r32|r16|qf|sf)_\d+$|^(third|final)$/.test(k));
+  return tieneAlgunaKO?"no llenó ese cruce puntual (sí completó otros de eliminatoria)":"no completó ninguna predicción de eliminatoria todavía";
 }
 
 // v1.9 — Extraído de calcClassifiedPtsForPhase() para poder otorgar el
@@ -865,10 +922,13 @@ function getMatchIdsByCount(count){
 // de Batallas"), pero el pedido explícito ahora es que una Batalla sume
 // TODO lo que sumen básicos + eliminatoria + avanzado, solo Bonos
 // (último lugar/racha/MVP) queda afuera. Fix:
-//   - calcClassifiedPtsForPid(pid) para cada elimMid de la ventana (NO
-//     toda la fase — solo los partidos puntuales que caen dentro de esta
-//     Batalla, para no sumarle de más partidos que quedaron afuera de su
-//     ventana).
+//   - calcClassifiedPtsForRealMatch(pid) para cada elimMid de la ventana
+//     (NO toda la fase — solo los partidos puntuales que caen dentro de
+//     esta Batalla). Ver su comentario arriba: NO es
+//     calcClassifiedPtsForPid() (esa exige el pid oficial exacto, que
+//     casi nunca coincide con el slot donde cada participante tiene a
+//     ese equipo en SU PROPIO bracket) — es la versión que busca por
+//     equipo real ganador en cualquier slot de la ronda.
 //   - calcAdv(name) entero (campeón/goleador/etc. no tiene "ventana"
 //     propia, es una predicción de todo el torneo — mismo criterio que ya
 //     usa calcRumblePts()).
@@ -884,7 +944,7 @@ function calcBattlePts(name,groupMids,elimMids){
       if(rR===pR){pts+=rR==="D"?R.empate:R.ganador;if(p.h===s.h&&p.a===s.a)pts+=R.exacto;}
     });
   }
-  elimMids.forEach(pid=>{pts+=calcElimMatchPts(name,pid)+calcClassifiedPtsForPid(name,pid);});
+  elimMids.forEach(pid=>{pts+=calcElimMatchPts(name,pid)+calcClassifiedPtsForRealMatch(name,pid);});
   pts+=calcAdv(name);
   return pts;
 }

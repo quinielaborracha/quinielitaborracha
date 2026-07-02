@@ -601,8 +601,8 @@ function renderOneBattle(slot){
       const es=S.elimScores[pid]||S.elimScores[String(pid)];
       const teams=getRealElimTeams(pid);
       const lbl=teams?`${teams.h} vs ${teams.a}`:`Eliminatoria #${pid}`;
-      const pts1elim=calcElimMatchPts(p1,pid)+calcClassifiedPtsForPid(p1,pid);
-      const pts2elim=calcElimMatchPts(p2,pid)+calcClassifiedPtsForPid(p2,pid);
+      const pts1elim=calcElimMatchPts(p1,pid)+calcClassifiedPtsForRealMatch(p1,pid);
+      const pts2elim=calcElimMatchPts(p2,pid)+calcClassifiedPtsForRealMatch(p2,pid);
       const reason1=pts1elim===0?explainZeroElimPts(p1,pid):null;
       const reason2=pts2elim===0?explainZeroElimPts(p2,pid):null;
       const fmtElim=(pts,reason)=>pts>0?`+${pts}pts`:(reason?`0 (${reason})`:"0");

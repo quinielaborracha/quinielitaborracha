@@ -64,7 +64,7 @@ bridge.textContent = `
   window.__test = {
     DB, S, PID_TO_SLOT, ELIM_1_16_IDS, ELIM_ROUNDS, BONUS_PHASES,
     rebuildDynamicData, calcBattlePts, calcElimMatchPts, calcAdv, calcBonos,
-    getRealElimTeams,
+    getRealElimTeams, calcClassifiedPtsForRealMatch, getTeamAdvancePickers,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -196,6 +196,39 @@ check("calcBonos() efectivamente da puntos (>0) con este Bono de último lugar",
   T.calcBonos(NAME) > 0);
 check("calcBattlePts() NO se mueve al agregar Bonos con puntos reales (Bonos sigue siempre afuera)",
   T.calcBattlePts(NAME, GROUP_MIDS_HOY, ALL_ELIM_IDS) === totalConAvanzado);
+
+/* ════════════════════════════════════════════════════════════════
+   BUG REAL reportado (v1.9, sesión de corrección en vivo): el bono de
+   "clasificado" dentro de una Batalla exigía que el participante hubiera
+   llenado el pid OFICIAL exacto (ej. P73, el partido real de Portugal)
+   -- pero el bracket es dinámico (cada quien lo arma desde SUS PROPIOS
+   resultados de grupo), así que "Portugal gana" casi nunca cae en el pid
+   oficial exacto donde Portugal juega de verdad; puede estar en
+   cualquier otro slot de esa misma ronda. Resultado real observado:
+   Ranking mostraba puntos, Batallas no, para las MISMAS dos personas.
+   Este bloque reproduce el caso concreto: un participante con Portugal
+   en un slot DISTINTO al pid oficial de Portugal (contra un rival
+   inventado, porque su fase de grupos salió distinta a la real) debe
+   seguir recibiendo el bono de clasificado en una Batalla que incluya
+   ese pid oficial.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── BUG REAL: clasificado en Batallas con bracket propio desalineado del oficial ──");
+const DESALINEADO = "Bracket Desalineado";
+const p73Winner = T.getRealElimTeams(73).h; // equipo local real de P73 (jugarRonda: local siempre gana 2-1)
+T.DB.participants.push({id:"pD", name:DESALINEADO, city:"C", country:"P"});
+T.DB.predictions.pD = {
+  // r32_2 es OTRO slot oficial (no el de P73) -- acá el participante
+  // predice que el ganador REAL de P73 gana, pero en un slot distinto y
+  // contra un rival inventado que nunca jugó contra él de verdad.
+  r32_2: {h:2, a:0, _a:p73Winner, _b:"Rival Inventado"},
+};
+T.rebuildDynamicData();
+check("calcClassifiedPtsForRealMatch(pid oficial de P73) da >0 aunque el equipo esté en OTRO slot del bracket propio",
+  T.calcClassifiedPtsForRealMatch(DESALINEADO, 73) > 0);
+check("calcBattlePts() en una Batalla sobre ese pid puntual SÍ suma el clasificado (el bug reportado)",
+  T.calcBattlePts(DESALINEADO, [], [73]) === T.calcClassifiedPtsForRealMatch(DESALINEADO, 73));
+check(`getTeamAdvancePickers(${p73Winner}) incluye a Bracket Desalineado`,
+  T.getTeamAdvancePickers(p73Winner, T.ELIM_ROUNDS[0].ids).includes(DESALINEADO));
 
 /* ════════════════════════════════════════════════════════════════
    Fase desactivada por el admin: una batalla sobre esa ventana da 0,
