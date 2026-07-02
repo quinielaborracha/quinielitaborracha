@@ -20,6 +20,14 @@
 
 // ESPN — ELIMINATORIA (P73-P104)
 // ══════════════════════════════════════════════════════════════
+
+// v1.7 — Movidas acá desde app-admin-auth.js (vivían ahí por accidente
+// histórico de orden en el app.js monolítico original): es la cola de
+// conflictos manual-vs-ESPN de EQUIPOS de una llave de eliminatoria
+// (openElimConflict/resolveElimTeamConflict, más abajo) — ningún otro
+// archivo las lee ni las escribe.
+let _elimConflictQueue=[],_elimConflictCurrent=null;
+
 // Traducción de nombres ESPN (en) → español para los equipos
 const ESPN_NAME_ES={
   "Mexico":"México","South Korea":"Corea del Sur","Czech Republic":"República Checa","Czechia":"República Checa",

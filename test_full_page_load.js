@@ -12,6 +12,7 @@ const FILES_IN_ORDER = [
   "participantes.js",
   "partidos-grupos.js",
   "utils.js",
+  "app-state.js",
   "scoring.js",
   "totp.js",
   // v8.0 — app.js (3906 líneas) se dividió en 16 módulos (Sprint 1,

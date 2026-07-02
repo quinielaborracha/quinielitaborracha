@@ -23,6 +23,15 @@
 const ESPN_API="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 const ALL_DATES=["20260611","20260612","20260613","20260614","20260615","20260616","20260617","20260618","20260619","20260620","20260621","20260622","20260623","20260624","20260625","20260626","20260627"];
 
+// v1.7 — Movidas acá desde app-admin-auth.js (vivían ahí por accidente
+// histórico de orden en el app.js monolítico original): mmT/mmS son el
+// timer del "matchmaker" en vivo (loadMM/startMMT, más abajo), y
+// _conflictQueue/_conflictCurrent son la cola de conflictos manual-vs-ESPN
+// de resultados de FASE DE GRUPOS (openConflict/resolveConflict, más
+// abajo) — ningún otro archivo las lee ni las escribe.
+let mmT=null,mmS=0;
+let _conflictQueue=[],_conflictCurrent=null;
+
 async function fetchAllDates(dates){
   const results=await Promise.allSettled(dates.map(d=>fetch(`${ESPN_API}?dates=${d}&limit=50`).then(r=>r.ok?r.json():null).catch(()=>null)));
   const evts=[];

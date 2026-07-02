@@ -1,7 +1,18 @@
 /* ════════════════════════════════════════════════════════════
    app-admin-auth.js — extraído de app.js (Sprint 1, división en módulos)
    ════════════════════════════════════════════════════════════
-   Autenticación de admin (Firebase Auth email/password) + 2FA (TOTP + dispositivo de confianza). También declara el objeto de estado compartido S (scores, checksums, bonos, battles, snapshots, etc.) y unas pocas variables de UI relacionadas (mmT/mmS, colas de conflicto) — quedaron físicamente acá porque así estaban en app.js original, justo después del bloque de 2FA.
+   Autenticación de admin (Firebase Auth email/password) + 2FA (TOTP + dispositivo de confianza).
+
+   v1.7 — Antes también declaraba el objeto de estado compartido S y unas
+   variables de UI de ESPN (mmT/mmS, colas de conflicto), que quedaron
+   físicamente acá solo porque así estaban ordenadas en el app.js
+   original, justo después del bloque de 2FA — sin ninguna relación con
+   autenticación. Se movieron a donde corresponde: S a app-state.js
+   (carga antes que scoring.js, su mayor consumidor), mmT/mmS y la cola
+   de conflictos de grupos a app-bracket-espn-live.js, y la cola de
+   conflictos de llaves de eliminatoria a app-bracket-espn-sync.js (los
+   únicos archivos que las leen o escriben). Este archivo ahora es
+   responsabilidad única: login + 2FA del admin.
 
    Secciones originales incluidas (encabezados tal cual estaban en
    app.js): ADMIN AUTH; ADMIN 2FA
@@ -465,18 +476,4 @@ async function submitLogin(){
   }
   btn.disabled=false;btn.textContent="Entrar";
 }
-
-let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{},elimTimes:{},
-  bonos:{lastPlace:{},classified:{},llaves:{},closed:{}},
-  tieBreakers:{},  // {pid: "h"|"a"} — quién avanzó en caso de empate
-  autoClose:false,
-  hiddenPL:{},  // {name: true} — participantes ocultos del ranking  // si true, cierra fases automáticamente al completarse
-  snapshots:[],    // [{id, label, ts, positions:{name:pos,...}}]
-  reality:{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountryGoals:0,mostConceded:""},adv:{},
-  battles:{},  // {1:{p1,p2,groupMids,elimMids,startedAt,closed}, 2:{...}} — duelos diarios v5.0
-  battleHistory:[]  // [{name,p1,p2,pts1,pts2,winner,date}] — historial de duelos cerrados, v5.4
-};
-let mmT=null,mmS=0;
-let _conflictQueue=[],_conflictCurrent=null;
-let _elimConflictQueue=[],_elimConflictCurrent=null;
 

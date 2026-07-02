@@ -32,14 +32,15 @@ tal cual. `package.json` existe únicamente para el tooling de test (jsdom).
 
 ### Carga de scripts: orden fijo, scope global compartido
 
-`index.html` carga ~22 archivos `<script defer src="...">` (no ES modules,
+`index.html` carga ~23 archivos `<script defer src="...">` (no ES modules,
 salvo el bloque inline de Firebase). Todos comparten el mismo scope global
 del navegador — no hay imports/exports; una función o variable de nivel
 superior declarada en un archivo está disponible en cualquiera que cargue
 después. El orden importa y es exactamente este:
 
 ```
-participantes.js → partidos-grupos.js → utils.js → scoring.js → totp.js →
+participantes.js → partidos-grupos.js → utils.js → app-state.js →
+scoring.js → totp.js →
 app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
 app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
 app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
@@ -50,17 +51,22 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
 - Los 16 `app-*.js` son slices literales y contiguos de un antiguo `app.js`
   monolítico de 3906 líneas (dividido en v8.0, Sprint 1 del roadmap de
   arquitectura). Cada uno es responsabilidad única, sin cambios de lógica
-  respecto al monolito. **El `app.js` de 3906 líneas sigue en el repo pero ya
-  no lo carga `index.html`** — es historia, no la fuente de verdad actual.
-  Si hay que tocar lógica de la app, es en el `app-*.js` correspondiente, no
-  en `app.js`.
+  respecto al monolito. **El `app.js` monolítico ya no existe en el repo**
+  (borrado en v1.7 tras confirmar que ningún archivo lo cargaba ni lo leía
+  — el historial completo sigue disponible vía `git log`/`git show` si hace
+  falta consultarlo). Si hay que tocar lógica de la app, es en el `app-*.js`
+  correspondiente.
 - `app-bootstrap.js` debe ser **siempre el último** de los `app-*.js`: hace
   el primer render (`load()`, `renderRank()`, etc.) llamando funciones
   definidas en todos los módulos anteriores, y arranca Firebase Auth +
   sincronización en vivo.
-- `participantes.js`, `partidos-grupos.js`, `utils.js`, `scoring.js`,
-  `totp.js` cargan antes que los `app-*.js` porque son la capa de datos/
-  helpers puros que estos consumen.
+- `participantes.js`, `partidos-grupos.js`, `utils.js`, `app-state.js`,
+  `scoring.js`, `totp.js` cargan antes que los `app-*.js` porque son la
+  capa de datos/estado/helpers que estos consumen. `app-state.js` declara
+  únicamente `S` (el estado mutable compartido: resultados reales,
+  checksums, bonos, batallas, snapshots — lo que persiste en
+  `quiniela/estado`) y va justo antes que `scoring.js`, su mayor
+  consumidor.
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
@@ -119,4 +125,6 @@ son consistentes entre sí; no reemplaza probar con el emulador real antes de
 publicar reglas nuevas.
 
 `split.js` fue un script de un solo uso para partir el `app.js` monolítico en
-los `app-*.js` actuales — no es parte del flujo normal de desarrollo.
+los `app-*.js` actuales — no es parte del flujo normal de desarrollo. Queda
+en el repo como referencia histórica de cómo se hizo la división, pero ya no
+se puede volver a correr (su input, `app.js`, ya no existe).
