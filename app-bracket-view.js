@@ -202,6 +202,25 @@ function toggleHideParticipant(name){
 // Posiciones previas para animar reordenamientos del ranking
 const _prevRankPos={};
 
+// v1.9 — Mejora visual: cuando el Total de alguien cambia, el número
+// cuenta hacia arriba/abajo (~220ms) en vez de aparecer de golpe -- misma
+// idea que rankUp/rankDown, pero sobre el valor en sí. Respeta
+// prefers-reduced-motion (deja el valor final quieto, sin animar).
+function animateCountUp(el,from,to){
+  if(from===to)return;
+  const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce)return; // el innerHTML ya dejó "to" puesto, no hace falta tocar nada
+  el.textContent=from;
+  const dur=220,start=performance.now();
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    const eased=1-Math.pow(1-t,3); // ease-out cúbico
+    el.textContent=Math.round(from+(to-from)*eased);
+    if(t<1)requestAnimationFrame(step);else el.textContent=to;
+  }
+  requestAnimationFrame(step);
+}
+
 function renderRank(){
   // Revisar si hay fases nuevas cerradas antes de renderizar
   checkAndAwardBonos();
@@ -214,10 +233,14 @@ function renderRank(){
   const rki=["🥇","🥈","🥉"];
   const tbody=document.getElementById("rb");
 
-  // Snapshot de posiciones ANTES del redibujado (para saber qué filas subieron/bajaron)
+  // Snapshot de posiciones Y totales ANTES del redibujado (para animar
+  // reordenamientos y el conteo del Total, respectivamente)
   const prevPos={};
+  const prevTotals={};
   Array.from(tbody.querySelectorAll("tr[data-rkey]")).forEach((tr,i)=>{
     prevPos[tr.dataset.rkey]=i;
+    const span=tr.querySelector(".ptb");
+    if(span)prevTotals[tr.dataset.rkey]=parseInt(span.textContent)||0;
   });
 
   tbody.innerHTML=ranked.map((p,i)=>{
@@ -258,7 +281,7 @@ function renderRank(){
       <td data-label="Avanzado"><span class="pill pg">${p.av}</span></td>
       <td data-label="Elim"><span class="pill" style="background:rgba(124,58,237,.18);color:#c4b5fd;border:1px solid rgba(124,58,237,.35)">${p.elim}</span></td>
       <td data-label="Bonos">${bonBadge}</td>
-      <td data-label="Total" style="text-align:right"><span class="ptb">${p.total}</span></td>
+      <td data-label="Total" style="text-align:right"><span class="ptb" data-target="${p.total}">${p.total}</span></td>
       ${adminActions}
     </tr>`;
   }).join("");
@@ -272,6 +295,12 @@ function renderRank(){
       void tr.offsetWidth; // forzar reflow para reiniciar animación si ya tenía una
       tr.classList.add(moved);
       tr.addEventListener("animationend",()=>tr.classList.remove(moved),{once:true});
+    }
+    // Contar hacia arriba/abajo el Total si cambió desde el render anterior
+    const span=tr.querySelector(".ptb");
+    if(span){
+      const target=parseInt(span.dataset.target);
+      if(key in prevTotals && prevTotals[key]!==target)animateCountUp(span,prevTotals[key],target);
     }
   });
 
