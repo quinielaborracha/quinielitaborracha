@@ -146,3 +146,24 @@ const SPECIAL_FIELD_MAP_V62 = {
 };
 
 // ══════════════════════════════════════════════════════════════
+
+// v1.4 — Mejora visual: reproducir el mismo fade-in de .tab-panel (ver
+// styles.css) cuando cambia el contenido de "Mi Quiniela". A diferencia
+// del resto de los tabs (que hacen display:none↔block sobre divs que ya
+// existen, y por eso el navegador redispara la animación solo), registro.js
+// arma cada pantalla de Mi Quiniela reemplazando el innerHTML de
+// #rg-content entero -- el contenedor nunca sale de display:block, así
+// que la animation de .tab-panel no se vuelve a disparar sola. Esto
+// observa esos reemplazos de contenido (sin leer ni decidir nada de lo
+// que se muestra, es puramente decorativo) y fuerza un reflow para que
+// la clase se vuelva a "sentir" nueva cada vez.
+(function(){
+  const rg = document.getElementById("rg-content");
+  if(!rg || typeof MutationObserver !== "function") return;
+  const obs = new MutationObserver(()=>{
+    rg.classList.remove("tab-panel");
+    void rg.offsetWidth; // fuerza reflow para poder re-agregar la clase
+    rg.classList.add("tab-panel");
+  });
+  obs.observe(rg, {childList:true});
+})();

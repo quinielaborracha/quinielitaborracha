@@ -60,8 +60,22 @@
 .inner-tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--qb-border);margin-bottom:.875rem;scrollbar-width:none;}
 .inner-tabs::-webkit-scrollbar{display:none;}
 
+/* ── TRANSICIÓN DE TABS — mejora visual v1.0 ──────────────────────
+   .tab-panel: se asigna a todos los paneles que hoy ya cambian de
+   display:none a display:block (los 9 tabs principales, sub-tabs de
+   Estadísticas/Fixture/Predicciones, wraps de Batallas). El navegador
+   re-dispara sola la animation cada vez que un elemento pasa de
+   display:none a block -- no hace falta ningún JS para esto. Mismo
+   cubic-bezier que ya usan rankUp/rankDown, para que se sienta parte de
+   la misma familia de movimiento. */
+.tab-panel{animation:tabFadeIn .18s cubic-bezier(.4,0,.2,1);}
+@keyframes tabFadeIn{
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
 /* Force dark background on the root element */
-#root { background: var(--qb-black) !important; }
+#root { background: var(--qb-black) !important; transition: background-color .25s ease; }
 
 *{box-sizing:border-box;margin:0;padding:0}
 
@@ -73,6 +87,7 @@
   font-family: var(--ff-body);
   color: var(--qb-text);
   min-height: 100vh;
+  transition: background-color .25s ease, color .25s ease;
 }
 
 /* ── HEADER ── */
@@ -439,7 +454,9 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .ib em { color: var(--qb-muted2); font-style: normal; text-decoration: underline; }
 
 /* ── CARDS ── */
-.pc{border:1px solid var(--qb-border);border-radius:12px;padding:.75rem .875rem;margin-bottom:.625rem;background:var(--qb-surface)}
+.pc{border:1px solid var(--qb-border);border-radius:12px;padding:.75rem .875rem;margin-bottom:.625rem;background:var(--qb-surface);transition:box-shadow .18s cubic-bezier(.4,0,.2,1),transform .18s cubic-bezier(.4,0,.2,1),background-color .25s ease,border-color .25s ease}
+.pc:hover,.pc:focus-within{box-shadow:0 4px 16px rgba(0,0,0,.18);transform:translateY(-2px)}
+:root.light .pc:hover,:root.light .pc:focus-within{box-shadow:0 4px 16px rgba(0,0,0,.08)}
 .pg2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
 .pm{border:1px solid var(--qb-border);border-radius:8px;padding:6px 8px;background:var(--qb-surface2)}
 .pmn{font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--qb-muted);margin-bottom:3px}
@@ -759,7 +776,9 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .rg-scope .rg-tab.on{color:var(--qb-text);border-bottom-color:var(--qb-red)}
 #rg-content{padding:1rem 0}
 
-.rg-scope .card{background:var(--qb-surface);border:1px solid var(--qb-border);border-radius:12px;padding:1rem;margin-bottom:1rem}
+.rg-scope .card{background:var(--qb-surface);border:1px solid var(--qb-border);border-radius:12px;padding:1rem;margin-bottom:1rem;transition:box-shadow .18s cubic-bezier(.4,0,.2,1),transform .18s cubic-bezier(.4,0,.2,1),background-color .25s ease,border-color .25s ease}
+.rg-scope .card:hover,.rg-scope .card:focus-within{box-shadow:0 4px 16px rgba(0,0,0,.18);transform:translateY(-2px)}
+:root.light .rg-scope .card:hover,:root.light .rg-scope .card:focus-within{box-shadow:0 4px 16px rgba(0,0,0,.08)}
 .rg-scope .card-title{font-family:var(--ff-display);font-size:16px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;margin-bottom:.65rem;display:flex;align-items:center;gap:8px}
 .rg-scope .field{margin-bottom:.85rem}
 .rg-scope .field label{display:block;font-size:11.5px;color:var(--qb-muted2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;font-weight:600}
@@ -804,7 +823,8 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .rg-scope .pick-row:last-child{border-bottom:none}
 .rg-scope .pick-label{font-size:11px;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .rg-scope .pick-btns{display:flex;gap:8px}
-.rg-scope .pick-btn{flex:1;background:var(--qb-surface2);border:1px solid var(--qb-border2);border-radius:8px;padding:9px 6px;color:var(--qb-text);font-size:13px;cursor:pointer;text-align:center;transition:background .15s,border-color .15s}
+.rg-scope .pick-btn{flex:1;background:var(--qb-surface2);border:1px solid var(--qb-border2);border-radius:8px;padding:9px 6px;color:var(--qb-text);font-size:13px;cursor:pointer;text-align:center;transition:background .15s,border-color .15s,transform .08s ease-out}
+.rg-scope .pick-btn:active{transform:scale(.97)}
 .rg-scope .pick-btn:hover{background:var(--qb-surface3)}
 .rg-scope .pick-btn.sel{background:var(--qb-gold-dim);border-color:var(--qb-gold);color:var(--qb-gold);font-weight:700}
 .rg-scope .badge{display:inline-block;font-family:var(--ff-display);font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em}
@@ -835,7 +855,8 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 /* Wizard */
 .rg-scope .stepper{display:flex;align-items:center;margin-bottom:.4rem;overflow-x:auto;scrollbar-width:none}
 .rg-scope .stepper::-webkit-scrollbar{display:none}
-.rg-scope .step-dot{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--qb-surface2);border:1px solid var(--qb-border2);color:var(--qb-muted2);font-family:var(--ff-display);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.rg-scope .step-dot{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--qb-surface2);border:1px solid var(--qb-border2);color:var(--qb-muted2);font-family:var(--ff-display);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .08s ease-out}
+.rg-scope .step-dot:active{transform:scale(.9)}
 .rg-scope .step-dot.done{background:var(--qb-green-dim);border-color:var(--qb-green);color:var(--qb-green)}
 .rg-scope .step-dot.on{background:var(--qb-red);border-color:var(--qb-red);color:#fff}
 .rg-scope .step-line{flex:1;min-width:10px;height:2px;background:var(--qb-border2);margin:0 2px}
@@ -854,7 +875,8 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .rg-scope .switch-row:last-child{border-bottom:none}
 .rg-scope .wiz-nav-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.6rem}
 .rg-scope .filter-chips{display:flex;gap:6px;flex-wrap:wrap}
-.rg-scope .filter-chip{font-family:var(--ff-body);font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-muted2);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.rg-scope .filter-chip{font-family:var(--ff-body);font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-muted2);cursor:pointer;transition:background .15s,color .15s,border-color .15s,transform .08s ease-out}
+.rg-scope .filter-chip:active{transform:scale(.97)}
 .rg-scope .filter-chip:hover{color:var(--qb-text)}
 .rg-scope .filter-chip.on{background:var(--qb-gold-dim);border-color:var(--qb-gold);color:var(--qb-gold)}
 .rg-scope .combo-wrap{position:relative}
@@ -864,7 +886,8 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .rg-scope .combo-empty{padding:9px 12px;font-size:12px;color:var(--qb-muted)}
 @keyframes rgPendingFlash{0%,100%{background:transparent}50%{background:var(--qb-gold-dim)}}
 .rg-scope .pending-flash{animation:rgPendingFlash .6s ease-in-out 3;border-radius:6px}
-.rg-scope .switch{position:relative;width:46px;height:26px;border-radius:99px;background:var(--qb-surface2);border:1px solid var(--qb-border2);cursor:pointer;transition:background .2s,border-color .2s;flex-shrink:0}
+.rg-scope .switch{position:relative;width:46px;height:26px;border-radius:99px;background:var(--qb-surface2);border:1px solid var(--qb-border2);cursor:pointer;transition:background .2s,border-color .2s,transform .08s ease-out;flex-shrink:0}
+.rg-scope .switch:active{transform:scale(.95)}
 .rg-scope .switch.on{background:var(--qb-green-dim);border-color:var(--qb-green)}
 .rg-scope .switch-knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--qb-muted2);transition:left .2s,background .2s}
 .rg-scope .switch.on .switch-knob{left:22px;background:var(--qb-green)}
@@ -950,4 +973,26 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 body.test-mode-active #root{
   outline:3px solid var(--qb-yellow);
   outline-offset:-3px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ACCESIBILIDAD DE MOVIMIENTO — mejora visual v1.0
+   ══════════════════════════════════════════════════════════════ */
+/* Un solo bloque para TODAS las animaciones/transiciones "de movimiento"
+   del proyecto (viejas y nuevas): quien tiene reducción de movimiento
+   activada en su sistema operativo no debería ver traslados, escalados
+   ni parpadeos. Lo que SÍ se conserva (recolorea sin mover) queda tal
+   cual -- por eso animation:none puntual en vez de "* { animation:none }"
+   a lo bruto, que también apagaría color-only cosas que no hace falta. */
+@media (prefers-reduced-motion: reduce){
+  .rt tbody tr,
+  .rt tbody tr.rank-move-up,
+  .rt tbody tr.rank-move-down{animation:none;transition:background .1s,opacity .3s}
+  .tab-panel{animation:none}
+  .pc,.rg-scope .card{transition:background-color .25s ease,border-color .25s ease}
+  .pc:hover,.pc:focus-within,.rg-scope .card:hover,.rg-scope .card:focus-within{transform:none}
+  .rg-scope .pick-btn,.rg-scope .step-dot,.rg-scope .filter-chip,.rg-scope .switch,.rg-btn{transition:background .15s,color .15s,border-color .15s}
+  .rg-scope .pick-btn:active,.rg-scope .step-dot:active,.rg-scope .filter-chip:active,.rg-scope .switch:active,.rg-btn:active{transform:none}
+  /* #qb-loader/.qb-skel viven en index.html con su propio bloque inline
+     (tienen que funcionar ANTES de que este archivo termine de cargar). */
 }

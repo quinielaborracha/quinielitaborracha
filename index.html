@@ -105,7 +105,7 @@
   // Señal de que Firebase ya está listo para usarse
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
-<link rel="stylesheet" href="styles.css?v=1.6">
+<link rel="stylesheet" href="styles.css?v=1.7">
 
 <!-- v7.2 — Banner de Modo Prueba (?test=1). Oculto por defecto (display:none
      inline); el script de Firebase de arriba lo muestra solo si TEST_MODE
@@ -126,13 +126,47 @@
      a los 8s para que nadie quede mirando el loader para siempre. -->
 <style>
   @keyframes qb-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.78}}
-  @keyframes qb-bar{0%{transform:translateX(-130%)}100%{transform:translateX(330%)}}
+  @keyframes qb-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .qb-skel{background:linear-gradient(90deg,var(--qb-surface2) 25%,var(--qb-surface3) 50%,var(--qb-surface2) 75%);background-size:200% 100%;animation:qb-shimmer 1.5s ease-in-out infinite;border-radius:6px}
+  @media (prefers-reduced-motion: reduce){
+    #qb-loader img{animation:none}
+    .qb-skel{animation:none;background:var(--qb-surface2)}
+  }
 </style>
-<div id="qb-loader" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--qb-black);">
-  <img src="favicon.png?v=1" alt="" style="width:64px;height:64px;border-radius:14px;animation:qb-pulse 1.4s ease-in-out infinite">
-  <div style="font-family:var(--ff-display);font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--qb-muted);text-transform:uppercase">Cargando tu quiniela…</div>
-  <div style="width:120px;height:3px;background:var(--qb-border2);border-radius:3px;overflow:hidden">
-    <div style="width:40%;height:100%;background:var(--qb-gold);border-radius:3px;animation:qb-bar 1.1s ease-in-out infinite"></div>
+<!-- v1.9 — Mejora visual: el texto fijo "Cargando tu quiniela…" se
+     reemplaza por un skeleton screen (bloques con shimmer) que insinúa la
+     forma de la tabla de Ranking -- se siente como que YA hay contenido
+     apareciendo, en vez de una pantalla de espera genérica. El mecanismo
+     de ocultamiento (__qbHideLoader, ver <script> de abajo) no cambia. -->
+<div id="qb-loader" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--qb-black);padding:1rem">
+  <img src="favicon.png?v=1" alt="" style="width:48px;height:48px;border-radius:12px;animation:qb-pulse 1.4s ease-in-out infinite">
+  <div style="width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px">
+    <div class="qb-skel" style="width:55%;height:14px"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="qb-skel" style="width:22px;height:22px;border-radius:50%;flex-shrink:0"></div>
+      <div class="qb-skel" style="flex:1;height:12px"></div>
+      <div class="qb-skel" style="width:36px;height:12px;flex-shrink:0"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="qb-skel" style="width:22px;height:22px;border-radius:50%;flex-shrink:0"></div>
+      <div class="qb-skel" style="flex:1;height:12px"></div>
+      <div class="qb-skel" style="width:36px;height:12px;flex-shrink:0"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="qb-skel" style="width:22px;height:22px;border-radius:50%;flex-shrink:0"></div>
+      <div class="qb-skel" style="flex:1;height:12px"></div>
+      <div class="qb-skel" style="width:36px;height:12px;flex-shrink:0"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="qb-skel" style="width:22px;height:22px;border-radius:50%;flex-shrink:0"></div>
+      <div class="qb-skel" style="flex:1;height:12px"></div>
+      <div class="qb-skel" style="width:36px;height:12px;flex-shrink:0"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="qb-skel" style="width:22px;height:22px;border-radius:50%;flex-shrink:0"></div>
+      <div class="qb-skel" style="flex:1;height:12px"></div>
+      <div class="qb-skel" style="width:36px;height:12px;flex-shrink:0"></div>
+    </div>
   </div>
 </div>
 <script>
@@ -174,7 +208,7 @@
       <img id="logo-img" src="" alt="QB" style="width:40px;height:40px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.1</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.2</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -206,7 +240,7 @@
   <!-- Wrapper with padding for all tab content -->
   <div style="padding:0 .75rem">
 
-  <div id="t-rank">
+  <div id="t-rank" class="tab-panel">
     <div class="rfl">
       <span class="sec" style="margin:0">Tabla de posiciones</span>
       <button class="btn btn-sm" onclick="renderRank()">↻ Recalcular</button>
@@ -233,7 +267,7 @@
     </div>
   </div>
 
-  <div id="t-mm" style="display:none">
+  <div id="t-mm" class="tab-panel" style="display:none">
     <div class="refresh-bar">
       <span class="sec" style="margin:0">En vivo y próximos</span>
       <button class="btn btn-sm btn-espn" onclick="loadMM(true)"><span id="mm-spin" style="display:inline-block">⚡</span> <span id="mm-txt">Actualizar</span></button>
@@ -244,7 +278,7 @@
   </div>
 
   <!-- ═══ BATALLAS TAB — duelos diarios 1 vs 1 ═══ -->
-  <div id="t-battles" style="display:none">
+  <div id="t-battles" class="tab-panel" style="display:none">
     <div class="admin-only" style="display:none;margin-bottom:1rem;padding:.75rem;border:1px solid var(--qb-border);border-radius:10px;background:var(--qb-surface)">
       <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">⚔️ Armar batalla</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.5rem">
@@ -292,10 +326,10 @@
       <button class="inner-tab" onclick="battlesTab('ligas')" id="btab-ligas">🏅 Ligas</button>
       <button class="inner-tab" onclick="battlesTab('rumble')" id="btab-rumble">👑 Rumble</button>
     </div>
-    <div id="battles-active-wrap"><div id="battles-body"></div></div>
-    <div id="battles-history-wrap" style="display:none"></div>
-    <div id="battles-ligas-wrap" style="display:none"></div>
-    <div id="battles-rumble-wrap" style="display:none">
+    <div id="battles-active-wrap" class="tab-panel"><div id="battles-body"></div></div>
+    <div id="battles-history-wrap" class="tab-panel" style="display:none"></div>
+    <div id="battles-ligas-wrap" class="tab-panel" style="display:none"></div>
+    <div id="battles-rumble-wrap" class="tab-panel" style="display:none">
       <div class="admin-only" style="display:none;margin-bottom:1rem;padding:.75rem;border:1px solid var(--qb-border);border-radius:10px;background:var(--qb-surface)">
         <div style="font-family:var(--ff-display);font-size:12px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">👑 Armar Royal Rumble</div>
         <div style="font-size:10px;color:var(--qb-muted);margin-bottom:.375rem">Elegí quiénes participan (sin restricción de liga):</div>
@@ -319,14 +353,14 @@
   </div>
 
   <!-- ═══ FIXTURE TAB — sub: Grupos + Eliminatoria ═══ -->
-  <div id="t-fix" style="display:none">
+  <div id="t-fix" class="tab-panel" style="display:none">
     <div class="inner-tabs">
       <button class="inner-tab on" onclick="fixTab('grupos')" id="ftab-grupos">⚽ Fase de Grupos</button>
       <button class="inner-tab" onclick="fixTab('elim')" id="ftab-elim">🏆 Eliminatoria</button>
     </div>
 
     <!-- Grupos sub-panel -->
-    <div id="fix-grupos">
+    <div id="fix-grupos" class="tab-panel">
       <div class="rfl">
         <span class="sec" style="margin:0">Grupos A–L</span>
         <button class="btn btn-sm btn-espn" onclick="fetchESPN()"><span id="fi-spin" style="display:inline-block">⚡</span> <span id="fi-txt">ESPN Live</span></button>
@@ -341,7 +375,7 @@
     </div>
 
     <!-- Eliminatoria sub-panel -->
-    <div id="fix-elim" style="display:none">
+    <div id="fix-elim" class="tab-panel" style="display:none">
       <div class="rfl">
         <span class="sec" style="margin:0">Eliminatoria</span>
         <button id="btn-espn-elim" class="btn btn-sm btn-espn" onclick="fetchESPNElimChecked()"><span id="ei-spin" style="display:inline-block">⚡</span> <span id="ei-txt">ESPN Live</span></button>
@@ -361,7 +395,7 @@
   </div>
 
   <!-- ═══ PREDICCIONES TAB — sub: Fase de Grupos + Bracket + Avanzado ═══ -->
-  <div id="t-pred" style="display:none">
+  <div id="t-pred" class="tab-panel" style="display:none">
     <div class="inner-tabs">
       <button class="inner-tab on" onclick="predTab('grupos')" id="ptab-grupos">📋 Fase de Grupos</button>
       <button class="inner-tab" onclick="predTab('bracket')" id="ptab-bracket">🎯 Eliminatoria</button>
@@ -369,7 +403,7 @@
     </div>
 
     <!-- Fase de grupos sub-panel -->
-    <div id="pred-grupos">
+    <div id="pred-grupos" class="tab-panel">
       <div class="rfl"><span class="sec" style="margin:0">Predicciones por participante</span></div>
       <div class="ib">Verde = acertaste · Rojo = fallaste · Número = puntos del partido</div>
       <div id="psel" style="margin-bottom:.75rem;display:flex;gap:5px;flex-wrap:wrap"></div>
@@ -377,7 +411,7 @@
     </div>
 
     <!-- Bracket sub-panel -->
-    <div id="pred-bracket" style="display:none">
+    <div id="pred-bracket" class="tab-panel" style="display:none">
       <div class="rfl">
         <span class="sec" style="margin:0">Eliminatoria — Predicciones vs Realidad</span>
         <button class="btn btn-sm" onclick="renderBracket()">↻ Actualizar</button>
@@ -388,22 +422,22 @@
     </div>
 
     <!-- Avanzado sub-panel -->
-    <div id="pred-avanzado" style="display:none">
+    <div id="pred-avanzado" class="tab-panel" style="display:none">
       <div class="sec">Predicciones avanzadas</div>
       <div class="ib">Ingresa los resultados reales del torneo para calcular puntos avanzados. Las predicciones especiales de cada participante están en el archivo maestro.</div>
       <div id="ab"></div>
     </div>
   </div>
 
-  <div id="t-stats" style="display:none">
+  <div id="t-stats" class="tab-panel" style="display:none">
     <div style="display:flex;gap:0;border-bottom:1px solid var(--qb-border);margin-bottom:.875rem">
       <button class="stat-tab on" onclick="statTab('cards')" id="stab-cards">🃏 Tarjetas</button>
       <button class="stat-tab" onclick="statTab('popular')" id="stab-popular">🗳 Predicciones</button>
       <button class="stat-tab" onclick="statTab('goal')" id="stab-goal">⚽ Goleadores</button>
     </div>
-    <div id="stat-cards"></div>
-    <div id="stat-popular" style="display:none"></div>
-    <div id="stat-goal" style="display:none">
+    <div id="stat-cards" class="tab-panel"></div>
+    <div id="stat-popular" class="tab-panel" style="display:none"></div>
+    <div id="stat-goal" class="tab-panel" style="display:none">
       <div class="rfl">
         <span class="sec" style="margin:0">Goleadores del Mundial</span>
         <button class="btn btn-sm btn-espn" onclick="fetchESPNScorers()">⚡ ESPN en vivo</button>
@@ -423,7 +457,7 @@
 
 
 
-  <div id="t-rules" style="display:none">
+  <div id="t-rules" class="tab-panel" style="display:none">
     <div class="sec">Reglas básicas — Fase de Grupos</div>
     <div id="rbasic"></div>
 
@@ -458,8 +492,8 @@
        rg-tab/rg-tabs). Ahora Admin es una pestaña más del menú principal
        (ver #t-admin abajo) y Mi Quiniela muestra la pantalla del
        participante directo, sin sub-nav. -->
-  <div id="t-registro" class="rg-scope" style="display:none">
-    <div id="rg-content"></div>
+  <div id="t-registro" class="rg-scope tab-panel" style="display:none">
+    <div id="rg-content" class="tab-panel"></div>
   </div>
 
   <!-- v6.6.1 — Panel Admin, antes vivía adentro de Mi Quiniela como
@@ -471,7 +505,7 @@
        (adminSubTab(), app-tabs.js). No se reescribió ningún render — cada
        panel sigue siendo exactamente el mismo HTML/función de antes, solo
        que ahora cuelga de #t-admin en vez de ser su propio #t-xxx. -->
-  <div id="t-admin" style="display:none">
+  <div id="t-admin" class="tab-panel" style="display:none">
     <div class="inner-tabs" style="margin-bottom:.75rem">
       <button class="inner-tab on" onclick="adminSubTab('general')" id="atab-general">🛠️ General</button>
       <button class="inner-tab" onclick="adminSubTab('torneo')" id="atab-torneo">⚙️ Configuración del torneo</button>
@@ -740,7 +774,7 @@
 <script defer src="app-core-data.js?v=1.0"></script>
 <script defer src="app-admin-auth.js?v=1.1"></script>
 <script defer src="app-live-sync.js?v=1.2"></script>
-<script defer src="app-tabs.js?v=1.3"></script>
+<script defer src="app-tabs.js?v=1.4"></script>
 <script defer src="app-eliminatoria-data.js?v=1.0"></script>
 <script defer src="app-batallas.js?v=2.1"></script>
 <script defer src="app-bracket-render.js?v=1.2"></script>
