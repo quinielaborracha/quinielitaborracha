@@ -875,6 +875,16 @@ function closePhase(phaseKey){
   S.bonos.closed[phaseKey]=true;
 
   save();renderRank();renderBonosPanel();
+  // v1.7 — FIX: cerrar una fase es justo lo que desbloquea el botón "ESPN
+  // Live"/"Simular marcadores" de la SIGUIENTE fase (ver
+  // getFirstBlockedElimPhase()/updateElimBtns() en app-bracket-compute.js)
+  // -- pero nada llamaba a updateElimBtns() acá, así que el botón seguía
+  // viéndose deshabilitado hasta cambiar de pestaña (eso sí lo dispara,
+  // ver tab() en app-tabs.js) o hasta que llegara un snapshot remoto de
+  // Firestore. Guardado con typeof porque scoring.js carga ANTES que
+  // app-bracket-compute.js (donde vive updateElimBtns) — para cuando esto
+  // se INVOQUE (nunca al cargar el script) ya está definida.
+  if(typeof updateElimBtns==="function")updateElimBtns();
 
   // Show who got last place bonus
   const lp=S.bonos.lastPlace?.[phaseKey];
@@ -922,7 +932,7 @@ function autoCloseCompletedPhases(){
     const lp=S.bonos.lastPlace?.[phase.key];
     toast(`✓ Auto-cerrada: ${phase.label}${lp&&lastPts>0?" · 🚑 "+sn(lp.name)+" +"+lp.pts+"pts":""}`);
   });
-  if(any){save();renderRank();renderBonosPanel();}
+  if(any){save();renderRank();renderBonosPanel();if(typeof updateElimBtns==="function")updateElimBtns();}
   return any;
 }
 
@@ -933,6 +943,7 @@ function reopenPhase(key){
   if(S.bonos.classified)delete S.bonos.classified[key];
   if(S.bonos.llaves)delete S.bonos.llaves[key];
   save();renderRank();renderBonosPanel();
+  if(typeof updateElimBtns==="function")updateElimBtns();
   toast(`✓ Fase ${key} reabierta`);
 }
 
@@ -940,12 +951,14 @@ function runBonosCheck(){
   const awarded=checkAndAwardBonos();
   if(!awarded)toast("Sin fases nuevas completadas");
   renderBonosPanel();
+  if(typeof updateElimBtns==="function")updateElimBtns();
 }
 
 function clearAllBonos(){
   if(!confirm("¿Limpiar TODOS los bonos adjudicados? Esto reabre todas las fases."))return;
   S.bonos={lastPlace:{},classified:{},llaves:{},closed:{}};
   save();renderRank();renderBonosPanel();
+  if(typeof updateElimBtns==="function")updateElimBtns();
   toast("✓ Bonos limpiados");
 }
 
