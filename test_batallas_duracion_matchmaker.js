@@ -1,0 +1,233 @@
+// Test funcional de la Fase 2 del roadmap de Batallas: duración
+// configurable en días (getMatchIdsInWindow) + "Sugerime un rival"
+// (calcularDiffPrediccion / sugerirRival).
+//
+// Carga los 22 archivos de producción en el mismo orden que index.html,
+// mismo patrón de bridge que el resto de los tests de Batallas.
+const { JSDOM } = require("jsdom");
+const fs = require("fs");
+const path = require("path");
+
+const FILES_IN_ORDER = [
+  "participantes.js","partidos-grupos.js","utils.js","scoring.js","totp.js",
+  "app-core-data.js","app-admin-auth.js","app-live-sync.js","app-tabs.js",
+  "app-eliminatoria-data.js","app-batallas.js","app-bracket-render.js",
+  "app-bracket-compute.js","app-bracket-espn-sync.js","app-bracket-view.js",
+  "app-bracket-espn-live.js","app-integridad.js","app-predicciones.js",
+  "app-estadisticas.js","app-admin-tools.js","app-bootstrap.js"
+];
+
+const html = `<!doctype html><html><body>
+  <div id="root"></div><div id="toast"></div><div id="integ-banner"></div>
+  <img id="logo-img"><span id="admin-indicator"></span>
+  <span id="hstat"></span><span id="hdr-master-badge"></span><span id="hdr-today"></span>
+  <table><tbody id="rb"></tbody></table>
+  <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
+  <div id="t-battles" style="display:block">
+    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
+    <input id="battle-slot1-dias"><input id="battle-slot1-name">
+    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
+    <input id="battle-slot2-dias"><input id="battle-slot2-name">
+    <div id="battles-postulados"></div><div id="battles-body"></div>
+  </div>
+</body></html>`;
+
+const dom = new JSDOM(html, { url: "https://example.org/", runScripts: "dangerously" });
+const { window } = dom;
+window.toast = (m,e) => {};
+window.setInterval = () => 0;
+window.confirm = () => true;
+window.alert = () => {};
+window.__fb = null;
+
+let ok = true;
+function check(label, cond){ console.log((cond?"✅ ":"❌ ")+label); if(!cond) ok=false; }
+
+for (const file of FILES_IN_ORDER){
+  const code = fs.readFileSync(path.join(__dirname, file), "utf8");
+  const script = window.document.createElement("script");
+  script.textContent = code;
+  try{ window.document.body.appendChild(script); }
+  catch(e){ console.log(`❌ ${file} lanzó un error al cargar: ${e.message}`); ok = false; }
+}
+
+const bridge = window.document.createElement("script");
+bridge.textContent = `
+  window.__test = {
+    DB, S, PID_TO_SLOT, ELIM_1_16_IDS,
+    rebuildDynamicData, getMatchIdsInWindow, areBattleMatchesDone,
+    calcularDiffPrediccion, sugerirRival, startBattle, asignarPostulado,
+  };
+`;
+window.document.body.appendChild(bridge);
+if (!window.__test){ console.error("❌ El bridge no se ejecutó."); process.exit(1); }
+const T = window.__test;
+const W = window;
+W.isAdmin = () => true; // reasignar DESPUÉS de cargar los archivos (isAdmin() real pisa cualquier override previo)
+
+const now = new Date();
+const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+function atDayOffset(days, hour){
+  const d = new Date(startOfToday);
+  d.setDate(d.getDate()+days);
+  d.setHours(hour===undefined?12:hour, 0, 0, 0);
+  return d.getTime();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 1 — getMatchIdsInWindow(days): ventana de N días calendario
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Ventana de N días (getMatchIdsInWindow) ──");
+
+T.S.matchTimes[1] = atDayOffset(0);  // hoy
+T.S.matchTimes[2] = atDayOffset(1);  // mañana
+T.S.matchTimes[3] = atDayOffset(2);  // pasado mañana
+T.S.matchTimes[4] = atDayOffset(3);  // 3 días desde hoy -- fuera de una ventana de 3 días
+T.S.matchTimes[5] = atDayOffset(-1); // ayer -- nunca debería entrar
+
+let w1 = T.getMatchIdsInWindow(1);
+check("Con 1 día (default, igual a 'hoy' de siempre): solo el mid de hoy",
+  JSON.stringify(w1.groupMids) === JSON.stringify([1]));
+
+let w3 = T.getMatchIdsInWindow(3);
+check("Con 3 días: hoy + mañana + pasado mañana (3 mids), sin el de +3 días ni el de ayer",
+  JSON.stringify(w3.groupMids) === JSON.stringify([1,2,3]));
+
+let wSinArg = T.getMatchIdsInWindow();
+check("Sin argumento, se comporta igual que con 1 día (fallback seguro)",
+  JSON.stringify(wSinArg.groupMids) === JSON.stringify([1]));
+
+let wInvalido = T.getMatchIdsInWindow(-5);
+check("Con un valor inválido (negativo), cae a 1 día en vez de romper",
+  JSON.stringify(wInvalido.groupMids) === JSON.stringify([1]));
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 2 — startBattle respeta el input de días y lo guarda en S.battles
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── startBattle() con duración configurable ──");
+
+T.DB.participants = [
+  {id:"p0", name:"Ana", city:"C", country:"P"},
+  {id:"p1", name:"Beto", city:"C", country:"P"},
+];
+T.DB.predictions = {p0:{}, p1:{}};
+T.rebuildDynamicData();
+
+W.document.getElementById("battle-slot1-p1").innerHTML = `<option value="Ana">Ana</option>`;
+W.document.getElementById("battle-slot1-p2").innerHTML = `<option value="Beto">Beto</option>`;
+W.document.getElementById("battle-slot1-p1").value = "Ana";
+W.document.getElementById("battle-slot1-p2").value = "Beto";
+W.document.getElementById("battle-slot1-dias").value = "3";
+
+T.startBattle(1);
+check("S.battles[1].dias quedó guardado como 3 (el valor del input, no el default)",
+  T.S.battles[1] && T.S.battles[1].dias === 3);
+check("S.battles[1].groupMids usó la ventana de 3 días (incluye mids 1,2,3)",
+  T.S.battles[1] && JSON.stringify(T.S.battles[1].groupMids) === JSON.stringify([1,2,3]));
+
+delete T.S.battles[1];
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 3 — calcularDiffPrediccion: la fórmula de discrepancia
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── calcularDiffPrediccion() ──");
+
+T.DB.participants = [
+  {id:"pA", name:"Carla", city:"C", country:"P"},
+  {id:"pB", name:"Diego", city:"C", country:"P"},
+];
+T.DB.predictions = {pA:{}, pB:{}};
+// mid 10: mismo resultado, mismo marcador exacto -> 0
+T.DB.predictions.pA[10] = {h:2,a:0}; T.DB.predictions.pB[10] = {h:2,a:0};
+// mid 11: mismo resultado (gana H), marcador distinto -> +0.3
+T.DB.predictions.pA[11] = {h:3,a:0}; T.DB.predictions.pB[11] = {h:1,a:0};
+// mid 12: resultado distinto (uno gana H, el otro empate) -> +1
+T.DB.predictions.pA[12] = {h:2,a:0}; T.DB.predictions.pB[12] = {h:1,a:1};
+// mid 13: a Diego le falta la predicción -> se salta, no suma
+T.DB.predictions.pA[13] = {h:1,a:0};
+T.rebuildDynamicData();
+
+const diffGrupos = T.calcularDiffPrediccion("Carla","Diego",[10,11,12,13],[]);
+check("Diff de 3 partidos de grupos comparables (0 + 0.3 + 1) = 1.3, el 4to se salteó por falta de predicción",
+  Math.abs(diffGrupos - 1.3) < 1e-9);
+
+// Eliminatoria: P73 con equipos "a mano" (dieciseisavos), mismo patrón que
+// test_batallas_todas_fases.js.
+T.S.elimTeams[73] = {h:"Argentina", a:"Brasil"};
+T.S.elimTimes[73] = atDayOffset(0);
+const slot73 = T.PID_TO_SLOT[73];
+// Mismo ganador (Argentina), marcador distinto -> +0.3
+T.DB.predictions.pA[slot73] = {h:2,a:0,_a:"Argentina",_b:"Brasil"};
+T.DB.predictions.pB[slot73] = {h:1,a:0,_a:"Argentina",_b:"Brasil"};
+
+T.S.elimTeams[74] = {h:"Francia", a:"España"};
+T.S.elimTimes[74] = atDayOffset(0);
+const slot74 = T.PID_TO_SLOT[74];
+// Ganador distinto (Francia vs España) -> +1
+T.DB.predictions.pA[slot74] = {h:2,a:0,_a:"Francia",_b:"España"};
+T.DB.predictions.pB[slot74] = {h:0,a:1,_a:"Francia",_b:"España"};
+T.rebuildDynamicData();
+
+const diffElim = T.calcularDiffPrediccion("Carla","Diego",[],[73,74]);
+check("Diff de eliminatoria (mismo ganador+marcador distinto=0.3, ganador distinto=1) = 1.3",
+  Math.abs(diffElim - 1.3) < 1e-9);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 4 — sugerirRival(): elige el par con mayor diferencia
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── sugerirRival() ──");
+
+T.DB.participants = [
+  {id:"q1", name:"Elena", city:"C", country:"P", quierePelear:true},
+  {id:"q2", name:"Fede", city:"C", country:"P", quierePelear:true},
+  {id:"q3", name:"Gonzalo", city:"C", country:"P", quierePelear:true},
+];
+T.DB.predictions = {q1:{}, q2:{}, q3:{}};
+// mid 20: Elena y Fede predicen IGUAL (diff 0 entre ellos); Gonzalo predice
+// distinto a ambos -> Gonzalo debería terminar emparejado con cualquiera de
+// los otros dos antes que Elena-Fede entre sí.
+T.DB.predictions.q1[20] = {h:1,a:0};
+T.DB.predictions.q2[20] = {h:1,a:0};
+T.DB.predictions.q3[20] = {h:0,a:1};
+T.rebuildDynamicData();
+
+W.document.getElementById("battle-slot2-p1").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
+W.document.getElementById("battle-slot2-p2").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
+W.document.getElementById("battle-slot2-p1").value = "";
+W.document.getElementById("battle-slot2-p2").value = "";
+W.document.getElementById("battle-slot2-dias").value = "1";
+T.S.matchTimes[20] = atDayOffset(0);
+
+T.sugerirRival(2);
+const sugeridoP1 = W.document.getElementById("battle-slot2-p1").value;
+const sugeridoP2 = W.document.getElementById("battle-slot2-p2").value;
+check("sugerirRival() cargó a Gonzalo en alguna de las 2 ranuras (es quien más discrepa)",
+  sugeridoP1 === "Gonzalo" || sugeridoP2 === "Gonzalo");
+check("sugerirRival() NO sugirió el par Elena-Fede (diff 0 entre ellos, el peor par posible)",
+  !((sugeridoP1==="Elena"&&sugeridoP2==="Fede") || (sugeridoP1==="Fede"&&sugeridoP2==="Elena")));
+
+// Si la ranura ya tiene algo cargado, no debe pisarlo.
+let avisoRanuraLlena = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoRanuraLlena = true; };
+T.sugerirRival(2); // ya está llena por la sugerencia anterior
+check("Con la ranura ya ocupada, sugerirRival() avisa en vez de pisar la selección",
+  avisoRanuraLlena === true);
+
+// Con menos de 2 postulados disponibles, también debe avisar (no reventar).
+// battle-slot1-p1/p2 no tienen <option>s todavía en este fixture -- sin
+// eso, asignar .value="Elena" fallaría en silencio (mismo bug que ya
+// atrapamos en test_postulacion_batallas.js con un nombre inventado).
+W.document.getElementById("battle-slot1-p1").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
+W.document.getElementById("battle-slot1-p2").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
+W.document.getElementById("battle-slot2-p1").value = "";
+W.document.getElementById("battle-slot2-p2").value = "";
+W.document.getElementById("battle-slot1-p1").value = "Elena";
+W.document.getElementById("battle-slot1-p2").value = "Fede"; // ocupa a 2 de los 3 postulados en la OTRA ranura
+let avisoPocos = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoPocos = true; };
+T.sugerirRival(2); // solo queda Gonzalo disponible -> menos de 2
+check("Con menos de 2 postulados disponibles, sugerirRival() avisa sin romper",
+  avisoPocos === true);
+
+console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
+process.exit(ok ? 0 : 1);

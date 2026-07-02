@@ -45,22 +45,33 @@ function ensureBattlesState(){
 const BATTLE_AUTO_NAMES=["Batalla del día","Duelo de titanes","Choque de gigantes","La gran rivalidad","Cara a cara"];
 let _editingHistIdx=null; // índice del registro de historial de batallas en edición (null = ninguno)
 
+// Días configurados para la ranura (input numérico "battle-slotN-dias" en
+// index.html) — número libre, sin límite fijo. Sin valor cargado o valor
+// inválido, cae a 1 día (mismo comportamiento de siempre: "los partidos
+// de hoy").
+function getDiasRanura(slot){
+  const el=document.getElementById(`battle-slot${slot}-dias`);
+  const v=parseInt(el?.value);
+  return (v>0)?v:1;
+}
+
 function startBattle(slot){
   if(!isAdmin())return;
   ensureBattlesState();
   const p1=document.getElementById(`battle-slot${slot}-p1`).value;
   const p2=document.getElementById(`battle-slot${slot}-p2`).value;
   if(!p1||!p2||p1===p2){toast("Elige 2 participantes distintos",true);return;}
-  const{groupMids,elimMids}=getTodaysMatchIds();
+  const dias=getDiasRanura(slot);
+  const{groupMids,elimMids}=getMatchIdsInWindow(dias);
   if(groupMids.length===0&&elimMids.length===0){
-    toast("No hay partidos programados para hoy",true);return;
+    toast(`No hay partidos programados en los próximos ${dias} día(s)`,true);return;
   }
   const nameInput=document.getElementById(`battle-slot${slot}-name`);
   let name=(nameInput?.value||"").trim();
   if(!name)name=BATTLE_AUTO_NAMES[Math.floor(Math.random()*BATTLE_AUTO_NAMES.length)];
-  S.battles[slot]={p1,p2,name,groupMids,elimMids,startedAt:Date.now(),closed:false};
+  S.battles[slot]={p1,p2,name,dias,groupMids,elimMids,startedAt:Date.now(),closed:false};
   save();renderBattlesPanel();
-  toast(`⚔️ Batalla ${slot} iniciada: ${p1} vs ${p2}`);
+  toast(`⚔️ Batalla ${slot} iniciada: ${p1} vs ${p2} (${dias} día${dias===1?"":"s"})`);
 }
 
 function resetBattle(slot){
@@ -166,6 +177,69 @@ function asignarPostulado(name){
   toast("Las 2 ranuras ya están llenas",true);
 }
 
+// v1.8 (Fase 2) — "Sugerime un rival": cuánto discrepan las predicciones
+// de dos participantes para los partidos de una ventana (grupos + elim).
+// Criterio (documentado acá porque el brief no fijó una fórmula exacta):
+//   - Partido de grupos: +1 si predicen resultados distintos (gana
+//     H/gana A/empate), +0.3 si predicen el MISMO resultado pero con
+//     marcador distinto (menos tensión que un resultado distinto, pero
+//     no cero -- igual pueden desempatar puntos por el marcador exacto).
+//   - Partido de eliminatoria: +1 si predicen un GANADOR distinto (el
+//     equipo, no el pid -- dos personas pueden haber armado llaves
+//     distintas y de todas formas llegar a este cruce con equipos
+//     distintos), +0.3 si coinciden en el ganador pero no en el marcador.
+//   - Partidos donde a cualquiera de los dos le falta la predicción se
+//     saltean (no se puede comparar, así que ni suman ni restan tensión).
+// Mayor total = más motivos para que el resultado final no quede atado.
+function calcularDiffPrediccion(nameA,nameB,groupMids,elimMids){
+  let diff=0;
+  groupMids.forEach(mid=>{
+    const pa=MD[mid]?.preds?.[nameA],pb=MD[mid]?.preds?.[nameB];
+    if(!pa||!pb)return;
+    const ra=pa.h>pa.a?"H":pa.h<pa.a?"A":"D";
+    const rb=pb.h>pb.a?"H":pb.h<pb.a?"A":"D";
+    if(ra!==rb)diff+=1;
+    else if(pa.h!==pb.h||pa.a!==pb.a)diff+=0.3;
+  });
+  elimMids.forEach(pid=>{
+    const wa=getPredWinner(nameA,pid),wb=getPredWinner(nameB,pid);
+    if(!wa||!wb)return;
+    if(n(wa)!==n(wb)){diff+=1;return;}
+    const pa=elimPred(nameA,pid),pb=elimPred(nameB,pid);
+    if(pa&&pb&&(pa.h!==pb.h||pa.a!==pb.a))diff+=0.3;
+  });
+  return diff;
+}
+
+// Sobre los postulados DISPONIBLES para esta ranura (misma lista que ve
+// el panel de Postulados), busca el par con mayor diferencia de
+// predicciones para la ventana de N días ya configurada en esta ranura, y
+// lo carga directo en los 2 <select>. Requiere la ranura vacía primero
+// (no pisa una selección ya hecha a mano).
+function sugerirRival(slot){
+  if(!isAdmin())return;
+  const p1Sel=document.getElementById(`battle-slot${slot}-p1`);
+  const p2Sel=document.getElementById(`battle-slot${slot}-p2`);
+  if(!p1Sel||!p2Sel)return;
+  if(p1Sel.value||p2Sel.value){toast("Vaciá esta ranura primero para poder sugerir un rival",true);return;}
+  const candidatos=getPostuladosDisponibles();
+  if(candidatos.length<2){toast("Hacen falta al menos 2 postulados disponibles para sugerir un duelo",true);return;}
+  const dias=getDiasRanura(slot);
+  const{groupMids,elimMids}=getMatchIdsInWindow(dias);
+  let mejor=null,mejorDiff=-1;
+  for(let i=0;i<candidatos.length;i++){
+    for(let j=i+1;j<candidatos.length;j++){
+      const d=calcularDiffPrediccion(candidatos[i],candidatos[j],groupMids,elimMids);
+      if(d>mejorDiff){mejorDiff=d;mejor=[candidatos[i],candidatos[j]];}
+    }
+  }
+  if(!mejor){toast("No se pudo calcular ninguna sugerencia",true);return;}
+  p1Sel.value=mejor[0];
+  p2Sel.value=mejor[1];
+  renderPostuladosPanel();
+  toast(`🎯 Sugerido: ${mejor[0]} vs ${mejor[1]} (diferencia ${mejorDiff.toFixed(1)} en ${groupMids.length+elimMids.length} partido(s) de ${dias} día${dias===1?"":"s"})`);
+}
+
 // Delegado en document (mismo patrón que .js-edit-participant en
 // app-bracket-view.js): un solo listener, siempre vivo, no depende de que
 // #battles-postulados ya exista cuando este script corre.
@@ -175,7 +249,9 @@ document.addEventListener("click", (ev)=>{
 });
 
 function renderBattleCountdown(groupMids,elimMids,big){
-  // Encuentra la hora de fin estimada del ÚLTIMO partido de hoy (inicio + ~2h como estimado)
+  // Encuentra la hora de fin estimada del ÚLTIMO partido de la ventana del
+  // duelo (inicio + ~2h como estimado) -- desde la Fase 2, esa ventana
+  // puede abarcar varios días, no solo hoy.
   const times=[];
   groupMids.forEach(mid=>{if(S.matchTimes[mid])times.push(new Date(S.matchTimes[mid]).getTime());});
   elimMids.forEach(pid=>{if(S.elimTimes[pid])times.push(new Date(S.elimTimes[pid]).getTime());});
@@ -185,7 +261,7 @@ function renderBattleCountdown(groupMids,elimMids,big){
   const now=Date.now();
   const diff=estEnd-now;
   const fs=big?"13px":"10px";
-  if(diff<=0)return`<span style="color:var(--qb-muted);font-size:${fs}">Esperando resultado del último partido del día…</span>`;
+  if(diff<=0)return`<span style="color:var(--qb-muted);font-size:${fs}">Esperando resultado del último partido del duelo…</span>`;
   const h=Math.floor(diff/3600000),mn=Math.floor((diff%3600000)/60000);
   const weight=big?"font-weight:800;color:var(--qb-text)":"color:var(--qb-muted)";
   return`<span style="font-size:${fs};${weight}">⏳ Cierra en ${h}h ${mn}m</span>`;
@@ -199,12 +275,12 @@ function renderBattlesSectionHeader(activeSlots){
   for(const s of activeSlots){
     const b=S.battles[s];
     if(!b)continue;
-    const done=areTodaysMatchesDone(b.groupMids,b.elimMids);
+    const done=areBattleMatchesDone(b.groupMids,b.elimMids);
     if(!done){countdownHtml=renderBattleCountdown(b.groupMids,b.elimMids,true);break;}
   }
   return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.75rem;padding-bottom:.625rem;border-bottom:1px solid var(--qb-border)">
     <span style="font-family:var(--ff-display);font-size:13px;font-weight:800;color:var(--qb-text)">📅 ${today}</span>
-    ${countdownHtml||'<span style="font-size:11px;color:var(--qb-muted)">✓ Partidos del día cerrados</span>'}
+    ${countdownHtml||'<span style="font-size:11px;color:var(--qb-muted)">✓ Duelos activos cerrados</span>'}
   </div>`;
 }
 
@@ -213,9 +289,10 @@ function renderOneBattle(slot){
   const b=S.battles[slot];
   if(!b)return"";
   const{p1,p2,groupMids,elimMids,name}=b;
+  const dias=b.dias||1; // batallas creadas antes de la Fase 2 no tienen este campo -- 1 día, mismo comportamiento de siempre
   const pts1=calcBattlePts(p1,groupMids,elimMids);
   const pts2=calcBattlePts(p2,groupMids,elimMids);
-  const done=areTodaysMatchesDone(groupMids,elimMids);
+  const done=areBattleMatchesDone(groupMids,elimMids);
   const total=pts1+pts2;
   const pct1=total>0?Math.round((pts1/total)*100):50;
   let winnerBadge="";
@@ -240,7 +317,7 @@ function renderOneBattle(slot){
   ];
   const battleName=esc(name||"Batalla del día");
   return`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:var(--qb-surface);${done?"border-color:rgba(245,166,35,.5)":""}">
-    <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName}</div>
+    <div style="text-align:center;font-size:11px;font-weight:700;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${battleName} · ${dias} día${dias===1?"":"s"}</div>
     <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;text-align:center">
       <div>
         <div style="font-family:var(--ff-display);font-weight:800;font-size:14px;color:var(--qb-text)">${esc(p1)}</div>
@@ -259,7 +336,7 @@ function renderOneBattle(slot){
     ${winnerBadge}
     ${done?'<div style="margin-top:.625rem;text-align:center"><span style="font-size:10px;color:var(--qb-muted)">✓ Duelo cerrado</span></div>':""}
     <details style="margin-top:.5rem">
-      <summary style="font-size:10px;color:var(--qb-muted);cursor:pointer">Cartelera de hoy (${cartelera.length} partido${cartelera.length===1?"":"s"})</summary>
+      <summary style="font-size:10px;color:var(--qb-muted);cursor:pointer">Cartelera del duelo (${cartelera.length} partido${cartelera.length===1?"":"s"})</summary>
       <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:8px">
         ${cartelera.map(c=>`<div style="border-top:1px solid var(--qb-border);padding-top:6px">
           <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--qb-text)">

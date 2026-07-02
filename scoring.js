@@ -756,17 +756,23 @@ function getLogrosStats(name,events,days,rankNow){
   return{exactoAlguna,racha10,unlockedTiers,nextTier};
 }
 
-function getTodaysMatchIds(){
-  const now=new Date();
-  const y=now.getFullYear(),m=now.getMonth(),d=now.getDate();
-  const isToday=(ts)=>{
+// v1.8 (Fase 2 de Batallas) — Generalización de "los partidos de hoy" a
+// "los partidos de los próximos N días calendario, arrancando hoy". Con
+// days=1 (o sin argumento) el comportamiento es IDÉNTICO al de siempre:
+// mismo criterio (hora de inicio local del partido cae en la ventana), la
+// única diferencia es que la ventana ahora puede ser de más de un día.
+function getMatchIdsInWindow(days){
+  const n=Math.max(1,parseInt(days)||1);
+  const start=new Date();start.setHours(0,0,0,0); // medianoche local de hoy
+  const end=new Date(start);end.setDate(end.getDate()+n); // medianoche local, n días después (exclusivo)
+  const inWindow=(ts)=>{
     if(!ts)return false;
     const dt=new Date(ts);
-    return dt.getFullYear()===y&&dt.getMonth()===m&&dt.getDate()===d;
+    return dt>=start&&dt<end;
   };
-  const groupMids=MIDS.filter(mid=>isToday(S.matchTimes[mid]));
+  const groupMids=MIDS.filter(mid=>inWindow(S.matchTimes[mid]));
   const elimMids=[];
-  for(let pid=73;pid<=104;pid++){if(isToday(S.elimTimes[pid]))elimMids.push(pid);}
+  for(let pid=73;pid<=104;pid++){if(inWindow(S.elimTimes[pid]))elimMids.push(pid);}
   return{groupMids,elimMids};
 }
 
@@ -786,7 +792,11 @@ function calcBattlePts(name,groupMids,elimMids){
   return pts;
 }
 
-function areTodaysMatchesDone(groupMids,elimMids){
+// v1.8 — Renombrada de areTodaysMatchesDone: el cuerpo no cambió (nunca
+// dependió de "hoy" en sí, solo revisa si CADA mid/pid recibido ya tiene
+// marcador no-"live"), pero el nombre anterior quedaba engañoso ahora que
+// battle.groupMids/elimMids pueden abarcar varios días (Fase 2).
+function areBattleMatchesDone(groupMids,elimMids){
   const gDone=groupMids.every(mid=>{const s=sc(mid);return!!s&&!s.live;});
   const eDone=elimMids.every(pid=>{const s=S.elimScores[pid]||S.elimScores[String(pid)];return!!s&&!s.live;});
   return gDone&&eDone;
