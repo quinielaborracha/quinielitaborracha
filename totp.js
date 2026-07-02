@@ -125,12 +125,3 @@ async function verifyTOTPCode(secretBase32, userCode) {
   }
   return false;
 }
-
-// ── Construir la URL otpauth:// (informativa — se muestra como texto en
-// el setup para quien prefiera pegarla en vez de tipear el secreto a
-// mano; no se usa para generar ningún QR). ──
-function buildOtpauthUrl(secretBase32, accountLabel, issuer) {
-  const label = encodeURIComponent(`${issuer}:${accountLabel}`);
-  const params = `secret=${secretBase32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
-  return `otpauth://totp/${label}?${params}`;
-}

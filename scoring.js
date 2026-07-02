@@ -846,52 +846,6 @@ function calcTotalAtCut(name,phaseKey){
   return b+av+elim+prevLastBonos;
 }
 
-function calcClassifiedPts(name,phase){
-  const classifiedPts=getFaseValor(phase,'classifiedPts');
-  if(!classifiedPts)return 0;
-  if(!isFaseActiva(phase.key))return 0; // v1.2 — fase desactivada: no existe, no puntúa
-  if(!isFasePuntosActiva(phase.key))return 0; // v1.2 (fase 2) — puntos de esta fase apagados a propósito
-  let pts=0;
-  // Los clasificados REALES son los ganadores de los partidos de esta fase
-  const realWinners=new Set();
-  phase.mids.forEach(pid=>{
-    const sc=S.elimScores[pid];if(!sc)return;
-    const teams=getRealElimTeams(pid);if(!teams)return;
-    let winner;
-    if(sc.h>sc.a)winner=teams.h;
-    else if(sc.a>sc.h)winner=teams.a;
-    else winner=teams.h; // empate → local (penales)
-    if(winner)realWinners.add(n(winner));
-  });
-  // Los clasificados PREDICHOS por el participante = ganadores que predijo en esta fase
-  phase.mids.forEach(pid=>{
-    const predTeams=getElimTeams(name,pid);if(!predTeams)return;
-    const pred=elimPred(name,pid);if(!pred)return;
-    let predWinner;
-    if(pred.h>pred.a)predWinner=predTeams.h;
-    else if(pred.a>pred.h)predWinner=predTeams.a;
-    else predWinner=predTeams.h;
-    if(predWinner&&realWinners.has(n(predWinner)))pts+=classifiedPts;
-  });
-  return pts;
-}
-
-function calcLlavePts(name,phase){
-  const llavePts=getFaseValor(phase,'llavePts');
-  if(!llavePts)return 0;
-  if(!isFaseActiva(phase.key))return 0; // v1.2 — fase desactivada: no existe, no puntúa
-  if(!isFasePuntosActiva(phase.key))return 0; // v1.2 (fase 2) — puntos de esta fase apagados a propósito
-  let pts=0;
-  phase.mids.forEach(pid=>{
-    // Solo si el partido tiene resultado (la llave es real)
-    const hasSc=phase.elimPhase?!!S.elimScores[pid]:!!S.scores[pid];
-    if(!hasSc)return;
-    // Verificar si la llave predicha coincide con la real
-    if(isLlaveCorrecta(name,pid))pts+=llavePts;
-  });
-  return pts;
-}
-
 function closePhase(phaseKey){
   const phase=BONUS_PHASES.find(p=>p.key===phaseKey);
   if(!phase){toast("Fase no encontrada",true);return;}
@@ -1069,23 +1023,6 @@ function calcH2H(g, nameA, nameB) {
     else { aPts++; bPts++; }
   }
   return { aPts, bPts, aGd: aGf-bGf, bGd: bGf-aGf, aGf, bGf };
-}
-
-function getBest3rds(standings) {
-  const thirds = [];
-  Object.entries(standings).forEach(([g, arr]) => {
-    if (arr.length >= 3) {
-      thirds.push({ ...arr[2], group: g });
-    }
-  });
-  // Ordenar los 12 terceros: pts → gd → gf → fairplay
-  thirds.sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    if (b.gd !== a.gd) return b.gd - a.gd;
-    if (b.gf !== a.gf) return b.gf - a.gf;
-    return 0;
-  });
-  return thirds.slice(0, 8); // top 8
 }
 
 function annexCLookup(groups8) {

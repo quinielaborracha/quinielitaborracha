@@ -115,11 +115,6 @@ const COUNTRY_LIST = [
   ["Venezuela","ve"],["Vietnam","vn"],["Yemen","ye"],["Yibuti","dj"],["Zambia","zm"],["Zimbabue","zw"]
 ].map(([name,iso])=>({name,iso})).sort((a,b)=>a.name.localeCompare(b.name,'es'));
 
-function findCountryByName(name){
-  const n = norm(name);
-  return COUNTRY_LIST.find(c=>norm(c.name)===n);
-}
-
 // Ciudades sugeridas para un país: no existe (ni puede embeberse offline)
 // una base de datos mundial de ciudades, así que las sugerencias crecen
 // solas a partir de lo que otros participantes de ese mismo país ya

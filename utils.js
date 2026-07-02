@@ -70,15 +70,6 @@ function normalizeAbbr(a){
   return MAP[a]||a;
 }
 
-function espnToMid(ev){
-  const comp=ev.competitions?.[0]||{};const comps=comp.competitors||[];
-  if(comps.length<2)return null;
-  const home=comps.find(c=>c.homeAway==="home")||comps[0];
-  const away=comps.find(c=>c.homeAway==="away")||comps[1];
-  const ha=normalizeAbbr(home.team?.abbreviation||"");const aa=normalizeAbbr(away.team?.abbreviation||"");
-  return ESPN_ABBR_MAP[`${ha}|${aa}`]||ESPN_ABBR_MAP[`${aa}|${ha}`]||null;
-}
-
 function getFlag(g,name){
   // Direct lookup first
   if(ALL_FLAGS[name])return ALL_FLAGS[name];
