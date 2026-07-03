@@ -37,9 +37,7 @@ const html = `<!doctype html><html><body>
   <table><tbody id="rb"></tbody></table>
   <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
   <div id="t-battles" style="display:block">
-    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
-    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
-    <div id="battles-postulados"></div><div id="battles-body"></div>
+    <div id="battle-builder-body"></div><div id="battles-body"></div>
   </div>
 </body></html>`;
 
@@ -62,6 +60,15 @@ for (const file of FILES_IN_ORDER){
   catch(e){ console.log(`❌ ${file} lanzó un error al cargar: ${e.message}`); ok = false; }
 }
 
+// v2.7 — Puente aparte (nombre distinto de window.__test, que más abajo
+// lo pisa por completo con el bridge de registro.js) para llegar a
+// _battleBuilderPending (let de nivel superior en app-batallas.js, no
+// wrapeado en IIFE -- mismo scope global compartido que ya documenta
+// CLAUDE.md para todos los app-*.js entre sí).
+const battlesBridge = window.document.createElement("script");
+battlesBridge.textContent = `window.__testBattles = { _battleBuilderPending, ensureBattleBuilderState };`;
+window.document.body.appendChild(battlesBridge);
+
 let regCode = fs.readFileSync(path.join(__dirname, "registro.js"), "utf8");
 const closeIdx = regCode.lastIndexOf("})();");
 if (closeIdx === -1) throw new Error("No se encontró el cierre de la IIFE en registro.js");
@@ -81,6 +88,7 @@ catch(e){ console.log(`❌ registro.js (con bridge) lanzó un error al cargar: $
 
 if (!window.__test){ console.error("❌ El bridge no se ejecutó."); process.exit(1); }
 const T = window.__test;
+const TB = window.__testBattles;
 const W = window;
 
 // isAdmin() es una function-declaration real de app-admin-auth.js (lee
@@ -133,71 +141,84 @@ check("Tras el merge, Beto (no postulado) tiene quierePelear:false",
   T.DB.participants.find(p=>p.name==="Beto").quierePelear === false);
 
 /* ════════════════════════════════════════════════════════════════
-   PARTE 3 — Panel de Postulados (admin): filtra correctamente
+   PARTE 3 — Selector compartido de "Armar batalla" (v2.7 -- reemplazó
+   al viejo panel de Postulados + 2 <select> por ranura por un único
+   selector de click, con 4 duelos simultáneos en vez de 2)
    ════════════════════════════════════════════════════════════════ */
-console.log("\n── Panel de Postulados ──");
+console.log("\n── Selector compartido de Armar batalla ──");
 
 T.DB.participants.push({id:"pC", name:"Carla", city:"C", country:"P", quierePelear:true});
 W.rebuildDynamicData();
 W.renderBattlesPanel();
 
-let postuladosWrap = W.document.getElementById("battles-postulados").innerHTML;
-check("Ana aparece en Postulados (quierePelear:true, no está en ninguna batalla)",
-  postuladosWrap.includes("Ana"));
-check("Carla aparece en Postulados",
-  postuladosWrap.includes("Carla"));
-check("Beto NO aparece en Postulados (no se postuló)",
-  !postuladosWrap.includes("Beto"));
+let builderWrap = W.document.getElementById("battle-builder-body").innerHTML;
+check("Ana aparece en el selector (postulada, no está en ningún duelo)",
+  !!W.document.querySelector('.js-battle-pick[data-pname="Ana"]'));
+check("Carla aparece en el selector (postulada)",
+  !!W.document.querySelector('.js-battle-pick[data-pname="Carla"]'));
+check("Beto TAMBIÉN aparece (el selector nuevo muestra a TODOS, no solo a quien se postuló)",
+  !!W.document.querySelector('.js-battle-pick[data-pname="Beto"]'));
+check("Ana (postulada) se muestra con el emoji 🥊 en el texto del botón",
+  W.document.querySelector('.js-battle-pick[data-pname="Ana"]').textContent.includes("🥊"));
+check("Beto (no postulado) NO tiene el emoji 🥊 en su botón",
+  !W.document.querySelector('.js-battle-pick[data-pname="Beto"]').textContent.includes("🥊"));
 
-// Click en el chip de Ana: debe cargarla en la primera ranura libre
-// (ranura1-p1) y desaparecer de la lista de inmediato.
-const chipAna = W.document.querySelector('.js-postulado-chip[data-pname="Ana"]');
-check("El chip de Ana existe con el data-pname correcto (round-trip íntegro, mismo patrón que data-pname del Ranking)",
-  !!chipAna);
-W.asignarPostulado("Ana");
-check("Tras asignar a Ana, la ranura1-p1 quedó con su nombre",
-  W.document.getElementById("battle-slot1-p1").value === "Ana");
-postuladosWrap = W.document.getElementById("battles-postulados").innerHTML;
-check("Ana ya NO aparece en Postulados (quedó cargada en una ranura, aunque el duelo todavía no se inició)",
-  !postuladosWrap.includes(">🥊 Ana<"));
-check("Carla sigue apareciendo (no se tocó su ranura)",
-  postuladosWrap.includes("Carla"));
+// Click en Ana: debe cargarla en el próximo hueco libre (duelo1.p1) y
+// desaparecer del selector de inmediato.
+const pickAna = W.document.querySelector('.js-battle-pick[data-pname="Ana"]');
+check("El botón de Ana existe con el data-pname correcto (round-trip íntegro, mismo patrón que data-pname del Ranking)",
+  !!pickAna);
+W.asignarAlProximoHueco("Ana");
+check("Tras asignar a Ana, duelo1.p1 quedó con su nombre",
+  TB._battleBuilderPending[1].p1 === "Ana");
+check("Ana ya NO aparece en el selector (quedó cargada en un duelo, aunque todavía no se inició)",
+  !W.document.querySelector('.js-battle-pick[data-pname="Ana"]'));
+check("Carla sigue apareciendo en el selector (no se tocó su hueco)",
+  !!W.document.querySelector('.js-battle-pick[data-pname="Carla"]'));
 
-// Asignar a Carla: debe ir a la próxima ranura libre (ranura1-p2, ya que
-// ranura1-p1 está ocupada por Ana), no pisar nada.
-W.asignarPostulado("Carla");
-check("Carla quedó en ranura1-p2 (ranura1-p1 ya estaba ocupada por Ana)",
-  W.document.getElementById("battle-slot1-p2").value === "Carla");
+// Asignar a Carla: debe ir al próximo hueco libre (duelo1.p2, ya que
+// duelo1.p1 está ocupado por Ana), no pisar nada.
+W.asignarAlProximoHueco("Carla");
+check("Carla quedó en duelo1.p2 (duelo1.p1 ya estaba ocupado por Ana)",
+  TB._battleBuilderPending[1].p2 === "Carla");
 
-// Iniciar el duelo 1 de verdad: Ana vs Carla ya deben quedar excluidas de
-// Postulados por estar en una batalla ACTIVA (S.battles), no solo por
-// tener la ranura cargada.
+// Iniciar el duelo 1 de verdad: Ana y Carla ya deben quedar excluidas del
+// selector por estar en una batalla ACTIVA (S.battles), no solo por tener
+// el hueco cargado.
 T.S.matchTimes[1] = Date.now(); T.S.scores[1] = {h:1,a:0};
 W.startBattle(1);
 check("startBattle(1) efectivamente armó S.battles[1] con Ana/Carla",
   T.S.battles[1] && T.S.battles[1].p1==="Ana" && T.S.battles[1].p2==="Carla");
-postuladosWrap = W.document.getElementById("battles-postulados").innerHTML;
-check("Con la batalla 1 ya activa (Ana vs Carla), ninguna de las 2 aparece en Postulados",
-  !postuladosWrap.includes("Ana") && !postuladosWrap.includes("Carla"));
+check("startBattle() limpió el hueco de construcción del duelo 1 (queda libre para el próximo)",
+  TB._battleBuilderPending[1].p1===null && TB._battleBuilderPending[1].p2===null);
+check("Con la batalla 1 ya activa (Ana vs Carla), ninguna de las 2 aparece en el selector",
+  !W.document.querySelector('.js-battle-pick[data-pname="Ana"]') && !W.document.querySelector('.js-battle-pick[data-pname="Carla"]'));
 
-// Tercer postulado, para probar el mensaje de "las 2 ranuras están llenas"
-// (ranura1 llena por la batalla activa; ranura2 sigue libre).
+// Cuarto postulado, para probar el mensaje de "los 4 duelos están llenos".
 T.DB.participants.push({id:"pD", name:"Diego", city:"C", country:"P", quierePelear:true});
 W.rebuildDynamicData();
 W.renderBattlesPanel();
-W.asignarPostulado("Diego"); // debería ir a ranura2-p1 (única libre)
-check("Diego se cargó en ranura2-p1 (ranura1 está ocupada por la batalla activa)",
-  W.document.getElementById("battle-slot2-p1").value === "Diego");
+W.asignarAlProximoHueco("Diego"); // duelo1 está ACTIVO (se saltea) -> debería ir a duelo2.p1
+check("Diego se cargó en duelo2.p1 (duelo1 está ocupado por la batalla activa, se saltea)",
+  TB._battleBuilderPending[2].p1 === "Diego");
+
+// Se llenan a mano los huecos restantes (duelo2.p2, duelo3 y duelo4
+// completos) -- no repite la mecánica de click ya probada arriba, solo
+// necesita llegar al estado "sin ningún hueco libre" para probar el aviso.
+// Nombres inventados a propósito (Wilson/Xiomara/Yolanda/Zacarías, no
+// existen en DB.participants) -- solo hace falta llegar al estado "sin
+// huecos libres" en _battleBuilderPending, no repetir la mecánica de
+// click ya probada arriba. Evita a propósito reusar nombres que la
+// Parte 3b usa más abajo (Gonzalo), para no dejar un hueco "ocupado" por
+// un resto de este bloque que enmascare esa prueba.
+TB._battleBuilderPending[2].p2 = "Beto";
+TB._battleBuilderPending[3] = {p1:"Wilson",p2:"Xiomara",name:"",dias:1,partidos:""};
+TB._battleBuilderPending[4] = {p1:"Yolanda",p2:"Zacarias",name:"",dias:1,partidos:""};
 
 let avisoLlenoMostrado = false;
 W.toast = (m, isErr)=>{ if(isErr) avisoLlenoMostrado = true; };
-// "Beto" ya existe en DB.participants (no postulado, pero eso no importa
-// para el <select>: lista a TODOS los participantes) -- un nombre inventado
-// como "Elena" no tendría <option> y el navegador ignora el .value en
-// silencio, dejando la ranura vacía sin que esto se entere.
-W.document.getElementById("battle-slot2-p2").value = "Beto"; // simula la última ranura ocupada a mano
-W.asignarPostulado("Fede");
-check("Con las 4 ranuras ocupadas, asignarPostulado() avisa en vez de pisar algo",
+W.asignarAlProximoHueco("Irene");
+check("Con los 4 duelos completos, asignarAlProximoHueco() avisa en vez de pisar algo",
   avisoLlenoMostrado === true);
 
 /* ════════════════════════════════════════════════════════════════
@@ -215,21 +236,22 @@ console.log("\n── Repintado en vivo con la pestaña Batallas ya abierta (fix
 
 T.DB.participants.push({id:"pG", name:"Gonzalo", city:"C", country:"P", quierePelear:false});
 W.rebuildDynamicData();
-W.renderBattlesPanel(); // deja el panel pintado SIN Gonzalo (todavía no se postuló)
-check("Antes de postularse, Gonzalo NO aparece en Postulados",
-  !W.document.getElementById("battles-postulados").innerHTML.includes("Gonzalo"));
+W.renderBattlesPanel(); // deja el panel pintado; Gonzalo YA aparece en el selector (no postulado no lo excluye más), pero SIN el 🥊
+check("Antes de postularse, Gonzalo aparece en el selector pero SIN el emoji 🥊",
+  !!W.document.querySelector('.js-battle-pick[data-pname="Gonzalo"]') &&
+  !W.document.querySelector('.js-battle-pick[data-pname="Gonzalo"]').textContent.includes("🥊"));
 
 // Simula exactamente lo que pasa en producción: Gonzalo se postula desde
 // SU sesión, eso llega por Firestore a la sesión del admin, se mezcla en
 // DB.participants (_rgMergeKnownPrivadoFields, ya probado en la Parte 2) y
 // dispara notifyParticipantesChange() -- CON la pestaña Batallas ya
 // abierta (id="t-battles" en display:block en el fixture de este test) Y
-// SIN que nada llame a renderBattlesPanel()/renderPostuladosPanel() a mano.
+// SIN que nada llame a renderBattlesPanel()/renderBattleBuilder() a mano.
 T.DB.participants.find(p=>p.name==="Gonzalo").quierePelear = true;
 T.notifyParticipantesChange();
 
-check("Tras postularse (notifyParticipantesChange, sin re-render manual), Gonzalo YA aparece en Postulados",
-  W.document.getElementById("battles-postulados").innerHTML.includes("Gonzalo"));
+check("Tras postularse (notifyParticipantesChange, sin re-render manual), Gonzalo YA se muestra con el 🥊",
+  W.document.querySelector('.js-battle-pick[data-pname="Gonzalo"]')?.textContent.includes("🥊"));
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 4 — Botón "Quiero pelear 🥊" en el Dashboard del participante

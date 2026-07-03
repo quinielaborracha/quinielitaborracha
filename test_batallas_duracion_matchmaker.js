@@ -24,11 +24,9 @@ const html = `<!doctype html><html><body>
   <table><tbody id="rb"></tbody></table>
   <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
   <div id="t-battles" style="display:block">
-    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
-    <input id="battle-slot1-dias"><input id="battle-slot1-partidos"><input id="battle-slot1-name">
-    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
-    <input id="battle-slot2-dias"><input id="battle-slot2-partidos"><input id="battle-slot2-name">
-    <div id="battles-postulados"></div><div id="battles-body"></div>
+    <input id="battle-dias"><input id="battle-partidos">
+    <input id="battle-slot1-name"><input id="battle-slot2-name">
+    <div id="battle-builder-body"></div><div id="battles-body"></div>
   </div>
 </body></html>`;
 
@@ -54,9 +52,9 @@ for (const file of FILES_IN_ORDER){
 const bridge = window.document.createElement("script");
 bridge.textContent = `
   window.__test = {
-    DB, S, PID_TO_SLOT, ELIM_1_16_IDS,
+    DB, S, PID_TO_SLOT, ELIM_1_16_IDS, _battleBuilderPending,
     rebuildDynamicData, getMatchIdsInWindow, getMatchIdsByCount, areBattleMatchesDone,
-    calcularDiffPrediccion, sugerirRival, startBattle, asignarPostulado, getVentanaRanura,
+    calcularDiffPrediccion, sugerirRival, startBattle, ensureBattleBuilderState, getVentanaRanura,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -150,11 +148,10 @@ T.DB.participants = [
 T.DB.predictions = {p0:{}, p1:{}};
 T.rebuildDynamicData();
 
-W.document.getElementById("battle-slot1-p1").innerHTML = `<option value="Ana">Ana</option>`;
-W.document.getElementById("battle-slot1-p2").innerHTML = `<option value="Beto">Beto</option>`;
-W.document.getElementById("battle-slot1-p1").value = "Ana";
-W.document.getElementById("battle-slot1-p2").value = "Beto";
-W.document.getElementById("battle-slot1-dias").value = "3";
+T.ensureBattleBuilderState();
+T._battleBuilderPending[1].p1 = "Ana";
+T._battleBuilderPending[1].p2 = "Beto";
+W.document.getElementById("battle-dias").value = "3";
 
 T.startBattle(1);
 check("S.battles[1].ventanaModo quedó 'dias' y ventanaValor 3 (el valor del input, no el default)",
@@ -176,8 +173,13 @@ console.log("\n── Precedencia de 'Partidos de duración' sobre 'Días' ─�
 T.S.matchTimes[1] = Date.now() + 1*3600000;
 T.S.matchTimes[2] = Date.now() + 2*3600000;
 
-W.document.getElementById("battle-slot1-dias").value = "3"; // sigue cargado
-W.document.getElementById("battle-slot1-partidos").value = "2"; // ahora también
+// startBattle(1) de la Parte 2 limpió _battleBuilderPending[1] al iniciar
+// el duelo (ver nota en startBattle(), app-batallas.js) -- se vuelve a
+// cargar el mismo par para poder armar el duelo 1 de nuevo acá.
+T._battleBuilderPending[1].p1 = "Ana";
+T._battleBuilderPending[1].p2 = "Beto";
+W.document.getElementById("battle-dias").value = "3"; // sigue cargado
+W.document.getElementById("battle-partidos").value = "2"; // ahora también
 
 T.startBattle(1);
 check("Con ambos campos cargados, gana 'partidos': ventanaModo='partidos', ventanaValor=2",
@@ -185,13 +187,13 @@ check("Con ambos campos cargados, gana 'partidos': ventanaModo='partidos', venta
 check("La ventana real son los 2 próximos partidos (mid 1 y 2), NO los 3 días (que serían 1,2,3)",
   T.S.battles[1] && JSON.stringify(T.S.battles[1].groupMids) === JSON.stringify([1,2]));
 
-W.document.getElementById("battle-slot1-partidos").value = ""; // vacío -> vuelve a caer en "días"
+W.document.getElementById("battle-partidos").value = ""; // vacío -> vuelve a caer en "días"
 const ventanaSinPartidos = T.getVentanaRanura(1);
 check("Con 'partidos' vacío, getVentanaRanura() vuelve a usar 'días' (modo='dias')",
   ventanaSinPartidos.modo==="dias" && ventanaSinPartidos.valor===3);
 
 delete T.S.battles[1];
-W.document.getElementById("battle-slot1-dias").value = "1";
+W.document.getElementById("battle-dias").value = "1";
 
 delete T.S.battles[1];
 
@@ -259,42 +261,35 @@ T.DB.predictions.q2[20] = {h:1,a:0};
 T.DB.predictions.q3[20] = {h:0,a:1};
 T.rebuildDynamicData();
 
-W.document.getElementById("battle-slot2-p1").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
-W.document.getElementById("battle-slot2-p2").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
-W.document.getElementById("battle-slot2-p1").value = "";
-W.document.getElementById("battle-slot2-p2").value = "";
-W.document.getElementById("battle-slot2-dias").value = "1";
+T.ensureBattleBuilderState();
+T._battleBuilderPending[1] = {p1:null,p2:null,name:"",dias:1,partidos:""};
+T._battleBuilderPending[2] = {p1:null,p2:null,name:"",dias:1,partidos:""};
+W.document.getElementById("battle-dias").value = "1";
 T.S.matchTimes[20] = atDayOffset(0);
 
 T.sugerirRival(2);
-const sugeridoP1 = W.document.getElementById("battle-slot2-p1").value;
-const sugeridoP2 = W.document.getElementById("battle-slot2-p2").value;
+const sugeridoP1 = T._battleBuilderPending[2].p1;
+const sugeridoP2 = T._battleBuilderPending[2].p2;
 check("sugerirRival() cargó a Gonzalo en alguna de las 2 ranuras (es quien más discrepa)",
   sugeridoP1 === "Gonzalo" || sugeridoP2 === "Gonzalo");
 check("sugerirRival() NO sugirió el par Elena-Fede (diff 0 entre ellos, el peor par posible)",
   !((sugeridoP1==="Elena"&&sugeridoP2==="Fede") || (sugeridoP1==="Fede"&&sugeridoP2==="Elena")));
 
-// Si la ranura ya tiene algo cargado, no debe pisarlo.
+// Si el duelo ya tiene algo cargado, no debe pisarlo.
 let avisoRanuraLlena = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoRanuraLlena = true; };
-T.sugerirRival(2); // ya está llena por la sugerencia anterior
-check("Con la ranura ya ocupada, sugerirRival() avisa en vez de pisar la selección",
+T.sugerirRival(2); // ya está lleno por la sugerencia anterior
+check("Con el duelo ya ocupado, sugerirRival() avisa en vez de pisar la selección",
   avisoRanuraLlena === true);
 
-// Con menos de 2 postulados disponibles, también debe avisar (no reventar).
-// battle-slot1-p1/p2 no tienen <option>s todavía en este fixture -- sin
-// eso, asignar .value="Elena" fallaría en silencio (mismo bug que ya
-// atrapamos en test_postulacion_batallas.js con un nombre inventado).
-W.document.getElementById("battle-slot1-p1").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
-W.document.getElementById("battle-slot1-p2").innerHTML = `<option value=""></option><option value="Elena">Elena</option><option value="Fede">Fede</option><option value="Gonzalo">Gonzalo</option>`;
-W.document.getElementById("battle-slot2-p1").value = "";
-W.document.getElementById("battle-slot2-p2").value = "";
-W.document.getElementById("battle-slot1-p1").value = "Elena";
-W.document.getElementById("battle-slot1-p2").value = "Fede"; // ocupa a 2 de los 3 postulados en la OTRA ranura
+// Con menos de 2 disponibles, también debe avisar (no reventar).
+T._battleBuilderPending[2] = {p1:null,p2:null,name:"",dias:1,partidos:""};
+T._battleBuilderPending[1].p1 = "Elena";
+T._battleBuilderPending[1].p2 = "Fede"; // ocupa a 2 de los 3 disponibles en el OTRO duelo
 let avisoPocos = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoPocos = true; };
 T.sugerirRival(2); // solo queda Gonzalo disponible -> menos de 2
-check("Con menos de 2 postulados disponibles, sugerirRival() avisa sin romper",
+check("Con menos de 2 disponibles, sugerirRival() avisa sin romper",
   avisoPocos === true);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);

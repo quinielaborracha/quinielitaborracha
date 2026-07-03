@@ -22,11 +22,9 @@ const html = `<!doctype html><html><body>
   <table><tbody id="rb"></tbody></table>
   <div id="rbasic"></div><div id="radv"></div><div id="relim"></div><div id="rlast"></div>
   <div id="t-battles" style="display:block">
-    <select id="battle-slot1-p1"></select><select id="battle-slot1-p2"></select>
     <input id="battle-slot1-dias"><input id="battle-slot1-partidos"><input id="battle-slot1-name">
-    <select id="battle-slot2-p1"></select><select id="battle-slot2-p2"></select>
     <input id="battle-slot2-dias"><input id="battle-slot2-partidos"><input id="battle-slot2-name">
-    <div id="battles-postulados"></div><div id="battles-body"></div>
+    <div id="battle-builder-body"></div><div id="battles-body"></div>
     <div id="battles-ligas-wrap"></div>
   </div>
 </body></html>`;
@@ -53,9 +51,9 @@ for (const file of FILES_IN_ORDER){
 const bridge = window.document.createElement("script");
 bridge.textContent = `
   window.__test = {
-    DB, S, rebuildDynamicData,
+    DB, S, rebuildDynamicData, _battleBuilderPending, ensureBattleBuilderState,
     computeBattleRecord, getLigaStandings, getLigaGroups, getLigaDe, LIGAS,
-    startBattle, sugerirRival, asignarPostulado,
+    startBattle, sugerirRival,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -161,10 +159,9 @@ console.log("\n── Restricción de Liga en startBattle() ──");
 check("getLigaDe() de un ganador (Champions) da 'champions'", T.getLigaDe("G1") === "champions");
 check("getLigaDe() de alguien que nunca jugó da 'premier'", T.getLigaDe("Nuevo1") === "premier");
 
-W.document.getElementById("battle-slot1-p1").innerHTML = T.DB.participants.map(p=>`<option value="${p.name}">${p.name}</option>`).join("");
-W.document.getElementById("battle-slot1-p2").innerHTML = W.document.getElementById("battle-slot1-p1").innerHTML;
-W.document.getElementById("battle-slot1-p1").value = "G1"; // Champions
-W.document.getElementById("battle-slot1-p2").value = "Nuevo1"; // Premier
+T.ensureBattleBuilderState();
+T._battleBuilderPending[1].p1 = "G1"; // Champions
+T._battleBuilderPending[1].p2 = "Nuevo1"; // Premier
 
 let avisoLigaDistinta = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoLigaDistinta = true; };
@@ -173,8 +170,8 @@ check("startBattle() rechaza el duelo entre ligas distintas (Champions vs Premie
 check("No se creó ninguna batalla en la ranura 1", !T.S.battles[1]);
 
 // Ahora 2 participantes de la MISMA liga (Premier, los 2 nuevos) sí deben poder pelear.
-W.document.getElementById("battle-slot1-p1").value = "Nuevo1";
-W.document.getElementById("battle-slot1-p2").value = "Nuevo2";
+T._battleBuilderPending[1].p1 = "Nuevo1";
+T._battleBuilderPending[1].p2 = "Nuevo2";
 // Ancla a "hoy al mediodía" en vez de "ahora + 1h": getMatchIdsInWindow(1)
 // solo mira el DÍA calendario (medianoche a medianoche), no si el partido
 // es futuro o pasado -- pero "ahora + 1h" cruza a mañana si el test corre

@@ -133,33 +133,37 @@ function getLigaDe(name){
   return null;
 }
 
-// Días configurados para la ranura (input numérico "battle-slotN-dias" en
-// index.html) — número libre, sin límite fijo. Sin valor cargado o valor
-// inválido, cae a 1 día (mismo comportamiento de siempre: "los partidos
-// de hoy").
+// v2.7 — "Días de duración"/"Partidos de duración" pasaron de ser 2
+// campos POR duelo (8 en total, con 4 duelos) a UN SOLO par compartido
+// (2 en total), debajo del selector -- se aplican al PRÓXIMO duelo que
+// se inicie, sea cual sea. El parámetro "slot" se mantiene en la firma
+// de estas 2 funciones (y de getVentanaRanura()) por compatibilidad con
+// todos los call-sites existentes, pero ya no se usa para nada: las 3
+// funciones siempre leen el mismo par de inputs globales
+// ("battle-dias"/"battle-partidos" en index.html/renderBattleBuilder()).
 function getDiasRanura(slot){
-  const el=document.getElementById(`battle-slot${slot}-dias`);
+  const el=document.getElementById("battle-dias");
   const v=parseInt(el?.value);
   return (v>0)?v:1;
 }
 
-// v1.9 — "Partidos de duración" (input "battle-slotN-partidos" en
-// index.html), alternativa a "Días de duración": si tiene un número
-// válido (>0) cargado, la ventana se arma por CANTIDAD de partidos
-// (getMatchIdsByCount) en vez de por días calendario (getMatchIdsInWindow)
-// -- gana ella sobre "días" cuando ambas están cargadas, porque es el
-// campo que el admin llenó más específicamente a propósito. Vacía (o en
-// 0), se ignora y se usa "días" como siempre.
+// v1.9 — "Partidos de duración", alternativa a "Días de duración": si
+// tiene un número válido (>0) cargado, la ventana se arma por CANTIDAD de
+// partidos (getMatchIdsByCount) en vez de por días calendario
+// (getMatchIdsInWindow) -- gana ella sobre "días" cuando ambas están
+// cargadas, porque es el campo que el admin llenó más específicamente a
+// propósito. Vacía (o en 0), se ignora y se usa "días" como siempre.
 function getPartidosRanura(slot){
-  const el=document.getElementById(`battle-slot${slot}-partidos`);
+  const el=document.getElementById("battle-partidos");
   const v=parseInt(el?.value);
   return (v>0)?v:null;
 }
 
-// Ventana de partidos (grupos+elim) que le toca a esta ranura, según cuál
-// de los 2 campos de duración esté cargado. Única función que arma la
-// ventana para toda la ranura -- startBattle() y sugerirRival() la usan
-// para no poder desincronizarse entre sí sobre qué ventana le toca a cuál.
+// Ventana de partidos (grupos+elim) que le toca al PRÓXIMO duelo a
+// iniciar, según cuál de los 2 campos de duración compartidos esté
+// cargado. Única función que arma la ventana -- startBattle() y
+// sugerirRival() la usan para no poder desincronizarse entre sí sobre
+// qué ventana aplica.
 function getVentanaRanura(slot){
   const partidos=getPartidosRanura(slot);
   if(partidos!==null)return{modo:"partidos",valor:partidos,...getMatchIdsByCount(partidos)};
@@ -173,9 +177,9 @@ function descripVentana(modo,valor){
 
 function startBattle(slot){
   if(!isAdmin())return;
-  ensureBattlesState();
-  const p1=document.getElementById(`battle-slot${slot}-p1`).value;
-  const p2=document.getElementById(`battle-slot${slot}-p2`).value;
+  ensureBattlesState();ensureBattleBuilderState();
+  const pend=_battleBuilderPending[slot];
+  const p1=pend.p1,p2=pend.p2;
   if(!p1||!p2||p1===p2){toast("Elige 2 participantes distintos",true);return;}
   // Fase 3 — restricción de Liga: en 1v1 solo se pueden enfrentar
   // participantes de la MISMA liga (el Royal Rumble de la Fase 4 no tiene
@@ -195,7 +199,10 @@ function startBattle(slot){
   let name=(nameInput?.value||"").trim();
   if(!name)name=BATTLE_AUTO_NAMES[Math.floor(Math.random()*BATTLE_AUTO_NAMES.length)];
   S.battles[slot]={p1,p2,name,ventanaModo:modo,ventanaValor:valor,groupMids,elimMids,startedAt:Date.now(),closed:false};
-  save();renderBattlesPanel();
+  // Duelo iniciado: se libera el hueco en construcción para poder armar
+  // otro ahí apenas se cierre este (S.battles[slot] manda mientras tanto).
+  _battleBuilderPending[slot]={p1:null,p2:null,name:""};
+  save();renderBattlesPanel();renderBattleBuilder();
   toast(`⚔️ Batalla ${slot} iniciada: ${p1} vs ${p2} (${descripVentana(modo,valor)})`);
 }
 
@@ -216,7 +223,7 @@ function resetBattle(slot){
     });
   }
   delete S.battles[slot];
-  save();renderBattlesPanel();
+  save();renderBattlesPanel();renderBattleBuilder();
   toast(`Batalla ${slot} terminada y guardada`);
 }
 
@@ -368,86 +375,174 @@ function renderRumbleHistory(){
   }).join("");
 }
 
-// v1.7.2 — BUG REPORTADO: alguien se postulaba y nunca aparecía en
-// Postulados, incluso después de una recarga completa. Causa: al recargar
-// (F5), el navegador restaura solo los <select> de "Armar batalla" con lo
-// último que tenían seleccionado ANTES del reload (comportamiento nativo
-// del navegador, no algo que este código dispare) -- y como
-// getPostuladosDisponibles() trata "ya cargado en un <select>" como
-// "ocupado" (a propósito, para que desaparezca apenas se lo asigna), un
-// nombre restaurado por el navegador quedaba tapando a un postulado real
-// sin que el admin hubiera tocado nada. Fix real: `autocomplete="off"` en
-// los 4 <select> de index.html, para que el navegador no los restaure.
-function populateBattleSelects(){
-  if(!isAdmin())return;
-  const names=PL.slice().sort();
-  [1,2].forEach(slot=>{
-    [1,2].forEach(p=>{
-      const sel=document.getElementById(`battle-slot${slot}-p${p}`);
-      if(!sel)return;
-      const current=sel.value;
-      sel.innerHTML=`<option value="">— elegir —</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
-      if(names.includes(current))sel.value=current;
-    });
+// v2.7 — REDISEÑO: "Armar batalla" pasó de 2 a 4 duelos simultáneos, y el
+// viejo par de <select> por ranura + panel de "Postulados" aparte se
+// unificaron en UN SOLO selector compartido (renderBattleBuilder(), más
+// abajo): click en un nombre lo asigna al próximo duelo con hueco libre.
+// BATTLE_SLOTS es la única fuente de verdad de "cuántos duelos hay" --
+// para agregar/quitar duelos simultáneos alcanza con cambiar este array,
+// nada más depende de un número hardcodeado de ranuras.
+const BATTLE_SLOTS=[1,2,3,4];
+
+// v2.7 — Estado transitorio de "armado" de cada duelo: quién quedó
+// asignado a cada ranura ANTES de apretar "Iniciar duelo" (que recién
+// ahí lo convierte en S.battles[slot], persistido). Vive solo en memoria
+// (como _editingHistIdx) -- si se recarga la página se pierde, a
+// propósito: es más seguro que restaurar una selección vieja del
+// navegador (mismo motivo por el que los <select> viejos usaban
+// autocomplete="off", ver nota histórica más abajo).
+let _battleBuilderPending={};
+// v2.7 — "Días de duración"/"Partidos de duración" pasaron a ser UN SOLO
+// par de campos compartido (debajo del selector), no uno por duelo -- se
+// aplican al próximo duelo que se inicie, sea cual sea. Separado de
+// _battleBuilderPending (que es por-duelo: quiénes pelean + nombre
+// opcional) porque estos 2 campos ya NO son por-duelo.
+let _battleBuilderShared={dias:1,partidos:""};
+function ensureBattleBuilderState(){
+  BATTLE_SLOTS.forEach(slot=>{
+    if(!_battleBuilderPending[slot])_battleBuilderPending[slot]={p1:null,p2:null,name:""};
   });
 }
 
-// v1.7 — POSTULADOS (Fase 1 del roadmap de Batallas): quién marcó "Quiero
-// pelear 🥊" en Mi Quiniela (participantes.js::quierePelear, persiste en
-// registro_privado) y todavía está disponible -- ni ya emparejado en una
-// batalla activa, ni ya cargado (sin confirmar) en alguno de los 4
-// <select> de "Armar batalla". Esto último es a propósito: apenas el
-// admin clickea un postulado y lo carga en una ranura, desaparece de la
-// lista de inmediato (no recién al apretar "Iniciar duelo"), para que no
-// lo pueda cargar dos veces por error en el mismo duelo.
-function getPostuladosDisponibles(){
-  ensureBattlesState();
+// Actualiza el nombre (opcional) de un duelo en construcción sin volver a
+// pintar todo el panel -- mismo criterio "no re-renderizar en cada
+// tecla" que ya se aplicó al parpadeo de Mi Quiniela: acá no hace falta
+// ni ese cuidado extra (nada escucha este campo en vivo), pero tampoco
+// hay motivo para re-pintar por cada tecla.
+function bbUpdateField(slot,field,val){
+  ensureBattleBuilderState();
+  _battleBuilderPending[slot][field]=val;
+}
+
+// Ídem, para el par compartido de "Días"/"Partidos de duración".
+function bbUpdateShared(field,val){
+  _battleBuilderShared[field]=val;
+}
+
+// Quita a quien esté en la ranura p1/p2 de un duelo en construcción
+// (antes de "Iniciar duelo") y lo devuelve a la lista de disponibles.
+function bbQuitar(slot,pnum){
+  if(!isAdmin())return;
+  ensureBattleBuilderState();
+  _battleBuilderPending[slot][pnum===1?"p1":"p2"]=null;
+  renderBattleBuilder();
+}
+
+// v1.7.2 (histórico) — BUG REPORTADO: alguien se postulaba y nunca
+// aparecía en Postulados, incluso después de una recarga completa.
+// Causa entonces: el navegador restauraba los <select> viejos con lo
+// último tipeado antes del reload. Ya no aplica -- el selector nuevo no
+// usa <select> (son botones de click), así que no hay estado de
+// formulario que el navegador pueda "recordar" por su cuenta.
+
+// v2.7 — Generaliza getPostuladosDisponibles(): antes solo listaba a
+// quienes se auto-postularon (quierePelear); ahora el selector compartido
+// muestra a TODOS los participantes disponibles (ni ya en una batalla
+// ACTIVA, ni ya asignados a algún duelo en construcción), con los
+// postulados destacados arriba de la lista y con el emoji 🥊 -- así el
+// admin sigue viendo de un vistazo quién se anotó, sin perder la
+// posibilidad de armar un duelo con alguien que no se postuló.
+function getDisponiblesParaBatalla(){
+  ensureBattlesState();ensureBattleBuilderState();
   const ocupados=new Set();
-  [1,2].forEach(slot=>{
+  BATTLE_SLOTS.forEach(slot=>{
     const b=S.battles[slot];
-    if(b){ ocupados.add(b.p1); ocupados.add(b.p2); }
-    [1,2].forEach(p=>{
-      const sel=document.getElementById(`battle-slot${slot}-p${p}`);
-      if(sel && sel.value) ocupados.add(sel.value);
-    });
+    if(b){ocupados.add(b.p1);ocupados.add(b.p2);}
+    const pend=_battleBuilderPending[slot];
+    if(pend.p1)ocupados.add(pend.p1);
+    if(pend.p2)ocupados.add(pend.p2);
   });
   return (DB.participants||[])
-    .filter(p=>p.quierePelear && !ocupados.has(p.name))
-    .map(p=>p.name)
-    .sort();
+    .filter(p=>!ocupados.has(p.name))
+    .map(p=>({name:p.name,postulado:!!p.quierePelear}))
+    .sort((a,b)=>{
+      if(a.postulado!==b.postulado)return a.postulado?-1:1;
+      return a.name.localeCompare(b.name,"es");
+    });
 }
 
-function renderPostuladosPanel(){
-  const wrap=document.getElementById("battles-postulados");
-  if(!wrap || !isAdmin())return;
-  const disponibles=getPostuladosDisponibles();
-  if(!disponibles.length){
-    wrap.innerHTML=`<div style="font-size:10px;color:var(--qb-muted);margin-top:.5rem">🦗 Se escuchan los grillos. Nadie se anotó para pelear todavía.</div>`;
-    return;
-  }
-  wrap.innerHTML=`
-    <div style="font-size:10px;color:var(--qb-muted);margin:.5rem 0 .25rem">🥊 Postulados — click para cargar en la próxima ranura libre</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px">
-      ${disponibles.map(name=>`<button class="btn btn-sm js-postulado-chip" data-pname="${esc(name)}">🥊 ${esc(name)}</button>`).join("")}
+// v2.7 — Pinta TODO el panel "Armar batalla": el selector compartido a la
+// izquierda y las 4 filas de duelo (construcción o activo) a la derecha.
+// Reemplaza a populateBattleSelects()+renderPostuladosPanel().
+function renderBattleBuilder(){
+  const wrap=document.getElementById("battle-builder-body");
+  if(!wrap||!isAdmin())return;
+  ensureBattlesState();ensureBattleBuilderState();
+  const disponibles=getDisponiblesParaBatalla();
+
+  // v2.7 — "Días de duración"/"Partidos de duración" son UN SOLO par
+  // compartido debajo del selector (antes: uno por duelo, 8 campos en
+  // total con 4 duelos) -- se aplican al PRÓXIMO duelo que se inicie.
+  // Los postulados (🥊) ya se destacan arriba de todo en el selector
+  // mismo (prioridad + emoji), no hace falta una lista aparte.
+  const selectorHtml=`<div>
+      <div style="font-size:10px;color:var(--qb-muted);margin-bottom:.375rem">Click en un nombre para asignarlo al próximo duelo con hueco libre${disponibles.some(d=>d.postulado)?" (🥊 = se postuló)":""}</div>
+      <div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-right:2px;margin-bottom:.625rem">
+        ${disponibles.length
+          ?disponibles.map(d=>`<button class="btn btn-sm js-battle-pick" data-pname="${esc(d.name)}" style="text-align:left;justify-content:flex-start">${d.postulado?"🥊 ":""}${esc(d.name)}</button>`).join("")
+          :`<div style="font-size:10px;color:var(--qb-muted)">🦗 Nadie disponible (todos ya están en un duelo).</div>`}
+      </div>
+      <div style="border-top:1px solid var(--qb-border2);padding-top:.5rem">
+        <div style="font-size:9px;color:var(--qb-muted);margin-bottom:4px">Duración del próximo duelo a iniciar:</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:4px">
+            <label for="battle-dias" style="font-size:9px;color:var(--qb-muted);white-space:nowrap">Días</label>
+            <input type="number" id="battle-dias" oninput="bbUpdateShared('dias',this.value)" min="1" step="1" value="${_battleBuilderShared.dias||1}" style="width:44px;font-size:11px;padding:4px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text)">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <label for="battle-partidos" style="font-size:9px;color:var(--qb-muted);white-space:nowrap">Partidos</label>
+            <input type="number" id="battle-partidos" oninput="bbUpdateShared('partidos',this.value)" min="1" step="1" placeholder="—" value="${_battleBuilderShared.partidos||""}" style="width:44px;font-size:11px;padding:4px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text)">
+          </div>
+        </div>
+      </div>
     </div>`;
+
+  const rowsHtml=BATTLE_SLOTS.map(slot=>{
+    const active=S.battles[slot];
+    if(active){
+      return`<div style="border:1px solid var(--qb-border2);border-radius:8px;padding:8px;background:var(--qb-surface2)">
+        <div style="font-size:10px;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Duelo ${slot} · activo</div>
+        <div style="font-size:12px;font-weight:700;color:var(--qb-text);margin-bottom:6px">${esc(active.p1)} <span style="color:var(--qb-red)">vs</span> ${esc(active.p2)}</div>
+        <button class="btn btn-sm" style="width:100%" onclick="resetBattle(${slot})">↻ Terminar y guardar duelo ${slot}</button>
+      </div>`;
+    }
+    const pend=_battleBuilderPending[slot];
+    const chip=(name,pnum)=>name
+      ?`<button class="btn btn-sm" style="flex:1;min-width:0" onclick="bbQuitar(${slot},${pnum})" title="Quitar">${esc(sn(name))} ✕</button>`
+      :`<div style="flex:1;font-size:10px;color:var(--qb-muted);border:1px dashed var(--qb-border2);border-radius:6px;padding:6px;text-align:center">— vacío —</div>`;
+    const listo=pend.p1&&pend.p2;
+    return`<div style="border:1px solid var(--qb-border2);border-radius:8px;padding:8px">
+        <div style="font-size:10px;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Duelo ${slot}</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px">${chip(pend.p1,1)}${chip(pend.p2,2)}</div>
+        <input type="text" id="battle-slot${slot}-name" oninput="bbUpdateField(${slot},'name',this.value)" value="${esc(pend.name||"")}" placeholder="Nombre (opcional)" style="width:100%;font-size:11px;padding:5px;border-radius:6px;border:1px solid var(--qb-border2);background:var(--qb-surface2);color:var(--qb-text);margin-bottom:6px;box-sizing:border-box">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="flex:1" onclick="sugerirRival(${slot})" ${listo?"disabled":""}>🎯 Sugerir</button>
+          <button class="btn btn-sm btn-blue" style="flex:1" onclick="startBattle(${slot})" ${listo?"":"disabled"}>⚔️ Iniciar duelo ${slot}</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  wrap.innerHTML=`<div style="display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:12px">
+    ${selectorHtml}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${rowsHtml}</div>
+  </div>`;
 }
 
-// Carga a `name` en la primera ranura libre (en orden ranura1-p1,
-// ranura1-p2, ranura2-p1, ranura2-p2), sin repetirlo dentro del mismo
-// duelo. Si las 2 ranuras ya están llenas, avisa en vez de pisar algo.
-function asignarPostulado(name){
+// Asigna `name` al próximo duelo con un hueco libre (en orden: duelo1-p1,
+// duelo1-p2, duelo2-p1, duelo2-p2, ... hasta BATTLE_SLOTS), sin repetirlo
+// dentro del mismo duelo. Salta duelos ya activos (S.battles[slot]) -- esos
+// no se pueden tocar hasta terminarlos. Si los 4 ya están completos/activos,
+// avisa en vez de pisar algo.
+function asignarAlProximoHueco(name){
   if(!isAdmin())return;
-  const orden=[[1,1,2],[1,2,1],[2,1,2],[2,2,1]];
-  for(const [slot,pnum,otherPnum] of orden){
-    const sel=document.getElementById(`battle-slot${slot}-p${pnum}`);
-    const otherSel=document.getElementById(`battle-slot${slot}-p${otherPnum}`);
-    if(sel && !sel.value && !(otherSel && otherSel.value===name)){
-      sel.value=name;
-      renderPostuladosPanel();
-      return;
-    }
+  ensureBattlesState();ensureBattleBuilderState();
+  for(const slot of BATTLE_SLOTS){
+    if(S.battles[slot])continue;
+    const pend=_battleBuilderPending[slot];
+    if(!pend.p1){pend.p1=name;renderBattleBuilder();return;}
+    if(!pend.p2&&pend.p1!==name){pend.p2=name;renderBattleBuilder();return;}
   }
-  toast("Las 2 ranuras ya están llenas",true);
+  toast("Los 4 duelos ya están completos o activos",true);
 }
 
 // v1.8 (Fase 2) — "Sugerime un rival": cuánto discrepan las predicciones
@@ -484,19 +579,18 @@ function calcularDiffPrediccion(nameA,nameB,groupMids,elimMids){
   return diff;
 }
 
-// Sobre los postulados DISPONIBLES para esta ranura (misma lista que ve
-// el panel de Postulados), busca el par con mayor diferencia de
-// predicciones para la ventana de N días ya configurada en esta ranura, y
-// lo carga directo en los 2 <select>. Requiere la ranura vacía primero
-// (no pisa una selección ya hecha a mano).
+// v2.7 — Ahora busca entre TODOS los disponibles (getDisponiblesParaBatalla,
+// ya no solo postulados -- ver nota junto a esa función), el par con mayor
+// diferencia de predicciones para la ventana de N días de este duelo, y lo
+// carga directo en el duelo en construcción. Requiere el duelo vacío
+// primero (no pisa una selección ya hecha a mano).
 function sugerirRival(slot){
   if(!isAdmin())return;
-  const p1Sel=document.getElementById(`battle-slot${slot}-p1`);
-  const p2Sel=document.getElementById(`battle-slot${slot}-p2`);
-  if(!p1Sel||!p2Sel)return;
-  if(p1Sel.value||p2Sel.value){toast("Vaciá esta ranura primero para poder sugerir un rival",true);return;}
-  const candidatos=getPostuladosDisponibles();
-  if(candidatos.length<2){toast("Hacen falta al menos 2 postulados disponibles para sugerir un duelo",true);return;}
+  ensureBattleBuilderState();
+  const pend=_battleBuilderPending[slot];
+  if(pend.p1||pend.p2){toast("Vaciá este duelo primero para poder sugerir un rival",true);return;}
+  const candidatos=getDisponiblesParaBatalla().map(d=>d.name);
+  if(candidatos.length<2){toast("Hacen falta al menos 2 participantes disponibles para sugerir un duelo",true);return;}
   const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
   let mejor=null,mejorDiff=-1;
   for(let i=0;i<candidatos.length;i++){
@@ -508,19 +602,18 @@ function sugerirRival(slot){
       if(d>mejorDiff){mejorDiff=d;mejor=[candidatos[i],candidatos[j]];}
     }
   }
-  if(!mejor){toast("No se pudo sugerir ningún par (¿todos los postulados están en ligas distintas?)",true);return;}
-  p1Sel.value=mejor[0];
-  p2Sel.value=mejor[1];
-  renderPostuladosPanel();
+  if(!mejor){toast("No se pudo sugerir ningún par (¿todos los disponibles están en ligas distintas?)",true);return;}
+  pend.p1=mejor[0];pend.p2=mejor[1];
+  renderBattleBuilder();
   toast(`🎯 Sugerido: ${mejor[0]} vs ${mejor[1]} (diferencia ${mejorDiff.toFixed(1)} en ${groupMids.length+elimMids.length} partido(s), ventana de ${descripVentana(modo,valor)})`);
 }
 
 // Delegado en document (mismo patrón que .js-edit-participant en
 // app-bracket-view.js): un solo listener, siempre vivo, no depende de que
-// #battles-postulados ya exista cuando este script corre.
+// #battle-builder-body ya exista cuando este script corre.
 document.addEventListener("click", (ev)=>{
-  const chip=ev.target.closest(".js-postulado-chip");
-  if(chip){ asignarPostulado(chip.dataset.pname); }
+  const pick=ev.target.closest(".js-battle-pick");
+  if(pick){ asignarAlProximoHueco(pick.dataset.pname); }
 });
 
 function renderBattleCountdown(groupMids,elimMids,big){
@@ -685,11 +778,10 @@ function renderLigasPanel(){
 
 function renderBattlesPanel(){
   ensureBattlesState();
-  populateBattleSelects();
-  renderPostuladosPanel();
+  renderBattleBuilder();
   const body=document.getElementById("battles-body");
   if(!body)return;
-  const slots=[1,2].filter(s=>S.battles[s]);
+  const slots=BATTLE_SLOTS.filter(s=>S.battles[s]);
   if(!slots.length){
     body.innerHTML=`<div style="text-align:center;padding:2rem 1rem;color:var(--qb-muted);font-size:12px">
       <div style="font-size:32px;margin-bottom:.5rem">😌</div>
@@ -806,7 +898,7 @@ function renderBattlesBanner(){
   ensureBattlesState();
   const el=document.getElementById("battles-banner");
   if(!el)return;
-  const slots=[1,2].filter(s=>S.battles[s]);
+  const slots=BATTLE_SLOTS.filter(s=>S.battles[s]);
   if(!slots.length){el.innerHTML="";return;}
   el.innerHTML=`<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--qb-border)">
     <div style="font-family:var(--ff-display);font-size:11px;font-weight:700;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem;cursor:pointer;text-align:center" onclick="tab('battles')">⚔️ Batalla del día — ver más</div>
