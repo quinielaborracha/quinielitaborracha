@@ -213,7 +213,7 @@ function resolveKoMatch(koKey, slot, preds, firstKo, fallbackA, fallbackB){
   if(idxThis === idxFirst){
     const real = realTeamsForSlot(slot);
     if(!real) return { a:null, b:null, winner:null }; // admin todavía no cargó los equipos reales
-    return { a:real.a, b:real.b, winner: koWinner(pred, real.a, real.b) };
+    return { a:real.a, b:real.b, winner: koWinner(pred, real.a, real.b, true) };
   }
   if(pred && pred._migrated) return { a:pred._a, b:pred._b, winner:koWinner(pred, pred._a, pred._b) };
   const a=fallbackA, b=fallbackB;
@@ -543,16 +543,31 @@ function computeQualifiers(preds){
   return { standings, winners, runnersUp, thirds, rankedThirds, qualThirds, seeded };
 }
 
-function koWinner(pred, teamA, teamB){
-  if(!pred || pred._a!==teamA || pred._b!==teamB) return null; // sin datos o "huella" obsoleta
+// v2.8.2 — 'trustSlot' (solo lo usa resolveKoMatch para el cruce que
+// arranca de equipos REALES, ver más abajo): ese slot corresponde SIEMPRE
+// al mismo partido real (mismo pid), así que un cambio de teamA/teamB ahí
+// no es "otro partido" -- es la MISMA pregunta resolviéndose (el admin
+// cargó un equipo provisorio, o ESPN todavía no confirmó ambos lados) o
+// simplemente refinándose. Antes esto invalidaba la predicción ya
+// guardada (marcador puesto ANTES de conocerse el rival/ganador real de
+// una fase anterior) apenas cambiaba el nombre del equipo -- justo el
+// caso que el admin quiere habilitar: dejar cargar el marcador de un
+// cruce de eliminatoria sin esperar a que terminen todas las rondas
+// previas. Para cualquier otro cruce (encadenado desde la PROPIA
+// predicción del participante en la ronda anterior) la huella _a/_b
+// sigue siendo obligatoria: ahí sí puede tratarse de un partido distinto
+// de verdad (la persona volvió atrás y cambió a quién hizo avanzar).
+function koWinner(pred, teamA, teamB, trustSlot){
+  if(!pred) return null;
+  if(!trustSlot && (pred._a!==teamA || pred._b!==teamB)) return null; // sin datos o "huella" obsoleta
   if(!Number.isInteger(pred.h) || !Number.isInteger(pred.a) || pred.h<0 || pred.a<0) return null;
   if(pred.h > pred.a) return teamA;
   if(pred.a > pred.h) return teamB;
   if(pred.pick===teamA || pred.pick===teamB) return pred.pick;
   return null; // empate sin definir quién avanza todavía
 }
-function koLoser(pred, teamA, teamB){
-  const w = koWinner(pred, teamA, teamB);
+function koLoser(pred, teamA, teamB, trustSlot){
+  const w = koWinner(pred, teamA, teamB, trustSlot);
   if(!w) return null;
   return w===teamA ? teamB : teamA;
 }
@@ -639,8 +654,8 @@ function computeBracket(preds){
     const r = resolveKoMatch('sf', slot, preds, firstKo, m1.winner, m2.winner);
     sf.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
   }
-  const thirdFallbackA = (sf[0].a && sf[0].b) ? koLoser(preds[sf[0].slot], sf[0].a, sf[0].b) : null;
-  const thirdFallbackB = (sf[1].a && sf[1].b) ? koLoser(preds[sf[1].slot], sf[1].a, sf[1].b) : null;
+  const thirdFallbackA = (sf[0].a && sf[0].b) ? koLoser(preds[sf[0].slot], sf[0].a, sf[0].b, firstKo==='sf') : null;
+  const thirdFallbackB = (sf[1].a && sf[1].b) ? koLoser(preds[sf[1].slot], sf[1].a, sf[1].b, firstKo==='sf') : null;
   const thirdR = resolveKoMatch('third', 'third', preds, firstKo, thirdFallbackA, thirdFallbackB);
   const third = { slot:'third', a:thirdR.a, b:thirdR.b, winner:thirdR.winner };
   const finalR = resolveKoMatch('final', 'final', preds, firstKo, sf[0].winner, sf[1].winner);
@@ -1905,7 +1920,7 @@ function renderLogin(c){
    RENDER — bracket dinámico, preguntas especiales y estado de avance
    ════════════════════════════════════════ */
 
-function renderKoRow(slot, teamA, teamB, preds, readOnly){
+function renderKoRow(slot, teamA, teamB, preds, readOnly, trustSlot){
   if(!teamA || !teamB){
     return `<div class="match-row muted" style="opacity:.55">
         <div class="team"><span class="nm">${teamA?esc(teamA):'Pendiente'}</span></div>
@@ -1914,7 +1929,9 @@ function renderKoRow(slot, teamA, teamB, preds, readOnly){
       </div>`;
   }
   const raw = preds[slot];
-  const v = (raw && raw._a===teamA && raw._b===teamB) ? raw : null;
+  // trustSlot: ver nota en koWinner() más arriba -- mismo criterio para
+  // decidir si el marcador ya cargado sigue siendo válido para este slot.
+  const v = trustSlot ? (raw||null) : ((raw && raw._a===teamA && raw._b===teamB) ? raw : null);
   const h = v && Number.isInteger(v.h) ? v.h : '';
   const a = v && Number.isInteger(v.a) ? v.a : '';
   const tied = v && Number.isInteger(v.h) && Number.isInteger(v.a) && v.h===v.a;
@@ -2929,7 +2946,8 @@ function buildKoStepHtml(key, bracket, preds, readOnly){
     const someTeamsMissing = slots.some(m=>!m.a||!m.b);
     tag = `<div class="note" style="margin-bottom:.75rem">⚽ Estos son los equipos <b>reales</b> de esta fase del torneo (los carga el organizador). ${someTeamsMissing?'Todavía faltan algunos por confirmar — vuelve más tarde si ves "Pendiente".':'Adivina el resultado de cada cruce.'}</div>`;
   }
-  return tag + extra + slots.map(m=>renderKoRow(m.slot, m.a, m.b, preds, readOnly)).join('');
+  const trustSlot = bracket.realSeedKey===key;
+  return tag + extra + slots.map(m=>renderKoRow(m.slot, m.a, m.b, preds, readOnly, trustSlot)).join('');
 }
 
 function buildSpecialStepHtml(preds, readOnly, bracket){
@@ -3973,12 +3991,13 @@ function buildPosterElimHtml(preds, bracket){
   }
   return KO_PHASES.filter(ph=>isKoPhaseActive(ph.key)).map(ph=>{
     const slots = koSlotsOf(bracket, ph.key);
+    const trustSlot = bracket.realSeedKey===ph.key;
     const rows = slots.map(m=>{
       if(!m.a || !m.b){
         return `<div class="pp-match-row"><span class="pp-team">Pendiente</span></div>`;
       }
       const raw = preds[m.slot];
-      const v = (raw && raw._a===m.a && raw._b===m.b) ? raw : null;
+      const v = trustSlot ? (raw||null) : ((raw && raw._a===m.a && raw._b===m.b) ? raw : null);
       const h = v && Number.isInteger(v.h) ? v.h : '-';
       const a = v && Number.isInteger(v.a) ? v.a : '-';
       return `<div class="pp-match-row">
