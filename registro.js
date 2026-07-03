@@ -934,20 +934,22 @@ function importarInfoParticipantes(file){
       if(text[0] === '{' || text[0] === '['){
         const raw = JSON.parse(text);
         if(raw && raw.tipo === 'quinielaborracha_info_participantes' && Array.isArray(raw.participantes)){
-          // Formato nuevo (v1.5.1) — el que arma exportarInfoParticipantes().
-          formato = 'json';
-          raw.participantes.forEach(p=>{
-            if(!p || !p.codigo) return;
-            const datos = {};
-            if(p.clave) datos.clave = p.clave;
-            if(p.correo) datos.email = p.correo;
-            if(p.ciudad) datos.city = p.ciudad;
-            if(p.pais) datos.country = p.pais;
-            if(p.estado) datos.estadoQuiniela = p.estado;
-            if(p.creado) datos.fechaCreacion = p.creado;
-            if(p.enviado) datos.fechaEnvio = p.enviado;
-            if(Object.keys(datos).length) porCodigo[p.codigo] = datos;
-          });
+          // v2.8.1 — Formato nuevo (el que arma exportarInfoParticipantes(),
+          // ahora con "predicciones" incluidas). CAMBIO DE COMPORTAMIENTO a
+          // propósito respecto al resto de esta función (CSV/json-legado,
+          // más abajo, que siguen igual que siempre): este formato YA NO
+          // sobreescribe a nadie que exista. Con la quiniela completa
+          // adentro, tiene más sentido usarlo para MEZCLAR/RESTAURAR
+          // participantes desde un backup -- se agregan como NUEVOS
+          // (con su quiniela) solo los códigos que todavía no existen acá;
+          // los que ya existen se dejan 100% intactos, sin tocar ni un
+          // campo, para no arriesgar pisar en silencio la quiniela de
+          // alguien que ya está jugando en este dispositivo. Tiene su
+          // propio confirm()/backup()/guardado más abajo y corta la
+          // función ahí (no cae al camino de "sobreescribir" de CSV/
+          // json-legado).
+          importarInfoParticipantesComoNuevos(raw.participantes);
+          return;
         }else{
           // Por las dudas alguien todavía tenga a mano el backup JSON
           // automático (el que se descarga solo al migrar, o el que se
@@ -1053,6 +1055,74 @@ function importarInfoParticipantes(file){
   reader.readAsText(file);
 }
 
+// v2.8.1 — Camino NUEVO de importación, usado SOLO por el formato actual
+// de exportarInfoParticipantes() (el que trae "predicciones"). A
+// diferencia del resto de importarInfoParticipantes() (CSV/json-legado,
+// que parchea campos de participantes YA existentes), acá se agregan
+// como participantes NUEVOS -- con su quiniela completa -- únicamente
+// los códigos del archivo que todavía NO existen en este dispositivo.
+// Los que ya existen se dejan 100% intactos (ni un campo se toca): así
+// se puede reimportar el mismo backup las veces que haga falta sin
+// arriesgar pisar en silencio la quiniela de alguien que ya está
+// jugando, y sin crear duplicados de quien ya está.
+function importarInfoParticipantesComoNuevos(participantesDelArchivo){
+  const codigosExistentes = new Set(DB.participants.map(p=>p.codigo));
+  const vistosEnArchivo = new Set(); // por si el archivo trae el mismo código repetido
+  const nuevos = [];
+  participantesDelArchivo.forEach(p=>{
+    if(!p || !p.codigo || !p.nombre) return; // sin código o sin nombre no alcanza para crear un participante de verdad
+    if(codigosExistentes.has(p.codigo)) return; // ya existe -- se deja intacto
+    if(vistosEnArchivo.has(p.codigo)) return;
+    vistosEnArchivo.add(p.codigo);
+    nuevos.push(p);
+  });
+
+  const yaExistian = participantesDelArchivo.length - nuevos.length;
+  if(!nuevos.length){
+    toast(yaExistian
+      ? `Los ${yaExistian} participante(s) de este archivo ya existen acá -- no se agregó ninguno nuevo.`
+      : 'Este archivo no tiene participantes con código y nombre para agregar.', true);
+    return;
+  }
+
+  if(!confirm(`Este archivo trae ${participantesDelArchivo.length} participante(s): ${nuevos.length} no existen todavía acá y se van a AGREGAR como nuevos (con su quiniela completa)${yaExistian?`, y ${yaExistian} ya existen y se van a dejar sin tocar`:''}. Antes de agregar nada se descarga un backup del estado actual. ¿Continuar?`)) return;
+
+  // Mismo cuidado que el resto de este panel: backup del estado ACTUAL
+  // antes de aplicar nada.
+  const backupActual = {
+    tipo: "backup_pre_importacion_info_participantes",
+    fecha: new Date().toISOString(),
+    dbAntesDeImportar: JSON.parse(JSON.stringify(DB))
+  };
+  const blobBk = new Blob([JSON.stringify(backupActual, null, 2)], { type: "application/json" });
+  const urlBk = URL.createObjectURL(blobBk);
+  const aBk = document.createElement("a");
+  aBk.href = urlBk; aBk.download = `backup_antes_de_importar_${Date.now()}.json`;
+  document.body.appendChild(aBk); aBk.click(); aBk.remove();
+  URL.revokeObjectURL(urlBk);
+
+  const now = Date.now();
+  nuevos.forEach(p=>{
+    const id = uid();
+    DB.participants.push({
+      id, codigo: p.codigo,
+      name: p.nombre, city: p.ciudad||'', country: p.pais||'', countryIso: p.paisIso||'',
+      email: p.correo||'', clave: p.clave||genClave(), ownerUid: null,
+      estadoQuiniela: (p.estado==='enviada') ? 'enviada' : 'borrador',
+      lastStep: visibleStepIndices()[0] ?? WIZARD_STEPS.findIndex(s=>s.key==='groups'),
+      fechaCreacion: p.creado || now, fechaActualizacion: now, fechaEnvio: p.enviado || null,
+    });
+    DB.predictions[id] = JSON.parse(JSON.stringify(p.predicciones || {}));
+  });
+
+  // saveData() ya separa clave/correo al documento privado y manda
+  // emailHash al público -- mismo camino que cualquier guardado normal.
+  saveData(DB);
+  render();
+  if(typeof refreshAdminTable==='function') refreshAdminTable();
+  toast(`✓ Se agregaron ${nuevos.length} participante(s) nuevo(s) con su quiniela completa${yaExistian?` (${yaExistian} ya existían y no se tocaron)`:''}.`);
+}
+
 // v1.5.1 — Exporta TODA la info que se ve en la tabla del panel Admin
 // (Código, Nombre, Correo, Ubicación, Clave, Creado, Enviado, Estado,
 // Avance) a un .json descargable -- antes ("Exportar correos y claves")
@@ -1061,14 +1131,23 @@ function importarInfoParticipantes(file){
 // NO es un campo real guardado en Firestore, así que
 // importarInfoParticipantes() lo ignora al leer un archivo de vuelta (se
 // recalcula solo, siempre, a partir de las predicciones reales de cada
-// quien). "Nombre" también viaja informativo pero no se reimporta -- ver
-// el comentario grande en importarInfoParticipantes().
+// quien). "Nombre" también viaja informativo pero no se reimporta para
+// alguien YA existente -- ver el comentario grande en
+// importarInfoParticipantes().
+//
+// v2.8.1 — Ahora cada participante también trae "predicciones" (su
+// quiniela completa, DB.predictions[p.id] tal cual) -- este .json pasó a
+// ser un backup real y restaurable de punta a punta (datos + quiniela),
+// no solo la info de la tabla. Ver importarInfoParticipantes(): con
+// predicciones adentro, este archivo ahora permite RECREAR un
+// participante completo si ya no existe (antes solo servía para
+// parchear campos de uno que ya estaba).
 function exportarInfoParticipantes(){
   if(!DB.participants.length){ toast('No hay participantes para exportar.', true); return; }
   const total = totalMatches();
   const payload = {
     tipo: "quinielaborracha_info_participantes",
-    version: "1.5.1",
+    version: "2.8.1",
     exportedAt: new Date().toISOString(),
     participantes: DB.participants.slice()
       .sort((a,b)=> a.name.localeCompare(b.name))
@@ -1081,11 +1160,13 @@ function exportarInfoParticipantes(){
           correo: p.email || '',
           ciudad: p.city || '',
           pais: p.country || '',
+          paisIso: p.countryIso || '',
           clave: p.clave || '',
           creado: p.fechaCreacion || null,
           enviado: p.fechaEnvio || null,
           estado: p.estadoQuiniela || '',
-          avance: pct
+          avance: pct,
+          predicciones: DB.predictions[p.id] || {}
         };
       })
   };
@@ -3665,8 +3746,8 @@ function renderAdmin(){
       <div id="admin_table_wrap">${buildParticipantsRowsHtml(ADMIN_SEARCH, ADMIN_FILTER)}</div>
       <div class="rg-btn-row" style="margin-top:.75rem">
         <button class="rg-btn rg-btn-ghost" id="a_gen_claves" title="Genera una clave nueva solo a quien no tenga ninguna">🔑 Generar claves faltantes</button>
-        <button class="rg-btn rg-btn-ghost" id="a_export_info" title="Descarga un .json con código, nombre, correo, ubicación, clave, creado, enviado, estado y avance de todos">⬇️ Exportar info de participantes</button>
-        <button class="rg-btn rg-btn-ghost" id="a_import_info" title="Restaura correo/ubicación/clave/estado desde el mismo .json que descarga 'Exportar info de participantes' (también acepta el .csv de versiones anteriores y el backup .json de la migración)">⬆️ Importar info de participantes</button>
+        <button class="rg-btn rg-btn-ghost" id="a_export_info" title="Descarga un .json con código, nombre, correo, ubicación, clave, creado, enviado, estado, avance Y la quiniela completa (predicciones) de todos">⬇️ Exportar info de participantes</button>
+        <button class="rg-btn rg-btn-ghost" id="a_import_info" title="Agrega como NUEVOS (con su quiniela completa) solo los participantes del .json que todavía no existen acá -- a los que ya existen no los toca ni los duplica. (También acepta el .csv de versiones anteriores y el backup .json de la migración, para esos sí parchea correo/ubicación/clave/estado de quien ya existe, como siempre)">⬆️ Importar info de participantes</button>
         <input id="import_info_file" type="file" accept=".json,.csv" style="display:none">
         <button class="rg-btn rg-btn-ghost" id="a_toggle_papelera">🗑️ Papelera (${(DB.papelera||[]).length})</button>
         <button class="rg-btn rg-btn-danger" id="a_reset">Borrar todos los datos de prueba</button>
