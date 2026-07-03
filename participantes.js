@@ -139,7 +139,16 @@ const RG_DEFAULT_CONFIG = {
     rachaDesaciertos:{activo:false, hitos:[{n:3,pts:1},{n:5,pts:2},{n:8,pts:4}]},
     // NUEVO — MVP de la jornada: quien más puntos acumule en un mismo día
     // de partidos (puede haber varios ganadores si quedan empatados).
-    mvp:{activo:false, pts:3}
+    mvp:{activo:false, pts:3},
+    // NUEVO (v2.7.1) — Bono por ganar una Batalla 1v1 (S.battleHistory,
+    // resetBattle() en app-batallas.js) y/o el Royal Rumble
+    // (S.rumbleHistory, resetRumble()). Un "Empate" en una Batalla no
+    // otorga este bono a nadie (no hay ganador); el Royal Rumble no
+    // puede terminar en empate salvo que TODOS los participantes saquen
+    // 0pts, caso ya contemplado como "Empate" en S.rumbleHistory. Cuenta
+    // como Bono (calcBonos(), scoring.js) -- mismo balde que último
+    // lugar/racha/MVP, no Eliminatoria ni Avanzado.
+    batallas:{activo:false, ganadorDuelo:5, ganadorRumble:10}
   }
 };
 
@@ -188,6 +197,11 @@ function mergeReglas(saved){
     mvp: {
       activo: (saved.mvp&&saved.mvp.activo!==undefined) ? !!saved.mvp.activo : d.mvp.activo,
       pts: (saved.mvp&&saved.mvp.pts!==undefined) ? saved.mvp.pts : d.mvp.pts
+    },
+    batallas: {
+      activo: (saved.batallas&&saved.batallas.activo!==undefined) ? !!saved.batallas.activo : d.batallas.activo,
+      ganadorDuelo: (saved.batallas&&saved.batallas.ganadorDuelo!==undefined) ? saved.batallas.ganadorDuelo : d.batallas.ganadorDuelo,
+      ganadorRumble: (saved.batallas&&saved.batallas.ganadorRumble!==undefined) ? saved.batallas.ganadorRumble : d.batallas.ganadorRumble
     }
   };
 }

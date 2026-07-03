@@ -523,7 +523,36 @@ function calcBonos(name){
   pts+=calcRachaBonos(name); // v1.2 (fase 2) — nuevo, desactivado por defecto
   pts+=calcRachaDesaciertosBonos(name); // v1.6 — nuevo, desactivado por defecto
   pts+=calcMvpBonos(name);   // v1.2 (fase 2) — nuevo, desactivado por defecto
+  pts+=calcBattleWinBonos(name);  // v2.7.1 — nuevo, desactivado por defecto
+  pts+=calcRumbleWinBonos(name);  // v2.7.1 — nuevo, desactivado por defecto
   return pts;
+}
+
+// v2.7.1 — Bono por ganar Batallas 1v1 / Royal Rumble (Configuración del
+// torneo → Reglas → Batallas). Ambos leen el mismo switch "activo" (un
+// solo interruptor para las 2, ganadorDuelo/ganadorRumble son los montos
+// por victoria) y cuentan TODAS las victorias históricas de "name" en
+// S.battleHistory/S.rumbleHistory (resetBattle()/resetRumble(), ya
+// congeladas ahí -- no se recalculan, así que cerrar/reabrir fases o
+// tocar resultados después no puede moverle el bono a nadie por
+// sorpresa). Un "Empate" no cuenta como victoria de nadie: h.winner en
+// ese caso vale literalmente "Empate", que nunca puede coincidir con el
+// nombre real de un participante.
+function calcBattleWinBonos(name){
+  const cfg=DB.configGlobal?.reglas?.batallas;
+  if(!cfg||!cfg.activo)return 0;
+  const ptsPorVictoria=Number(cfg.ganadorDuelo)||0;
+  if(ptsPorVictoria<=0)return 0;
+  const wins=(S.battleHistory||[]).filter(h=>h&&h.winner===name).length;
+  return wins*ptsPorVictoria;
+}
+function calcRumbleWinBonos(name){
+  const cfg=DB.configGlobal?.reglas?.batallas;
+  if(!cfg||!cfg.activo)return 0;
+  const ptsPorVictoria=Number(cfg.ganadorRumble)||0;
+  if(ptsPorVictoria<=0)return 0;
+  const wins=(S.rumbleHistory||[]).filter(h=>h&&h.winner===name).length;
+  return wins*ptsPorVictoria;
 }
 
 // ══════════════════════════════════════════════════════════════

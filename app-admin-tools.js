@@ -402,6 +402,21 @@ function buildReglasHtml(R){
         <span>+${reglaNumInput('mvp.pts',R.mvp.pts,44)}pts</span>
       </div>`:""}
     </div>
+
+    <div class="card">
+      <div class="card-title">⚔️ Batallas y Royal Rumble</div>
+      ${reglaSwitchRow('batallas.activo',!!R.batallas.activo,'Activar bono de victoria','Bono extra para quien GANE una Batalla 1v1 o el Royal Rumble (resetBattle()/resetRumble(), Batallas → 🎁 Bonos). Un empate no otorga este bono a nadie. Cuenta como Bono, igual que último lugar/racha/MVP -- no Eliminatoria ni Avanzado.')}
+      ${R.batallas.activo?`<div style="margin-top:.5rem;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="flex:1">🥊 Por ganar una Batalla 1v1</span>
+          <span>+${reglaNumInput('batallas.ganadorDuelo',R.batallas.ganadorDuelo,44)}pts</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="flex:1">👑 Por ganar el Royal Rumble</span>
+          <span>+${reglaNumInput('batallas.ganadorRumble',R.batallas.ganadorRumble,44)}pts</span>
+        </div>
+      </div>`:""}
+    </div>
   `;
 }
 
