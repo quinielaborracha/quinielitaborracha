@@ -331,9 +331,14 @@ function renderRules(){
         ruleRow("Marcador exacto (adicional)",`${Rg.exacto} pts`,COL_BASIC)
       ].join(""));
 
-  // ── Reglas avanzadas — puntos fijos del juego, sin switch en
-  // Configuración del torneo, así que no cambian con esta pestaña.
-  setHTML("radv", ARULES.map(r=>ruleRow(r.l,`${r.p} pts`,COL_ADV)).join(""));
+  // ── Reglas avanzadas — v2.7.6: cada una tiene su propio switch
+  // (isPreguntaAvanzadaActiva, scoring.js) -- las apagadas desaparecen de
+  // acá, mismo criterio que el resto de esta pestaña ("toda regla
+  // desactivada desaparece, no se lista en gris").
+  const activeARULES=ARULES.filter(r=>isPreguntaAvanzadaActiva(r.id));
+  setHTML("radv", activeARULES.length
+    ? activeARULES.map(r=>ruleRow(r.l,`${r.p} pts`,COL_ADV)).join("")
+    : offNote("Todas las reglas avanzadas están desactivadas por ahora."));
 
   // ── Reglas de eliminatoria ──
   const Re=getReglasElim();

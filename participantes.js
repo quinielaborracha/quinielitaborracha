@@ -154,7 +154,18 @@ const RG_DEFAULT_CONFIG = {
     // 0pts, caso ya contemplado como "Empate" en S.rumbleHistory. Cuenta
     // como Bono (calcBonos(), scoring.js) -- mismo balde que último
     // lugar/racha/MVP, no Eliminatoria ni Avanzado.
-    batallas:{activo:false, ganadorDuelo:5, ganadorRumble:10}
+    batallas:{activo:false, ganadorDuelo:5, ganadorRumble:10},
+    // NUEVO (v2.7.6) — Reglas avanzadas (ARULES, app-static-data.js):
+    // campeón/subcampeón/3er lugar/goleador/etc. Antes eran puntos fijos
+    // sin ningún switch; ahora cada una se puede apagar por separado sin
+    // tocar las demás. Todas arrancan en true (comportamiento idéntico al
+    // de siempre) hasta que el admin apague alguna a propósito.
+    avanzado:{
+      campeon:true, subcampeon:true, tercer:true,
+      goleador:true, goles_goleador:true,
+      pais_goleador:true, goles_pais:true,
+      pais_goleado:true
+    }
   }
 };
 
@@ -208,7 +219,8 @@ function mergeReglas(saved){
       activo: (saved.batallas&&saved.batallas.activo!==undefined) ? !!saved.batallas.activo : d.batallas.activo,
       ganadorDuelo: (saved.batallas&&saved.batallas.ganadorDuelo!==undefined) ? saved.batallas.ganadorDuelo : d.batallas.ganadorDuelo,
       ganadorRumble: (saved.batallas&&saved.batallas.ganadorRumble!==undefined) ? saved.batallas.ganadorRumble : d.batallas.ganadorRumble
-    }
+    },
+    avanzado: {...d.avanzado, ...(saved.avanzado||{})}
   };
 }
 

@@ -168,15 +168,18 @@ const AVATAR_MAP = {
 // (app-predicciones.js) ahora arma esas 3 secciones en vivo desde
 // DB.configGlobal.reglas (mismos helpers que ya usa scoring.js:
 // getReglasGrupos/getReglasElim/getFaseValor/getActivePhases). ARULES
-// sigue acá tal cual: son puntos fijos del juego (campeón, goleador,
-// etc.) que no tienen ningún switch en Configuración del torneo.
+// sigue acá tal cual: son los puntos fijos del juego (campeón, goleador,
+// etc.) -- el "id" de cada una coincide a propósito con el id de
+// SPECIAL_QUESTIONS (registro.js), la misma clave que usa
+// DB.configGlobal.reglas.avanzado.<id> (v2.7.6 — switch individual por
+// pregunta, ver calcAdv en scoring.js).
 const ARULES=[
-  {l:"Acertar campeón",p:15},
-  {l:"Acertar subcampeón",p:10},
-  {l:"Acertar 3er lugar",p:8},
-  {l:"Acertar goleador del torneo",p:12},
-  {l:"Goles del goleador (exactos)",p:8},
-  {l:"País más goleador",p:8},
-  {l:"Goles de ese país (exactos)",p:10},
-  {l:"País más goleado en 1 partido",p:8},
+  {id:"campeon",        l:"Acertar campeón",                    p:15},
+  {id:"subcampeon",     l:"Acertar subcampeón",                 p:10},
+  {id:"tercer",         l:"Acertar 3er lugar",                  p:8},
+  {id:"goleador",       l:"Acertar goleador del torneo",        p:12},
+  {id:"goles_goleador", l:"Goles del goleador (exactos)",       p:8},
+  {id:"pais_goleador",  l:"País más goleador",                  p:8},
+  {id:"goles_pais",     l:"Goles de ese país (exactos)",        p:10},
+  {id:"pais_goleado",   l:"País más goleado en 1 partido",      p:8},
 ];

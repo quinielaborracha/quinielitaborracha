@@ -97,28 +97,43 @@ function getDynamicSpec(name){
   return out;
 }
 
+// v2.7.6 — ¿Esta "Regla avanzada" puntual (ARULES/SPECIAL_QUESTIONS,
+// mismo id en ambas) sigue otorgando puntos? Apagada por el admin desde
+// Configuración del torneo → Reglas → 🎯 Preguntas avanzadas. Igual que
+// el resto de los switches de "reglas.*.activo": apagarla NO oculta la
+// pregunta ni bloquea que se siga respondiendo (registro.js no cambia),
+// solo deja de sumar sus puntos acá.
+function isPreguntaAvanzadaActiva(qid){
+  const v=DB.configGlobal?.reglas?.avanzado?.[qid];
+  return v!==false;
+}
+
 function calcAdv(name){
   const r=S.reality;
   const spec=getDynamicSpec(name)||{};
   const a=Object.keys(spec).length?spec:(S.adv[name]||{});
   const nn=s=>(s||"").trim().toLowerCase();
   let ap=0;
-  if(nn(a.champ)&&nn(a.champ)===nn(r.champ))ap+=15;
-  if(nn(a.runner)&&nn(a.runner)===nn(r.runner))ap+=10;
-  if(nn(a.third)&&nn(a.third)===nn(r.third))ap+=8;
-  // Scorer: must match scorer first to get goals bonus
-  const scorerMatch=nn(a.scorer)&&nn(r.topScorer)&&nn(a.scorer)===nn(r.topScorer);
+  if(isPreguntaAvanzadaActiva('campeon')&&nn(a.champ)&&nn(a.champ)===nn(r.champ))ap+=15;
+  if(isPreguntaAvanzadaActiva('subcampeon')&&nn(a.runner)&&nn(a.runner)===nn(r.runner))ap+=10;
+  if(isPreguntaAvanzadaActiva('tercer')&&nn(a.third)&&nn(a.third)===nn(r.third))ap+=8;
+  // Scorer: must match scorer first to get goals bonus. Si 'goleador' está
+  // apagada, ni el acierto del nombre ni el bono de goles exactos suman
+  // (no tiene sentido premiar el bono de goles de un goleador que ya no
+  // puntúa); 'goles_goleador' apagada por separado solo apaga ESE bono,
+  // dejando los +12 del nombre si sigue acertado.
+  const scorerMatch=isPreguntaAvanzadaActiva('goleador')&&nn(a.scorer)&&nn(r.topScorer)&&nn(a.scorer)===nn(r.topScorer);
   if(scorerMatch){
     ap+=12;
-    if(r.topScorerGoals>0&&parseInt(a.scorerGoals)===parseInt(r.topScorerGoals))ap+=8;
+    if(isPreguntaAvanzadaActiva('goles_goleador')&&r.topScorerGoals>0&&parseInt(a.scorerGoals)===parseInt(r.topScorerGoals))ap+=8;
   }
-  // Top country: must match country first to get goals bonus
-  const countryMatch=nn(a.topCountry)&&nn(r.topCountry)&&nn(a.topCountry)===nn(r.topCountry);
+  // Top country: mismo criterio que el goleador de arriba.
+  const countryMatch=isPreguntaAvanzadaActiva('pais_goleador')&&nn(a.topCountry)&&nn(r.topCountry)&&nn(a.topCountry)===nn(r.topCountry);
   if(countryMatch){
     ap+=8;
-    if(r.topCountryGoals>0&&parseInt(a.topCountryGoals)===parseInt(r.topCountryGoals))ap+=10;
+    if(isPreguntaAvanzadaActiva('goles_pais')&&r.topCountryGoals>0&&parseInt(a.topCountryGoals)===parseInt(r.topCountryGoals))ap+=10;
   }
-  if(nn(a.mostConceded)&&nn(a.mostConceded)===nn(r.mostConceded))ap+=8;
+  if(isPreguntaAvanzadaActiva('pais_goleado')&&nn(a.mostConceded)&&nn(a.mostConceded)===nn(r.mostConceded))ap+=8;
   return ap;
 }
 

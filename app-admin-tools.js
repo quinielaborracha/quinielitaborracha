@@ -329,6 +329,20 @@ function buildReglasHtml(R){
     </div>`;
   }).join('');
 
+  // v2.7.6 — Preguntas avanzadas (ARULES, app-static-data.js): un switch
+  // mini por pregunta, mismo patrón visual que faseRows de arriba (label +
+  // switch, sin campos numéricos porque los puntos de ARULES no son
+  // editables acá -- solo se puede prender/apagar cada una).
+  const arulesRows=ARULES.map(r=>{
+    const on=(R.avanzado||{})[r.id]!==false;
+    return `<div class="reglas-fase-row" style="${on?'':'opacity:.5'}">
+      <div class="reglas-fase-label">
+        <span>${r.l} (${r.p} pts)</span>
+        ${reglaSwitchMini(`avanzado.${r.id}`,on)}
+      </div>
+    </div>`;
+  }).join('');
+
   const hitosRows=(R.racha.hitos||[]).map((h,i)=>`
     <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--qb-border);color:var(--qb-text)">
       <span>${reglaNumInput(`racha.hitos.${i}.n`,h.n,44)} aciertos seguidos</span>
@@ -368,6 +382,12 @@ function buildReglasHtml(R){
         <span>Empate ${reglaNumInput('elim.empate',R.elim.empate,50,!eOn)}pts</span>
         <span>Marcador exacto +${reglaNumInput('elim.exacto',R.elim.exacto,50,!eOn)}pts</span>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎯 Preguntas avanzadas</div>
+      <div class="muted" style="font-size:11.5px;margin-bottom:.5rem">Campeón, goleador del torneo, etc. -- puntos fijos (no editables), pero cada una se puede apagar por separado sin tocar las demás. Apagar una NO la oculta del wizard ni bloquea que se siga respondiendo: solo deja de sumar sus puntos.</div>
+      ${arulesRows}
     </div>
 
     <div class="card">
