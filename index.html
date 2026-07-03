@@ -105,7 +105,7 @@
   // Señal de que Firebase ya está listo para usarse
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
-<link rel="stylesheet" href="styles.css?v=1.11">
+<link rel="stylesheet" href="styles.css?v=1.12">
 
 <!-- v7.2 — Banner de Modo Prueba (?test=1). Oculto por defecto (display:none
      inline); el script de Firebase de arriba lo muestra solo si TEST_MODE
@@ -171,10 +171,10 @@
          contraseña + 2FA que vienen después), así que no hacía falta
          replicar exactamente ese detalle para el teclado. -->
     <div class="hdr-logo" id="logo-btn" role="button" tabindex="0" ondblclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" title="Doble clic para acceso admin" aria-label="Acceso admin" style="cursor:pointer;overflow:hidden;padding:0;background:transparent;box-shadow:none">
-      <img id="logo-img" src="" alt="QB" style="width:40px;height:40px;object-fit:contain;border-radius:8px">
+      <img id="logo-img" src="" alt="QB" style="width:52px;height:52px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.5</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.6</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -733,7 +733,7 @@
 
 <script defer src="participantes.js?v=1.7.2"></script>
 <script defer src="partidos-grupos.js?v=1.0"></script>
-<script defer src="utils.js?v=1.4"></script>
+<script defer src="utils.js?v=1.5"></script>
 <script defer src="app-static-data.js?v=1.1"></script>
 <script defer src="app-state.js?v=1.0"></script>
 <script defer src="scoring.js?v=2.5"></script>
@@ -760,7 +760,7 @@
 <script defer src="app-bracket-espn-sync.js?v=1.5"></script>
 <script defer src="app-bracket-view.js?v=1.5"></script>
 <script defer src="app-bracket-espn-live.js?v=1.3"></script>
-<script defer src="app-integridad.js?v=1.0"></script>
+<script defer src="app-integridad.js?v=1.1"></script>
 <script defer src="app-predicciones.js?v=1.9"></script>
 <script defer src="app-estadisticas.js?v=1.4"></script>
 <script defer src="app-admin-tools.js?v=1.6"></script>

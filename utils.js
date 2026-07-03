@@ -174,6 +174,24 @@ function validateScore(mid,h,a){
   return{ok:true};
 }
 
+// v2.6 — BUG REPORTADO: el panel de Integridad ("Verificar checksums" /
+// "Validar resultados") solo recorría S.scores (los 72 partidos de
+// Grupos) — la Eliminatoria (P73-P104, S.elimScores) quedaba totalmente
+// afuera de ambos chequeos. validateScore() no sirve tal cual para
+// eliminatoria porque exige MD[mid]/MID_ABBRS[mid], que solo existen
+// para partidos de grupos (P1-P72) -- por eso esta versión paralela, sin
+// esa dependencia, para poder validar rango/tipo de un resultado de
+// eliminatoria igual de a fondo.
+function validateElimScore(pid,h,a){
+  if(pid<73||pid>104) return{ok:false,err:`P${pid} no es un partido de eliminatoria válido (rango 73-104)`};
+  if(typeof h!=="number"||typeof a!=="number") return{ok:false,err:"Los goles deben ser números"};
+  if(isNaN(h)||isNaN(a)) return{ok:false,err:"Valores NaN detectados"};
+  if(h<0||a<0) return{ok:false,err:"Los goles no pueden ser negativos"};
+  if(h>20||a>20) return{ok:false,err:`Marcador ${h}-${a} fuera de rango (máx 20)`};
+  if(!Number.isInteger(h)||!Number.isInteger(a)) return{ok:false,err:"Los goles deben ser enteros"};
+  return{ok:true};
+}
+
 function n(s){return(s||"").toLowerCase().trim();}
 
 function abbr2name(abbr) {
