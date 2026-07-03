@@ -77,6 +77,12 @@ const RG_DEFAULT_CONFIG = {
   loginPorNombreHabilitado:true,
   fechaCierre:'', horaCierre:'23:59',
   usarMiQuinielaComoInicio:false, // v6.6 — si true, la app abre en "Mi Quiniela" en vez de en el Ranking
+  // v2.7.2 — Enlace de invitación al grupo de WhatsApp, editable desde
+  // Admin → Configuración. Vacío por defecto: el botón "💬 Unirte al
+  // grupo" (Mi Quiniela y último paso del registro) no aparece hasta que
+  // el admin cargue un link acá -- mismo criterio que fechaCierre vacía
+  // ("sin cierre configurado").
+  whatsappGroupLink:'',
   // v1.2 — Constructor de Torneos (fase 1): qué fases usa este torneo.
   // Claves iguales a BONUS_PHASES (app-eliminatoria-data.js), así todo el
   // motor de puntaje/UI puede preguntar isFaseActiva(key) sin traducir

@@ -1993,6 +1993,18 @@ const DASH_TABS = [
   {key:'evolucion',    label:'Evolución',     icon:'📈'},
 ];
 
+// v2.7.2 — Botón "Unirte al grupo de WhatsApp", compartido entre el
+// Dashboard de Mi Quiniela (junto a "Quiero pelear") y el último paso
+// del registro (junto a "Enviar mi Quiniela"). Una sola fuente de verdad
+// para no dejar que las 2 versiones se desincronicen en estilo/texto.
+// Vacío si no hay enlace configurado (Admin → Configuración) -- nunca
+// muestra un botón roto.
+function buildWhatsappBtnHtml(){
+  const link = (DB.configGlobal.whatsappGroupLink||'').trim();
+  if(!link) return '';
+  return `<a class="rg-btn rg-btn-ghost" href="${esc(link)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;padding:6px 10px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">💬 Unirte al grupo</a>`;
+}
+
 function renderParticipantDashboard(pid){
   const p = DB.participants.find(x=>x.id===pid);
   if(!p){ clearDraft(); render(); return; }
@@ -2030,10 +2042,11 @@ function renderParticipantDashboard(pid){
   // placeholder genérico), mismo criterio que en el resto de la app.
   const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
   const champAvatarFileDash = (champValDash && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champValDash]||'') : '';
-  const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px">
+  const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
          ${avatarImg(champAvatarFileDash, 62)}
          <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
          ${postularBtn}
+         ${buildWhatsappBtnHtml()}
        </div>`;
   const topActionsRow = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.75rem;flex-wrap:wrap">
          ${dashIdentityHtml}
@@ -2993,6 +3006,11 @@ function buildReviewStepHtml(pid, p, preds, bracket, readOnly){
         <button class="rg-btn rg-btn-primary rg-btn-block" id="btn_submit" disabled>📨 Enviar mi Quiniela y Generar PDF</button>
       </div>`;
   }
+  // v2.7.2 — Botón de WhatsApp al final del último paso, sin importar el
+  // estado (enviada/cerrada/pendiente) -- unirse al grupo tiene sentido
+  // en cualquiera de los 3 casos. Vacío si no hay enlace configurado.
+  const whatsappBtn = buildWhatsappBtnHtml();
+  if(whatsappBtn) html += `<div class="rg-btn-row" style="margin-top:.75rem;justify-content:center">${whatsappBtn}</div>`;
   return html;
 }
 
@@ -3218,7 +3236,15 @@ function renderQuinielaForm(pid, originTab){
       const blockers = getStepBlockers(idx, p, personalMerged, DRAFT_PREDS);
       if(blockers.length){ showBlockModal(blockers); return; }
     }
+    // v2.7.2 — Recordatorio (snack) al ENTRAR al último paso, no en cada
+    // re-render de ese mismo paso (ej. el eco del autoguardado) -- por
+    // eso se compara "idx" contra el WIZ_STEP VIEJO, antes de pisarlo.
+    // Nada que recordar si ya está enviada o si el registro está
+    // bloqueado (ahí el paso muestra otro mensaje, no el de "enviar").
+    const entrandoARevisar = idx!==WIZ_STEP && WIZARD_STEPS[idx]?.key==='review'
+      && p.estadoQuiniela!=='enviada' && !isLocked(p);
     WIZ_STEP = idx; flushAutosave(); render();
+    if(entrandoARevisar) toast('📝 ¡Ya casi! Revisá todo y no olvides tocar "Enviar mi Quiniela" para que cuente.');
   };
   document.getElementById('wiz_prev')?.addEventListener('click', ()=> goToStep(adjacentVisibleStepIdx(WIZ_STEP,-1)));
   document.getElementById('wiz_next')?.addEventListener('click', ()=> goToStep(adjacentVisibleStepIdx(WIZ_STEP,+1)));
@@ -3650,6 +3676,16 @@ function renderAdmin(){
           </div>
         </div>
       </div>
+      <div class="switch-row" style="border-bottom:none;align-items:flex-start">
+        <div style="width:100%">
+          <div style="font-weight:700;margin-bottom:4px">💬 Grupo de WhatsApp</div>
+          <div class="muted" style="font-size:11.5px;margin-bottom:10px">Enlace de invitación al grupo. Mientras esté vacío, el botón "💬 Unirte al grupo" no aparece en ningún lado (Mi Quiniela ni el último paso del registro).</div>
+          <div class="field"><label>Enlace (ej. https://chat.whatsapp.com/XXXXXXXX)</label><input type="url" id="a_whatsapp_link" placeholder="https://chat.whatsapp.com/..." value="${esc(DB.configGlobal.whatsappGroupLink||'')}"></div>
+          <div class="rg-btn-row">
+            <button class="rg-btn rg-btn-primary" id="a_guardar_whatsapp">Guardar enlace</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -3792,6 +3828,13 @@ function renderAdmin(){
     DB.configGlobal.fechaCierre = '';
     saveData(DB);
     toast('Cierre automático quitado — las inscripciones quedan abiertas.');
+    renderAdminTab();
+  });
+  document.getElementById('a_guardar_whatsapp').addEventListener('click', ()=>{
+    const link = document.getElementById('a_whatsapp_link').value.trim();
+    DB.configGlobal.whatsappGroupLink = link;
+    saveData(DB);
+    toast(link ? '✓ Enlace de WhatsApp guardado.' : 'Enlace de WhatsApp quitado — el botón deja de mostrarse.');
     renderAdminTab();
   });
 
