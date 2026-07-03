@@ -92,20 +92,20 @@ function adminSubTab(id){
 // sola función, para no repetir esta regla en cada lugar que la usa.
 // Si una fase está desactivada, "para el usuario simplemente no existe":
 // no debe quedar ningún botón de navegación apuntando a ella.
+//
+// v2.9 — "⚡ En vivo" (navtab-mm) YA NO se oculta acá con Grupos
+// desactivada. Motivo: el supuesto original ("En vivo" muestra SOLO
+// partidos de fase de grupos, vía parseESPNEvent/ESPN_ABBR_MAP, P1-P72)
+// quedó desactualizado desde que loadMM() (app-bracket-espn-live.js)
+// suma el fallback parseESPNEventElim() -- "En vivo" también sigue
+// partidos de ELIMINATORIA en tiempo real. Con la regla vieja, apagar
+// CUALQUIER fase (no solo Grupos) hacía desaparecer el botón aunque
+// hubiera partidos de eliminatoria en vivo para mostrar ahí. Ahora
+// "En vivo" se ve siempre, sin importar qué fase esté activa/inactiva.
 function syncTabsWithFasesActivas(){
   const gruposOn=isFaseActiva("grupos");
-  // "⚡ En vivo" muestra SOLO partidos de fase de grupos en tiempo real
-  // (parseESPNEvent/ESPN_ABBR_MAP cubren únicamente P1-P72) — si el
-  // torneo no usa Grupos, no hay nada que mostrar ahí.
-  const mmBtn=document.getElementById("navtab-mm");
-  if(mmBtn)mmBtn.style.display=gruposOn?"":"none";
   document.getElementById("ftab-grupos")?.style.setProperty("display",gruposOn?"":"none");
   document.getElementById("ptab-grupos")?.style.setProperty("display",gruposOn?"":"none");
-  // Si la pestaña actualmente abierta dejó de existir (ej. apagaron
-  // Grupos mientras alguien estaba en "En vivo"), redirigir a Ranking.
-  if(!gruposOn && document.getElementById("t-mm")?.style.display==="block"){
-    tab("rank");
-  }
 }
 
 // ── Fixture inner tabs ──
