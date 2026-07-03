@@ -1200,7 +1200,6 @@ let AUTOSAVE_TIMER = null;
 let _lastPushedFechaActualizacion = null;
 let INICIO_VIEW = 'choice'; // 'choice' | 'crear' | 'login' — sub-pantalla de la pestaña Inicio
 let PREFILL_EMAIL = '';     // correo (o nombre) pre-llenado al ofrecer "¿deseas verla?" desde un duplicado
-let MIGRAR_PID = null;      // v1.0 — participante que entró por nombre y debe registrar su correo antes de continuar
 let ADMIN_SEARCH = '';      // texto del buscador administrativo (persiste entre refrescos de la tabla)
 let ADMIN_FILTER = 'all';   // 'all' | 'completas' | 'incompletas' — filtro rápido (Fase 7)
 let SHOW_PAPELERA = false;  // v6.1 — si la sección de Papelera está expandida o no
@@ -1216,7 +1215,6 @@ function clearDraft(){
   ADMIN_OVERRIDE = false;
   PREVIEW_AS_PARTICIPANT = false;
   INICIO_VIEW = 'choice';
-  MIGRAR_PID = null;
   DASH_TAB = 'perfil';
   DASH_PRED_SUBTAB = 'grupos';
   clearTimeout(AUTOSAVE_TIMER);
@@ -1452,8 +1450,6 @@ function renderInicioInner(){
     renderQuinielaForm(DRAFT_PID, 'inicio');
     return;
   }
-  if(INICIO_VIEW==='migrar_correo'){ renderMigrarCorreo(c); return; }
-
   if(!DB.configGlobal.modoConsultaHabilitado){
     renderCrear(c);
     return;
@@ -1682,9 +1678,8 @@ function onCrearSubmit(){
    estado "enviada", entra de una vez al paso de Revisión (resumen
    completo de solo lectura + botón de PDF). Si sigue en "borrador",
    continúa el wizard exactamente en el paso donde quedó (p.lastStep). */
-// v1.0 — Centraliza el "entrar al wizard como X", reutilizado por el
-// login normal y por el flujo de migración de correo (antes estaba
-// duplicado en cada punto de entrada).
+// v1.0 — Centraliza el "entrar al wizard como X", reutilizado por los
+// distintos puntos de entrada del login (antes estaba duplicado).
 function enterWizardAs(p, opts){
   opts = opts || {};
   DRAFT_PID = p.id;
@@ -1705,9 +1700,9 @@ function renderLogin(c){
   const volverBtn = DB.configGlobal.modoConsultaHabilitado
     ? `<button class="rg-btn rg-btn-ghost" id="login_back" style="margin-bottom:.75rem">← Volver</button>` : '';
   const prefill = PREFILL_EMAIL; PREFILL_EMAIL = '';
-  // v1.0 — El ingreso por nombre es un puente TEMPORAL (switch de admin)
-  // para migrar participantes históricos sin correo. Con el switch
-  // apagado, el campo de nombre desaparece del login por completo.
+  // v1.0 — El ingreso por nombre (switch de admin) permite entrar sin
+  // correo registrado. Con el switch apagado, el campo de nombre
+  // desaparece del login por completo.
   const porNombre = DB.configGlobal.loginPorNombreHabilitado;
   const fieldLabel = porNombre ? 'Usuario o correo electrónico' : 'Correo electrónico';
   const fieldPlaceholder = porNombre ? 'Tu nombre completo o tu correo' : 'Con el que te registraste';
@@ -1770,14 +1765,6 @@ function renderLogin(c){
       ? window.__fb.auth.currentUser.uid : null;
 
     const continuar = ()=>{
-      // v1.0 — Entró (por nombre, normalmente) y todavía no tiene correo
-      // registrado: pantalla obligatoria antes de dejarlo seguir.
-      if(!p.email || !p.email.trim()){
-        MIGRAR_PID = p.id;
-        INICIO_VIEW = 'migrar_correo';
-        render();
-        return;
-      }
       enterWizardAs(p);
       render();
     };
@@ -1813,60 +1800,6 @@ function renderLogin(c){
         }
         errEl.style.display='block';
       });
-  });
-}
-
-/* ---- Sub-vista OBLIGATORIA: capturar correo al migrar desde login por
-   nombre. No tiene atajo para saltársela; solo "Volver" cancela el
-   intento de entrar (no se guarda nada hasta enviar el formulario). ---- */
-function renderMigrarCorreo(c){
-  const p = DB.participants.find(x=>x.id===MIGRAR_PID);
-  if(!p){ MIGRAR_PID=null; INICIO_VIEW='choice'; render(); return; }
-  c.innerHTML = `
-    <button class="rg-btn rg-btn-ghost" id="migrar_back" style="margin-bottom:.75rem">← Volver</button>
-    <div class="card">
-      <div class="card-title">📧 Necesitamos actualizar tu información</div>
-      <div class="note">Antes de continuar necesitamos registrar tu correo electrónico para futuras comunicaciones y recuperación de acceso.</div>
-      <div class="field">
-        <label>Correo electrónico</label>
-        <input id="mc_email" type="email" placeholder="correo@ejemplo.com" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Confirmar correo electrónico</label>
-        <input id="mc_email2" type="email" placeholder="correo@ejemplo.com" autocomplete="off">
-      </div>
-      <div id="mc_err" class="err" style="display:none"></div>
-      <div class="rg-btn-row">
-        <button class="rg-btn rg-btn-primary rg-btn-block" id="mc_submit">Guardar y continuar</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('migrar_back').addEventListener('click', ()=>{
-    MIGRAR_PID = null;
-    INICIO_VIEW = 'choice';
-    render();
-  });
-  document.getElementById('mc_submit').addEventListener('click', ()=>{
-    const email = document.getElementById('mc_email').value.trim();
-    const email2 = document.getElementById('mc_email2').value.trim();
-    const errEl = document.getElementById('mc_err');
-    const fail = (msg)=>{ errEl.textContent = msg; errEl.style.display='block'; };
-    errEl.style.display='none';
-    if(!email) return fail('El correo electrónico es obligatorio.');
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('El correo electrónico no parece válido.');
-    if(!email2) return fail('Debes confirmar tu correo electrónico.');
-    if(email.toLowerCase() !== email2.toLowerCase()) return fail('Los dos correos electrónicos no coinciden.');
-    const dup = findByEmail(email);
-    if(dup && dup.id!==p.id) return fail('Ese correo ya está registrado por otro participante.');
-
-    p.email = email;
-    p.migrado = true;
-    p.fechaActualizacion = Date.now();
-    saveData(DB);
-    toast('¡Listo! Tu correo quedó registrado.');
-    MIGRAR_PID = null;
-    enterWizardAs(p);
-    render();
   });
 }
 
@@ -3651,7 +3584,7 @@ function renderAdmin(){
       <div class="switch-row">
         <div>
           <div style="font-weight:700">Permitir ingreso utilizando nombre</div>
-          <div class="muted" style="font-size:11.5px">${DB.configGlobal.loginPorNombreHabilitado ? 'Puente temporal: quien no tenga correo puede entrar con su nombre completo (y luego se le pide registrar uno).' : 'Desactivado — solo se puede entrar con correo + Clave. El campo de nombre ya no aparece en el login.'}</div>
+          <div class="muted" style="font-size:11.5px">${DB.configGlobal.loginPorNombreHabilitado ? 'Quien no tenga correo registrado puede entrar igual con su nombre completo + Clave.' : 'Desactivado — solo se puede entrar con correo + Clave. El campo de nombre ya no aparece en el login.'}</div>
         </div>
         <div class="switch ${DB.configGlobal.loginPorNombreHabilitado?'on':''}" id="a_switch_nombre"><div class="switch-knob"></div></div>
       </div>
