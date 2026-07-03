@@ -3152,13 +3152,37 @@ function renderQuinielaForm(pid, originTab){
         const autoSp = computeAutoSpecial(finalBracket);
         DRAFT_PREDS.special = {...(DRAFT_PREDS.special||{}), ...autoSp};
         flushAutosave();
-        p.estadoQuiniela = 'enviada';
-        p.fechaEnvio = Date.now();
-        p.fechaActualizacion = Date.now();
-        saveData(DB);
-        toast('Tu quiniela fue enviada correctamente.');
-        render();
-        generarPDF(p); // se dispara después de pintar el nuevo estado "enviada"
+
+        // v2.7.4 — BUG REPORTADO: "a veces descarga la quiniela pero no la
+        // envía". Antes esto era optimista igual que la creación de
+        // participante lo era hasta la v7.5 (ver rgSubmitParticipantConfirmed,
+        // participantes.js, para la causa raíz completa): se marcaba
+        // 'enviada', se mostraba el toast de éxito y se disparaba el PDF
+        // ANTES de saber si Firestore aceptó la escritura de verdad. Ahora
+        // se espera la confirmación real del servidor primero; el botón se
+        // deshabilita mientras tanto para evitar un doble envío.
+        const preds = DB.predictions[p.id] || {};
+        const pEnviada = { ...p, estadoQuiniela:'enviada', fechaEnvio: Date.now(), fechaActualizacion: Date.now() };
+        const btnTextoOriginal = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Enviando...';
+
+        rgSubmitParticipantConfirmed(pEnviada, preds).then(()=>{
+          p.estadoQuiniela = pEnviada.estadoQuiniela;
+          p.fechaEnvio = pEnviada.fechaEnvio;
+          p.fechaActualizacion = pEnviada.fechaActualizacion;
+          saveData(DB); // el documento público ya se confirmó arriba; esto solo persiste meta/nextSeq y la copia local
+          toast('Tu quiniela fue enviada correctamente.');
+          render();
+          generarPDF(p); // se dispara después de pintar el nuevo estado "enviada"
+        }).catch(err=>{
+          console.error("Error al enviar la quiniela:", err);
+          btn.disabled = false; btn.textContent = btnTextoOriginal;
+          if(err && err.code === 'permission-denied'){
+            toast('No se pudo enviar tu quiniela: el servidor lo rechazó (permiso denegado). Avisale a quien administra la quiniela y probá de nuevo en un momento.', true);
+          }else{
+            toast('No se pudo enviar tu quiniela (' + (err && err.message ? err.message : 'error desconocido') + '). Revisá tu conexión e intentá de nuevo.', true);
+          }
+        });
       });
     }
   }

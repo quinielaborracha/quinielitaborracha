@@ -440,6 +440,36 @@ function rgCreateParticipantConfirmed(p){
   });
 }
 
+// v2.7.4 — BUG REPORTADO: "a veces se descarga el PDF pero la quiniela
+// no queda enviada". MISMA causa raíz que el bug de creación de más
+// arriba (rgCreateParticipantConfirmed): el botón "Enviar mi Quiniela"
+// (registro.js, paso 'review') marcaba p.estadoQuiniela='enviada',
+// mostraba el toast de éxito, renderizaba y disparaba la descarga del
+// PDF -- todo ANTES de saber si Firestore realmente aceptó esa
+// escritura, porque usaba el mismo saveData()/rgPushToFirestore()
+// "fire and forget" del autoguardado continuo. Si esa escritura puntual
+// fallaba (red inestable, timeout, cuota, cualquier error que no fuera
+// permission-denied no mostraba ni un aviso), la persona se iba
+// convencida de haber enviado -- con su PDF ya descargado -- pero para
+// el servidor (y por lo tanto para el panel Admin y el Ranking) su
+// quiniela seguía en borrador.
+//
+// FIX: igual que la creación, el envío final ahora espera la
+// confirmación real del servidor antes de decir "enviada" y generar el
+// PDF. Solo escribe el documento PÚBLICO de este participante (el envío
+// final no toca clave/correo, así que registro_privado no necesita
+// tocarse acá).
+function rgSubmitParticipantConfirmed(p, preds){
+  const fb = window.__fb;
+  if(!fb || !fb.PARTICIPANTS_COL || !fb.auth.currentUser){
+    return Promise.reject(new Error("Todavía estamos preparando tu sesión — espera un segundo y vuelve a intentar."));
+  }
+  const docRef = fb.doc(fb.PARTICIPANTS_COL, p.id);
+  return fb.setDoc(docRef, { ..._rgPublicFieldsOf(p), predictions: preds, updatedAt: fb.serverTimestamp() }).then(()=>{
+    _rgLastKnownParticipantsJSON[p.id] = _rgParticipantJSON(p, preds);
+  });
+}
+
 // v6.9 — Fase de Privacidad: el reclamo ahora son DOS escrituras
 // SECUENCIALES (no un batch atómico, a propósito):
 //   1) registro_privado/{pid}: se manda la clave que la persona ESCRIBIÓ
