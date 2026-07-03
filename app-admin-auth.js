@@ -184,6 +184,12 @@ function _afterAdminStatusResolved(){
     _testModeAutoSeedAttempted=true;
     maybeAutoSeedTestState();
   }
+  // v2.8 — "🏆 Torneo real": arranca (o frena, si dejó de ser admin --
+  // ver adminLogout) el auto-sync con ESPN en segundo plano. Se llama acá
+  // porque este es el único punto donde isAdmin() ya quedó resuelto de
+  // verdad, sea cual sea el camino (participante anónimo, admin recién
+  // logueado, o admin ya logueado que refresca la página).
+  if(typeof startTorneoRealAutoSync==="function") startTorneoRealAutoSync();
 }
 
 // ══════════════════════════════════════════════════════════════

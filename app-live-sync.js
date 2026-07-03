@@ -279,6 +279,16 @@ function applyRemoteState(p){
     // Si la persona está mirando "En vivo", refrescamos esa vista también
     try{loadMM(false);}catch(e){}
   }
+  // v2.8 — "🏆 Torneo real" (Estadísticas): si alguien la está mirando
+  // ahora mismo, se repinta con el nuevo estado apenas llega -- así se ve
+  // "en vivo" sin que ese visitante tenga que hacer nada ni recargar
+  // (ver renderTorneoReal, app-estadisticas.js, y startTorneoRealAutoSync,
+  // app-bracket-espn-sync.js, para de dónde sale este cambio remoto).
+  if(typeof renderTorneoReal==="function"
+    &&document.getElementById("t-stats")&&document.getElementById("t-stats").style.display!=="none"
+    &&document.getElementById("stat-popular")&&document.getElementById("stat-popular").style.display!=="none"){
+    try{renderTorneoReal();}catch(e){}
+  }
 }
 
 function wireFirestoreSync(){

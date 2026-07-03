@@ -159,6 +159,31 @@ async function fetchESPNElim(){
 }
 
 // ══════════════════════════════════════════════════════════════
+// AUTO-SYNC EN SEGUNDO PLANO — v2.8 ("🏆 Torneo real")
+// ══════════════════════════════════════════════════════════════
+// El proyecto no tiene Cloud Functions (plan Spark/gratuito, ver
+// CLAUDE.md): no hay ningún backend corriendo solo, así que "se actualiza
+// 100% sola" solo puede significar "mientras HAYA una sesión de admin con
+// la app abierta en algún lado, esa sesión resincroniza con ESPN sola, sin
+// que nadie tenga que acordarse de tocar el botón 'ESPN Live'". Solo el
+// admin puede escribir quiniela/estado (firestore.rules) -- por eso este
+// timer se arranca/frena únicamente según isAdmin() (ver
+// startTorneoRealAutoSync(), llamado desde _afterAdminStatusResolved() en
+// app-admin-auth.js cada vez que se resuelve el estado de auth, incluido
+// el logout). El resto de los visitantes ven el resultado en vivo gratis,
+// vía el mismo onSnapshot que ya sincroniza todo lo demás (applyRemoteState,
+// app-live-sync.js) -- cero llamadas a ESPN de su parte.
+let _torneoRealSyncT=null;
+function startTorneoRealAutoSync(){
+  stopTorneoRealAutoSync();
+  if(!isAdmin())return;
+  _torneoRealSyncT=setInterval(()=>{ fetchESPNElim(); },90000);
+}
+function stopTorneoRealAutoSync(){
+  if(_torneoRealSyncT){clearInterval(_torneoRealSyncT);_torneoRealSyncT=null;}
+}
+
+// ══════════════════════════════════════════════════════════════
 // CONFLICTO DE LLAVE DE ELIMINATORIA — v7.0
 // ══════════════════════════════════════════════════════════════
 // Se dispara cuando ESPN confirma equipos DISTINTOS a los que ya están

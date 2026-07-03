@@ -85,7 +85,7 @@ function statTab(id){
     document.getElementById("stab-"+x)?.classList.toggle("on",x===id);
   });
   if(id==="cards")renderStatCards();
-  if(id==="popular")renderStatPopular();
+  if(id==="popular")renderTorneoReal();
   if(id==="goal")fetchESPNScorers();
 }
 
@@ -204,88 +204,77 @@ function renderStatCards(){
   </div>`;
 }
 
-// ── PREDICCIONES MÁS POPULARES ──
-function renderStatPopular(){
+// ── TORNEO REAL (v2.8) ──
+// Antes esta sub-pestaña ("🗳 Predicciones") mostraba consenso/divergencia
+// de las predicciones de los 27 sobre partidos de GRUPOS ya jugados. Ahora
+// ("🏆 Torneo real") muestra el bracket de ELIMINATORIA real del Mundial
+// (P73-P104), sin nada de predicciones de nadie -- pura realidad del
+// torneo: equipos, marcador, en vivo o no. getRealElimTeams()/S.elimScores
+// (scoring.js/app-state.js) YA son la única fuente de verdad de "qué pasó
+// de verdad" que usa el resto de la app (renderBracket admin, Batallas,
+// etc.) -- acá solo se pinta esa misma verdad, sin comparar contra ningún
+// participante.
+//
+// "Se actualiza sola, en vivo": dos mecanismos, sin Cloud Functions (plan
+// Spark) ni polling desde cada visitante:
+//   1) Cualquier admin con la app abierta re-sincroniza con ESPN sola cada
+//      minuto en segundo plano (startTorneoRealAutoSync, app-bracket-espn-
+//      sync.js) y empuja el resultado a Firestore -- la única escritura
+//      real que puede haber (las reglas de Firestore rechazan cualquier
+//      escritura de un participante no-admin).
+//   2) TODOS los que están mirando esta pestaña reciben ese cambio al
+//      instante vía el mismo onSnapshot que ya sincroniza todo lo demás
+//      (applyRemoteState, app-live-sync.js) -- sin recargar la página.
+function renderTorneoReal(){
   const el=document.getElementById("stat-popular");if(!el)return;
-  const playedMids=MIDS.filter(mid=>sc(mid));
-  if(!playedMids.length){el.innerHTML=`<div class="ib">Sin resultados aún.</div>`;return;}
+  const rounds=(typeof ELIM_ROUNDS!=="undefined")?ELIM_ROUNDS:[];
+  if(!rounds.length){el.innerHTML=`<div class="ib">Sin datos de eliminatoria todavía.</div>`;return;}
 
-  // For each played match, calculate consensus and divergence
-  const matchStats=playedMids.map(mid=>{
-    const s=sc(mid);
-    const rR=s.h>s.a?"H":s.h<s.a?"A":"D";
-    const votes={H:0,D:0,A:0};let total=0;let exact=0;
-    PL.forEach(name=>{
-      const p=MD[mid]?.preds[name];if(!p)return;
-      total++;
-      const pR=p.h>p.a?"H":p.h<p.a?"A":"D";
-      votes[pR]++;
-      if(p.h===s.h&&p.a===s.a)exact++;
-    });
-    const winner=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
-    const consensus=total>0?Math.round(winner[1]/total*100):0;
-    const divergence=100-consensus; // higher = more split
-    const majCorrect=winner[0]===rR;
-    return{mid,lbl:MD[mid]?.lbl||`P${mid}`,s,rR,votes,total,exact,consensus,divergence,majCorrect,winner:winner[0]};
-  });
+  const fmtDT=(t)=>{
+    if(!t)return"";
+    const d=new Date(t);
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return d.toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit",timeZone:tz})+" · "+d.toLocaleDateString("es",{weekday:"short",day:"numeric",month:"short",timeZone:tz});
+  };
 
-  // Sort by divergence (most split first)
-  const sorted=[...matchStats].sort((a,b)=>b.divergence-a.divergence);
-  const top20=sorted.slice(0,20);
-
-  // Group consensus
-  const allH=matchStats.filter(m=>m.votes.H===m.total).length;
-  const allD=matchStats.filter(m=>m.votes.D===m.total).length;
-  const allA=matchStats.filter(m=>m.votes.A===m.total).length;
-  const totalExact=matchStats.reduce((s,m)=>s+m.exact,0);
-  const totalHits=matchStats.reduce((s,m)=>s+(m.majCorrect?1:0),0);
-
-  const RESULT_LBL={H:"Local",D:"Empate",A:"Visitante"};
-  const pts_short=lbl=>{const p=lbl.split(" vs ");return`${(p[0]||"").trim().split(" ").slice(-1)[0]} vs ${(p[1]||"").trim().split(" ").slice(-1)[0]}`;};
-
-  let html=`
-  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:.875rem">
-    <div style="padding:.625rem;background:var(--qb-surface);border:1px solid var(--qb-border);border-radius:8px;text-align:center">
-      <div style="font-family:var(--ff-display);font-size:24px;font-weight:900;color:#4dde8c">${totalHits}/${matchStats.length}</div>
-      <div style="font-size:10px;color:var(--qb-muted)">partidos donde la mayoría acertó</div>
-    </div>
-    <div style="padding:.625rem;background:var(--qb-surface);border:1px solid var(--qb-border);border-radius:8px;text-align:center">
-      <div style="font-family:var(--ff-display);font-size:24px;font-weight:900;color:var(--qb-gold)">${totalExact}</div>
-      <div style="font-size:10px;color:var(--qb-muted)">marcadores exactos en total</div>
-    </div>
-  </div>
-  <div class="sec" style="margin-bottom:.5rem">Partidos más disputados (mayor divergencia)</div>`;
-
-  top20.forEach(m=>{
-    const lbl=pts_short(m.lbl);
-    const rStr=`${m.s.h}–${m.s.a}`;
-    const hPct=m.total>0?Math.round(m.votes.H/m.total*100):0;
-    const dPct=m.total>0?Math.round(m.votes.D/m.total*100):0;
-    const aPct=m.total>0?Math.round(m.votes.A/m.total*100):0;
-    const barH=`<div style="height:8px;background:var(--qb-blue);border-radius:2px 0 0 2px;width:${hPct}%;display:inline-block;vertical-align:middle"></div>`;
-    const barD=`<div style="height:8px;background:var(--qb-muted);width:${dPct}%;display:inline-block;vertical-align:middle"></div>`;
-    const barA=`<div style="height:8px;background:var(--qb-red);border-radius:0 2px 2px 0;width:${aPct}%;display:inline-block;vertical-align:middle"></div>`;
-    const correctColor=m.majCorrect?"#4dde8c":"#ff8080";
-
-    html+=`<div style="padding:7px 10px;border:1px solid var(--qb-border);border-radius:8px;margin-bottom:4px;background:var(--qb-surface)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;font-weight:700;color:var(--qb-text)">${lbl}</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:10px;color:var(--qb-muted)">Real: <strong style="color:var(--qb-text)">${rStr}</strong></span>
-          <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:${m.majCorrect?"rgba(0,200,83,.12)":"rgba(212,0,26,.1)"};color:${correctColor};font-weight:700">${m.majCorrect?"mayoría ✓":"mayoría ✗"}</span>
-        </div>
-      </div>
-      <div style="display:flex;gap:0;overflow:hidden;border-radius:4px;margin-bottom:4px;height:8px;background:var(--qb-surface2)">${barH}${barD}${barA}</div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--qb-muted)">
-        <span style="color:var(--qb-blue)">🏠 ${m.votes.H} (${hPct}%)</span>
-        <span>🤝 ${m.votes.D} (${dPct}%)</span>
-        <span style="color:var(--qb-red)">✈️ ${m.votes.A} (${aPct}%)</span>
-        <span style="color:var(--qb-gold)">🎯 ${m.exact} exactos</span>
-      </div>
+  const cardFor=(pid)=>{
+    const teams=getRealElimTeams(pid);
+    const score=(S.elimScores&&(S.elimScores[pid]||S.elimScores[String(pid)]))||null;
+    const time=S.elimTimes&&S.elimTimes[pid];
+    if(!teams){
+      return`<div class="live-card" style="opacity:.5">
+        <div class="live-hdr"><span style="font-size:10px;color:var(--qb-muted)">P${pid} · por definir</span></div>
+      </div>`;
+    }
+    const hF=getFlag(null,teams.h),aF=getFlag(null,teams.a);
+    const live=!!(score&&score.live);
+    const played=!!score&&!live;
+    if(live){
+      return`<div class="live-card is-live">
+        <div class="live-hdr"><div style="display:flex;align-items:center;gap:6px"><span class="ldot"></span><span style="font-family:var(--ff-display);font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--qb-red);text-transform:uppercase">EN VIVO</span></div><span style="font-size:10px;color:var(--qb-muted)">P${pid}</span></div>
+        <div class="scoreboard"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(teams.h)}</span></div><div class="live-score red">${score.h} – ${score.a}</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(teams.a)}</span></div></div>
+      </div>`;
+    }
+    const scoreHtml=played
+      ?`<div class="live-score" style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-text)">${score.h} – ${score.a}</div>`
+      :`<div class="live-score" style="font-family:var(--ff-display);font-size:18px;font-weight:900;color:var(--qb-muted)">VS</div>`;
+    const timeHtml=(!played&&time)?`<span style="font-size:10px;color:var(--qb-muted)">⏱ ${fmtDT(time)}</span>`:"";
+    return`<div class="live-card">
+      <div class="live-hdr"><span style="font-size:10px;color:var(--qb-muted)">P${pid}${played?" · finalizado":""}</span>${timeHtml}</div>
+      <div class="scoreboard" style="padding:10px 14px"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(teams.h)}</span></div>${scoreHtml}<div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(teams.a)}</span></div></div>
     </div>`;
-  });
+  };
 
-  el.innerHTML=html;
+  const roundsHtml=rounds.map(round=>`
+    <div style="margin-bottom:1.125rem">
+      <div style="font-family:var(--ff-display);font-size:12px;font-weight:800;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${esc(round.lbl)}</div>
+      <div style="display:grid;gap:.5rem">${round.ids.map(cardFor).join("")}</div>
+    </div>`).join("");
+
+  el.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
+      <span class="sbadge ok">📡 Datos oficiales de ESPN</span>
+      <span style="font-size:10px;color:var(--qb-muted)">Se actualiza solo — no hace falta recargar la página</span>
+    </div>` + roundsHtml;
 }
 
 // ══════════════════════════════════════════════════════════════
