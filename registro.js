@@ -4191,4 +4191,19 @@ render();
 window.render = render;
 window.renderAdminTab = renderAdminTab;
 window.tryAutoLoginByOwnerUid = tryAutoLoginByOwnerUid;
+// v2.10 — isGloballyClosed se exporta para que propagateElimTeamRenames
+// (app-core-data.js, fuera de este IIFE) respete el cierre del registro
+// sin duplicar el criterio de fechaCierre/horaCierre: después del cierre
+// las predicciones de los participantes quedan congeladas y ningún
+// renombre de llave las vuelve a tocar.
+window.isGloballyClosed = isGloballyClosed;
+// v2.10 — la llama applyRemoteState (app-live-sync.js) cuando cambia
+// algún equipo de S.elimTeams: si hay alguien adentro del wizard, se
+// repinta para que vea el país nuevo sin recargar. Se salta el repintado
+// con tecleo sin guardar (WIZ_DIRTY) — mismo criterio anti-pérdida-de-
+// foco que onParticipantesChange, más arriba.
+window.rgRefreshWizardTeams = function(){
+  if(!DRAFT_PID || WIZ_DIRTY) return;
+  render();
+};
 })();

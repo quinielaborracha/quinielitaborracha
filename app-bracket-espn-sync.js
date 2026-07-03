@@ -61,6 +61,11 @@ async function fetchESPNElim(){
     let updated=0,live=0,teamsLoaded=0,teamsCorrected=0;
     _elimConflictQueue=[];
     const pidsEnConflicto=new Set();
+    // v2.10 — foto de las llaves manuales ANTES de aplicar lo de ESPN,
+    // para propagar cualquier renombre (texto provisional → país real)
+    // a las predicciones ya guardadas — mismo mecanismo que el editor
+    // manual de llaves (ver saveTeamsEditor / propagateElimTeamRenames).
+    const teamsBefore=snapshotManualElimTeams();
 
     evts.forEach(ev=>{
       // v7.0 — El partido se identifica por el gameId fijo de ESPN (ver
@@ -140,13 +145,15 @@ async function fetchESPNElim(){
       }
     });
 
+    const renombradas=propagateElimTeamRenames(elimRenamesFromTeamsDiff(teamsBefore,snapshotManualElimTeams())); // v2.10
     save();
     const now=new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});
     const lH=live>0?`<span class="sbadge" style="background:rgba(212,0,26,.18);color:#ff8080;border:1px solid rgba(212,0,26,.4)"><span class="ldot" style="width:5px;height:5px;margin-right:2px"></span>${live} en vivo</span>`:"";
     const tH=teamsLoaded>0?`<span class="sbadge info">🏴 ${teamsLoaded} equipos nuevos</span>`:"";
     const cH=teamsCorrected>0?`<span class="sbadge info">🔧 ${teamsCorrected} llave(s) corregida(s)</span>`:"";
+    const rH=renombradas>0?`<span class="sbadge info">📝 ${renombradas} quiniela(s) actualizadas</span>`:""; // v2.10
     const wH=_elimConflictQueue.length>0?`<span class="sbadge warn">⚠️ ${_elimConflictQueue.length} conflicto(s) de llave</span>`:"";
-    setES(`<span class="sbadge ok">✓ ESPN Elim · ${updated} resultados</span>${lH}${tH}${cH}${wH}<span style="color:var(--qb-muted)">${now}</span>`);
+    setES(`<span class="sbadge ok">✓ ESPN Elim · ${updated} resultados</span>${lH}${tH}${cH}${rH}${wH}<span style="color:var(--qb-muted)">${now}</span>`);
     if(_elimConflictQueue.length>0){
       const first=_elimConflictQueue.shift();
       openElimConflict(first.pid,first.current,first.espn);
@@ -206,8 +213,10 @@ function resolveElimTeamConflict(choice){
   if(!_elimConflictCurrent)return;
   const{pid,espn}=_elimConflictCurrent;
   if(choice==="espn"){
+    const before=snapshotManualElimTeams(); // v2.10
     S.elimTeams[pid]={h:espn.h,a:espn.a};
     delete S.elimScores[pid];
+    propagateElimTeamRenames(elimRenamesFromTeamsDiff(before,snapshotManualElimTeams())); // v2.10
     save();
   }
   _elimConflictCurrent=null;
