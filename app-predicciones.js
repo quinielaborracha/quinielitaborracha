@@ -26,7 +26,7 @@ function renderPred(){
   sel.innerHTML=PL.map((name,i)=>{const m=PM[name]||{};return`<button onclick="window._selP=${i};renderPred()" class="btn btn-sm ${i===pidx?"btn-blue":""}">${flagEmoji(m.champFlag,14)} ${esc(sn(name))}</button>`;}).join("");
   const name=PL[pidx];if(!name){body.innerHTML="";return;}
   const m=PM[name]||{};const pts=calcPts(name)+calcAdv(name)+calcElimPts(name)+calcBonos(name); // v1.1 — antes solo calcPts(name) (grupos); ahora coincide con el total de getRank()
-  body.innerHTML=`<div class="pc"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem"><span style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:var(--qb-text)">${avatarImg(m.champAvatar,28)}${flagEmoji(m.champFlag,16)} ${esc(name)}</span><span class="pill pb">${pts} pts</span></div>
+  body.innerHTML=`<div class="pc"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem"><span style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:var(--qb-text)">${avatarImg(m.champAvatar,34)}${flagEmoji(m.champFlag,16)} ${esc(name)}</span><span class="pill pb">${pts} pts</span></div>
   <div class="pg2">${MIDS.map(mid=>{
     const pred=MD[mid]?.preds[name];if(!pred)return"";
     const s=sc(mid);const played=!!s;let pts2=0,hit=false;
@@ -109,7 +109,7 @@ function renderAdv(){
   }).join("");
   const abEl=document.getElementById("ab");if(!abEl)return;abEl.innerHTML=ri+sel+`<div style="border:1px solid var(--qb-border);border-radius:12px;padding:.75rem .875rem;background:var(--qb-surface)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem">
-      <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:var(--qb-text)">${avatarImg(m.champAvatar,26)}${flagEmoji(m.champFlag,15)} ${esc(name)}</span>
+      <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:var(--qb-text)">${avatarImg(m.champAvatar,31)}${flagEmoji(m.champFlag,15)} ${esc(name)}</span>
       <span class="pill pg">${ap} pts</span>
     </div>
     <div style="margin-bottom:.5rem;font-size:10px;color:var(--qb-muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--ff-display);font-weight:700">Predicciones especiales (del archivo maestro)</div>

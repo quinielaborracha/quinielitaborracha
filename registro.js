@@ -799,6 +799,15 @@ function tryAutoLoginByOwnerUid(){
 
 onParticipantesChange(()=>{
   tryAutoLoginByOwnerUid();
+  if(DRAFT_PID){
+    // v1.9 — Ver nota junto a _lastPushedFechaActualizacion (declaración,
+    // arriba): esto es el ECO de nuestro propio flushAutosave(), no un
+    // cambio remoto genuino -- ya está aplicado localmente, re-renderizar
+    // acá solo produce el parpadeo/pérdida de foco reportado, sin mostrar
+    // nada nuevo.
+    const pEcho = DB.participants.find(x=>x.id===DRAFT_PID);
+    if(pEcho && pEcho.fechaActualizacion === _lastPushedFechaActualizacion) return;
+  }
   if(DRAFT_PID && WIZ_DIRTY) return; // hay tecleo sin guardar: no pisar ni re-renderizar
   if(DRAFT_PID){
     const p = DB.participants.find(x=>x.id===DRAFT_PID);
@@ -1175,6 +1184,20 @@ let WIZ_DIRTY = false;      // hay cambios escritos que el autoguardado todavía
 let ADMIN_OVERRIDE = false; // el admin entró por el lápiz ✏️: puede editar aunque esté bloqueada
 let PREVIEW_AS_PARTICIPANT = false; // el admin entró por 👁️ "Ver como participante" (vista idéntica, sin privilegios)
 let AUTOSAVE_TIMER = null;
+// v1.9 — BUG REPORTADO: la pantalla "parpadeaba" (re-render completo) en
+// CADA autoguardado mientras se escribía en un formulario -- incluso
+// editando como admin. Causa: onParticipantesChange() (más abajo) solo
+// se protegía con "if(DRAFT_PID && WIZ_DIRTY) return", pero flushAutosave()
+// pone WIZ_DIRTY=false ANTES de que Firestore confirme la escritura -- así
+// que el eco de nuestro propio guardado (onSnapshot se dispara solo, casi
+// al instante, con la escritura optimista local) llegaba con WIZ_DIRTY ya
+// en false y disparaba render() igual, reemplazando todo #rg-content por
+// nodos nuevos (de ahí el parpadeo/pérdida de foco en el input). Mismo
+// bug de fondo que _lastPushedStateJSON ya resolvió para quiniela/estado
+// (ver app-live-sync.js) -- acá basta con comparar fechaActualizacion
+// (se pisa en CADA flushAutosave, cubre predicciones Y datos personales
+// en un solo marcador) en vez de stringificar todo el documento.
+let _lastPushedFechaActualizacion = null;
 let INICIO_VIEW = 'choice'; // 'choice' | 'crear' | 'login' — sub-pantalla de la pestaña Inicio
 let PREFILL_EMAIL = '';     // correo (o nombre) pre-llenado al ofrecer "¿deseas verla?" desde un duplicado
 let MIGRAR_PID = null;      // v1.0 — participante que entró por nombre y debe registrar su correo antes de continuar
@@ -1263,6 +1286,7 @@ function flushAutosave(){
   DRAFT_PREDS = JSON.parse(JSON.stringify(cleaned));
   p.lastStep = WIZ_STEP;
   p.fechaActualizacion = Date.now();
+  _lastPushedFechaActualizacion = p.fechaActualizacion; // ver nota junto a la declaración, arriba
   saveData(DB);
   WIZ_DIRTY = false;
   updateSaveIndicator('Guardado ✓');
@@ -2007,7 +2031,7 @@ function renderParticipantDashboard(pid){
   const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
   const champAvatarFileDash = (champValDash && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champValDash]||'') : '';
   const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px">
-         ${avatarImg(champAvatarFileDash, 52)}
+         ${avatarImg(champAvatarFileDash, 62)}
          <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
          ${postularBtn}
        </div>`;
