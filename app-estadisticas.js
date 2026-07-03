@@ -141,6 +141,10 @@ function renderStatCards(){
   const pos=ranked.findIndex(r=>r.name===name)+1;
   const rankRow=ranked.find(r=>r.name===name);
 
+  // Batallas (duelos 1v1)
+  const battleWins=(computeBattleRecord()[name]||{}).wins||0;
+  const battlePts=calcBattleWinBonos(name);
+
   // Stars / badges
   const badges=[];
   if(exact>=5)badges.push({ico:"🎯",lbl:"Francotirador",desc:`${exact} exactos`});
@@ -179,6 +183,9 @@ function renderStatCards(){
         {v:wins,l:"Ganadores ✓",c:"#4dde8c"},
         {v:draws,l:"Empates ✓",c:"#6ab8f7"},
         {v:exact,l:"Marcador exacto",c:"var(--qb-gold)"},
+        {v:rankRow?.bon||0,l:"Pts de bonos",c:"#f5c842"},
+        {v:battleWins,l:"Batallas ganadas",c:"#4dde8c"},
+        {v:battlePts,l:"Pts de batallas",c:"#f5c842"},
       ].map(s=>`<div style="padding:.625rem;background:var(--qb-surface);text-align:center">
         <div style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:${s.c}">${s.v}</div>
         <div style="font-size:9px;color:var(--qb-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.04em">${s.l}</div>
