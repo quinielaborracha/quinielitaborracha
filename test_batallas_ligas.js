@@ -53,7 +53,7 @@ bridge.textContent = `
   window.__test = {
     DB, S, rebuildDynamicData, _battleBuilderPending, ensureBattleBuilderState,
     computeBattleRecord, getLigaStandings, getLigaGroups, getLigaDe, LIGAS,
-    startBattle, sugerirRival,
+    startBattle, sugerirRival, renderLigasPanel,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -82,6 +82,10 @@ check("Beto perdió 1 (contra Alfa) y empató 1 (contra Zulu) -- 0 wins, 1 loss,
   rec["Beto"].wins === 0 && rec["Beto"].losses === 1 && rec["Beto"].jugadas === 2);
 check("Un empate no suma win ni loss a nadie (Zulu/Beto solo tienen 1 loss cada uno, no 2)",
   rec["Zulu"].losses === 1 && rec["Beto"].losses === 1);
+// v2.7.5 — los empates ahora se contabilizan aparte (rec[x].draws).
+check("v2.7.5: el duelo D3 (Zulu vs Beto, Empate) sumó 1 'draws' a cada uno de los 2",
+  rec["Zulu"].draws === 1 && rec["Beto"].draws === 1);
+check("v2.7.5: Alfa (nunca empató) tiene draws === 0", rec["Alfa"].draws === 0);
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 2 — getLigaStandings(): orden (wins desc, losses asc, total
@@ -119,6 +123,45 @@ check("Echo (1 win, total más alto por acertar el marcador) queda ANTES que Fox
   posOf("Echo") < posOf("Foxtrot"));
 check("Los de 2 wins (Delta, Charlie) quedan ANTES que los de 1 win (Echo, Foxtrot)",
   Math.max(posOf("Delta"),posOf("Charlie")) < Math.min(posOf("Echo"),posOf("Foxtrot")));
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 2b (v2.7.5) — los EMPATES ahora son decisivos para el orden:
+   a igualdad de victorias, gana el que empató más (independientemente
+   de cuántas "jugadas" tenga cada uno en total).
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── getLigaStandings(): los empates desempatan antes que las derrotas ──");
+
+T.DB.participants = [
+  {id:"pG", name:"Golf",    city:"C", country:"P"}, // 3 wins, 2 draws, 0 losses (5 jugadas)
+  {id:"pH", name:"Hotel",   city:"C", country:"P"}, // 3 wins, 0 draws, 0 losses (3 jugadas) -- Golf debe ir ANTES
+];
+T.DB.predictions = {pG:{}, pH:{}};
+T.S.battleHistory = [
+  {name:"e1", p1:"Golf", p2:"X", winner:"Golf", date:"d"},
+  {name:"e2", p1:"Golf", p2:"Y", winner:"Golf", date:"d"},
+  {name:"e3", p1:"Golf", p2:"Z", winner:"Golf", date:"d"},
+  {name:"e4", p1:"Golf", p2:"W", winner:"Empate", date:"d"},
+  {name:"e5", p1:"Golf", p2:"V", winner:"Empate", date:"d"},
+  {name:"e6", p1:"Hotel", p2:"X", winner:"Hotel", date:"d"},
+  {name:"e7", p1:"Hotel", p2:"Y", winner:"Hotel", date:"d"},
+  {name:"e8", p1:"Hotel", p2:"Z", winner:"Hotel", date:"d"},
+];
+T.rebuildDynamicData();
+const standings2b = T.getLigaStandings();
+const posOf2b = (name)=>standings2b.findIndex(p=>p.name===name);
+check("Golf (3 wins, 2 draws) y Hotel (3 wins, 0 draws) están empatados en victorias",
+  standings2b.find(p=>p.name==="Golf").wins === standings2b.find(p=>p.name==="Hotel").wins);
+check("v2.7.5: Golf (más empates) queda ANTES que Hotel (mismas ganadas, menos empates)",
+  posOf2b("Golf") < posOf2b("Hotel"));
+
+// v2.7.5 — la tabla real (renderLigasPanel -> renderLigaTable) debe
+// mostrar la columna "Empatadas" con el valor correcto, no solo el
+// dato interno de getLigaStandings().
+T.renderLigasPanel();
+const ligasHtml = W.document.getElementById("battles-ligas-wrap").innerHTML;
+check("v2.7.5: la tabla de Ligas (UI real) tiene la columna 'Empatadas'", ligasHtml.includes("Empatadas"));
+check("v2.7.5: el valor '2' (empates de Golf) aparece en la fila de Golf",
+  /Golf[\s\S]{0,120}?<td[^>]*>\s*3\s*<\/td>[\s\S]{0,80}?<td[^>]*>\s*2\s*<\/td>/.test(ligasHtml));
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 3 — getLigaGroups(): tamaños (Champions=top10, Premier=mitad del

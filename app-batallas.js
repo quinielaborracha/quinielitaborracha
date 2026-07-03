@@ -59,14 +59,18 @@ const LIGAS=[
   {key:"serieb",label:"🥉 Serie B"},
 ];
 
-// Recuento de victorias/derrotas/partidos jugados por participante, leído
-// de S.battleHistory (el mismo array que ya llena resetBattle()). Un
-// "Empate" no suma a wins ni a losses de nadie, pero SÍ cuenta como
-// "jugadas" -- alguien que solo empató ya compitió, no es lo mismo que
-// alguien que nunca peleó ninguna batalla (ver getLigaGroups).
+// Recuento de victorias/derrotas/EMPATES/partidos jugados por
+// participante, leído de S.battleHistory (el mismo array que ya llena
+// resetBattle()). Un "Empate" no suma a wins ni a losses de nadie -- no
+// otorga puntos (ver calcBattleWinBonos, scoring.js) -- pero SÍ cuenta
+// como "jugadas" Y como "draws" propios: alguien que solo empató ya
+// compitió, no es lo mismo que alguien que nunca peleó ninguna batalla
+// (ver getLigaGroups), y v2.7.5 — los empates SÍ son decisivos para el
+// orden de la Liga (ver getLigaStandings): a igualdad de victorias, más
+// empates (= menos derrotas relativas) puntúa mejor.
 function computeBattleRecord(){
   const rec={};
-  const ensure=(name)=>{ if(!rec[name])rec[name]={wins:0,losses:0,jugadas:0}; return rec[name]; };
+  const ensure=(name)=>{ if(!rec[name])rec[name]={wins:0,losses:0,draws:0,jugadas:0}; return rec[name]; };
   (S.battleHistory||[]).forEach(h=>{
     ensure(h.p1).jugadas++;
     ensure(h.p2).jugadas++;
@@ -74,26 +78,32 @@ function computeBattleRecord(){
       ensure(h.winner).wins++;
       const loser=h.winner===h.p1?h.p2:h.p1;
       ensure(loser).losses++;
+    }else if(h.winner==="Empate"){
+      ensure(h.p1).draws++;
+      ensure(h.p2).draws++;
     }
   });
   return rec;
 }
 
 // Standings de TODOS los participantes activos, ordenados por el criterio
-// de la Liga: más victorias primero; empate en victorias, menos derrotas;
-// sigue empatado, el ranking general de predicciones (Básico+Avanzado+
-// Eliminatoria+Bonos, el mismo total que ya muestra getRank()) como
-// último desempate.
+// de la Liga: más victorias primero; empate en victorias, más EMPATES
+// (v2.7.5 — no suman puntos, pero sí definen el orden: entre 2
+// participantes con las mismas ganadas, quien empató más peleó "mejor"
+// que quien perdió más); sigue empatado, menos derrotas; sigue empatado,
+// el ranking general de predicciones (Básico+Avanzado+Eliminatoria+Bonos,
+// el mismo total que ya muestra getRank()) como último desempate.
 function getLigaStandings(){
   const record=computeBattleRecord();
   const rankTotal={};
   getRank().forEach(p=>{rankTotal[p.name]=p.total;});
   const rows=PL.map(name=>{
-    const r=record[name]||{wins:0,losses:0,jugadas:0};
-    return{name,wins:r.wins,losses:r.losses,jugadas:r.jugadas,total:rankTotal[name]||0};
+    const r=record[name]||{wins:0,losses:0,draws:0,jugadas:0};
+    return{name,wins:r.wins,losses:r.losses,draws:r.draws,jugadas:r.jugadas,total:rankTotal[name]||0};
   });
   rows.sort((a,b)=>{
     if(b.wins!==a.wins)return b.wins-a.wins;
+    if(b.draws!==a.draws)return b.draws-a.draws;
     if(a.losses!==b.losses)return a.losses-b.losses;
     return b.total-a.total;
   });
@@ -752,12 +762,13 @@ function renderLigaTable(rows){
   }
   const rki=["🥇","🥈","🥉"];
   return`<table class="rt" style="width:100%">
-    <thead><tr><th>#</th><th>Participante</th><th style="text-align:center">Ganadas</th><th style="text-align:center">Perdidas</th></tr></thead>
+    <thead><tr><th>#</th><th>Participante</th><th style="text-align:center">Ganadas</th><th style="text-align:center">Empatadas</th><th style="text-align:center">Perdidas</th></tr></thead>
     <tbody>
       ${rows.map((p,i)=>`<tr>
         <td>${i<3?`<span style="font-size:18px">${rki[i]}</span>`:`<span class="rk">${i+1}</span>`}</td>
         <td>${esc(p.name)}</td>
         <td style="text-align:center">${p.wins}</td>
+        <td style="text-align:center">${p.draws}</td>
         <td style="text-align:center">${p.losses}</td>
       </tr>`).join("")}
     </tbody>
