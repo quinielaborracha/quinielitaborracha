@@ -38,14 +38,20 @@ let _elimConflictQueue=[],_elimConflictCurrent=null;
 const ELIM_DATES=["20260628","20260629","20260630","20260701","20260702","20260703","20260704","20260705","20260706","20260707","20260709","20260710","20260711","20260712","20260714","20260715","20260718","20260719"];
 
 // Equipos "reales" conocidos hoy para un pid de eliminatoria, para poder
-// comparar orientación/identidad contra lo que reporta ESPN. Para 1/16
-// (73-88) viene de S.elimTeams; de Octavos en adelante viene de
-// getRealElimTeams(), que resuelve recursivamente contra ELIM_TREE y los
-// resultados reales ya cargados de la fase previa (puede o no estar
-// "cerrada" en Bonos -- v1.9, eso ya no bloquea cargar resultados, solo
-// los puntos).
+// comparar orientación/identidad contra lo que reporta ESPN.
+// v2.9.2 — antes esto era "if(ELIM_1_16_IDS.includes(pid))", hardcodeado
+// a Dieciseisavos (mismo bug que getRealElimTeams tenía hasta v1.2, ver
+// scoring.js). Ahora usa getManualTeamPids(): en un torneo normal (Grupos
+// + Dieciseisavos activos) es exactamente Dieciseisavos de siempre, pero
+// si el torneo arranca directo en una fase posterior (ej. Octavos,
+// Constructor de Torneos), esos son los pids que reciben equipos "a
+// mano" -- de ahí viene S.elimTeams directo; para cualquier pid
+// posterior a esa primera fase, viene de getRealElimTeams(), que resuelve
+// recursivamente contra ELIM_TREE y los resultados reales ya cargados de
+// la fase previa (puede o no estar "cerrada" en Bonos -- v1.9, eso ya no
+// bloquea cargar resultados, solo los puntos).
 function equiposConocidosElim(pid){
-  if(ELIM_1_16_IDS.includes(pid))return(S.elimTeams[pid]&&S.elimTeams[pid].h)?S.elimTeams[pid]:null;
+  if(getManualTeamPids().includes(pid))return(S.elimTeams[pid]&&S.elimTeams[pid].h)?S.elimTeams[pid]:null;
   return getRealElimTeams(pid);
 }
 
@@ -61,6 +67,14 @@ async function fetchESPNElim(){
     let updated=0,live=0,teamsLoaded=0,teamsCorrected=0;
     _elimConflictQueue=[];
     const pidsEnConflicto=new Set();
+    // v2.9.2 — pids que reciben equipos "a mano" HOY, según qué fase de
+    // eliminatoria sea la primera activa (mismo criterio que el editor
+    // manual de llaves y que getRealElimTeams(), ver scoring.js). En un
+    // torneo normal es Dieciseisavos (ELIM_1_16_IDS de siempre); si el
+    // torneo arranca en otra fase (ej. Octavos), son esos pids -- antes
+    // esto quedaba hardcodeado a ELIM_1_16_IDS y ESPN nunca llegaba a
+    // cargar los equipos de la fase real de arranque.
+    const manualPids=getManualTeamPids();
 
     evts.forEach(ev=>{
       // v7.0 — El partido se identifica por el gameId fijo de ESPN (ver
@@ -84,10 +98,11 @@ async function fetchESPNElim(){
         S.elimTimes[pid]=ev.date;
       }
 
-      // ── Cruce real (solo aplica a 1/16, P73-P88 — las rondas
-      //    posteriores se resuelven solas a partir de los resultados
-      //    previos vía ELIM_TREE) ──
-      if(ELIM_1_16_IDS.includes(pid)&&homeES&&awayES){
+      // ── Cruce real (solo aplica a los pids de la fase que recibe
+      //    equipos a mano HOY, manualPids — las rondas posteriores se
+      //    resuelven solas a partir de los resultados previos vía
+      //    ELIM_TREE) ──
+      if(manualPids.includes(pid)&&homeES&&awayES){
         const existT=S.elimTeams[pid];
         const sameTeams=!!(existT&&existT.h&&
           new Set([n(existT.h),n(existT.a)]).size===2&&
@@ -121,8 +136,8 @@ async function fetchESPNElim(){
       if(state==="post"||state==="in"){
         const hs=parseInt(home.score)||0;const as=parseInt(away.score)||0;
         const existing=S.elimScores[pid];
-        // Orientación contra los equipos reales conocidos (1/16: recién
-        // actualizado arriba; Octavos+: getRealElimTeams).
+        // Orientación contra los equipos reales conocidos (fase manual:
+        // recién actualizado arriba; fases siguientes: getRealElimTeams).
         const real=equiposConocidosElim(pid);
         let finalH=hs,finalA=as,orientable=true;
         if(real){
@@ -130,7 +145,7 @@ async function fetchESPNElim(){
           else if(!(n(real.h)===n(homeES)&&n(real.a)===n(awayES))){
             orientable=false; // ni coincide derecho ni invertido — no se adivina
           }
-        }else if(!ELIM_1_16_IDS.includes(pid)){
+        }else if(!manualPids.includes(pid)){
           orientable=false; // fase previa todavía no resuelta/cerrada
         }
         if(orientable&&(!existing||existing.live)){

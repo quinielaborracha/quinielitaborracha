@@ -55,7 +55,12 @@
 // asignables a un atributo src, antes con forma
 // "data:image/png;base64,..." y ahora con forma "archivo.webp?v=1".
 const LOGO_SRC="logo.webp?v=1";
-const BORRACHI_SRC="borrachi.webp?v=1";
+// v2.9.2 — borrachi.webp se regeneró sin el fondo blanco (flood-fill desde
+// los bordes + feather de anti-aliasing, conservando intacto el blanco
+// INTERNO del personaje: cara, espuma de la cerveza, suelas). ?v=2 para
+// que el Service Worker (sw.js, cache-first en pedidos con ?v=) no siga
+// sirviendo la versión vieja con fondo blanco desde caché.
+const BORRACHI_SRC="borrachi.webp?v=2";
 const LOGO_SIMPLE_SRC="logo-simple.webp?v=1";
 
 // ── Lockout cliente — fricción de UX, NO es seguridad real ─────

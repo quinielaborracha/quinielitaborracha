@@ -125,7 +125,12 @@
   );
 }
 .hdr-logo {
-  width: 52px; height: 52px;
+  /* v2.9.2 — 70px (antes 52px): ahora que borrachi.webp no tiene fondo
+     blanco, se agranda para que la mascota se note más en el header. El
+     background/box-shadow de acá quedan sin efecto a propósito -- el div
+     en index.html los pisa con su propio style inline (transparent/none),
+     ver la nota junto a #logo-btn en index.html. */
+  width: 70px; height: 70px;
   background: var(--qb-red);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -680,8 +685,8 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 
   /* ── Header v5.3: logo/título grandes, fecha+participantes juntos, Light/En vivo mismo ancho ── */
   .hdr{align-items:flex-start;flex-wrap:nowrap;gap:10px}
-  .hdr-logo{width:62px!important;height:62px!important;flex:0 0 auto}
-  #logo-img{width:62px!important;height:62px!important}
+  .hdr-logo{width:86px!important;height:86px!important;flex:0 0 auto} /* v2.9.2 — antes 62px */
+  #logo-img{width:86px!important;height:86px!important} /* v2.9.2 — antes 62px */
   .hdr-title{font-size:16px!important;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.2}
   .hdr-title .ver{font-size:10px}
   #admin-indicator{display:none!important}
