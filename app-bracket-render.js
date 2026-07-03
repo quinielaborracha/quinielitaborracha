@@ -188,12 +188,6 @@ function openTeamsEditor(){
 function closeTeamsEditor(){document.getElementById("teams-modal").style.display="none";}
 
 function saveTeamsEditor(){
-  // v2.10 — foto ANTES de escribir, para detectar renombres (texto
-  // provisional → país real) y propagarlos a las predicciones ya
-  // guardadas de los participantes (ver propagateElimTeamRenames,
-  // app-core-data.js — solo con registro abierto y torneo sembrado de
-  // equipos reales; en cualquier otro caso devuelve 0 y no toca nada).
-  const before=snapshotManualElimTeams();
   let saved=0;
   getManualTeamPids().forEach(pid=>{
     const h=(document.getElementById("th"+pid)?.value||"").trim();
@@ -201,9 +195,8 @@ function saveTeamsEditor(){
     if(h&&a){S.elimTeams[pid]={h,a};saved++;}
     else if(!h&&!a){delete S.elimTeams[pid];}
   });
-  const renombradas=propagateElimTeamRenames(elimRenamesFromTeamsDiff(before,snapshotManualElimTeams()));
   save();closeTeamsEditor();renderElim();renderBracket();renderRank();
-  toast(`✓ ${saved} llaves guardadas`+(renombradas?` · ${renombradas} quiniela(s) actualizadas al nuevo nombre`:""));
+  toast(`✓ ${saved} llaves guardadas`);
 }
 
 // ══════════════════════════════════════════════════════════════

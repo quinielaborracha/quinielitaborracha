@@ -246,10 +246,6 @@ function setLiveBadge(connected){
 
 function applyRemoteState(p){
   if(!p)return;
-  // v2.10 — foto de las llaves antes de pisarlas, para repintar el wizard
-  // de Mi Quiniela SOLO si de verdad cambió algún equipo (ver el bloque
-  // al final de esta función) y no en cada marcador en vivo que llega.
-  const prevElimTeamsJSON=JSON.stringify(S.elimTeams||{});
   S.scores=p.scores||{};
   S.checksums=p.checksums||{};
   S.elimScores=p.elimScores||{};
@@ -292,16 +288,6 @@ function applyRemoteState(p){
     &&document.getElementById("t-stats")&&document.getElementById("t-stats").style.display!=="none"
     &&document.getElementById("stat-popular")&&document.getElementById("stat-popular").style.display!=="none"){
     try{renderTorneoReal();}catch(e){}
-  }
-  // v2.10 — Si un participante está mirando su wizard de Mi Quiniela
-  // mientras el admin renombra una llave (✏️ Editar llaves / ⚡ ESPN),
-  // se repinta para que vea el país nuevo al instante, sin recargar.
-  // Solo cuando elimTeams realmente cambió, y rgRefreshWizardTeams
-  // (registro.js) se salta el repintado si hay tecleo sin guardar
-  // (WIZ_DIRTY) para no robarle el foco a nadie.
-  if(typeof window.rgRefreshWizardTeams==="function"
-    &&JSON.stringify(S.elimTeams||{})!==prevElimTeamsJSON){
-    try{window.rgRefreshWizardTeams();}catch(e){}
   }
 }
 
