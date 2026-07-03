@@ -298,6 +298,19 @@ const SPECIAL_QUESTIONS = [
 // vacío en esos 3 campos — backfillAutoSpecialForAll() (botón en el panel
 // Admin) corrige eso retroactivamente, sin tocar nada más de su quiniela.
 const AUTO_SPECIAL_IDS = ['campeon', 'subcampeon', 'tercer'];
+
+// v2.8.2 — Antes, apagar una "Regla avanzada" (Configuración del torneo →
+// Reglas → 🎯 Preguntas avanzadas) solo dejaba de sumarle puntos
+// (isPreguntaAvanzadaActiva, scoring.js) pero el wizard la seguía
+// mostrando y pidiendo igual, lo cual confundía a los participantes
+// (ej. "Goleador del torneo" apagado, pero el formulario lo sigue
+// exigiendo). Ahora el wizard, el contador de completitud y el PDF usan
+// esta lista filtrada en vez de SPECIAL_QUESTIONS directo, así que una
+// pregunta apagada desaparece de todos lados a la vez.
+function activeSpecialQuestions(){
+  if(typeof isPreguntaAvanzadaActiva!=="function") return SPECIAL_QUESTIONS; // scoring.js no cargado (algunos tests de registro.js aislado)
+  return SPECIAL_QUESTIONS.filter(q=>isPreguntaAvanzadaActiva(q.id));
+}
 function computeAutoSpecial(bracket){
   const out = { campeon:'', subcampeon:'', tercer:'' };
   if(!bracket || !bracket.ready) return out;
@@ -667,13 +680,14 @@ function computeCompletionFromPreds(preds){
     phases.push({key:ph.key, label:ph.label, done, total:ph.n});
   });
   const autoSp = computeAutoSpecial(bracket);
-  const specialAns = SPECIAL_QUESTIONS.filter(q=>{
+  const visibleSpecial = activeSpecialQuestions();
+  const specialAns = visibleSpecial.filter(q=>{
     if(AUTO_SPECIAL_IDS.includes(q.id)) return !!(autoSp[q.id] && String(autoSp[q.id]).trim());
     const v = preds.special && preds.special[q.id];
     if(q.type==='number') return v!==undefined && v!==null && v!=='' && Number.isInteger(Number(v)) && Number(v)>=0;
     return !!(v && String(v).trim());
   }).length;
-  phases.push({key:'special', label:'Preguntas especiales', done:specialAns, total:SPECIAL_QUESTIONS.length});
+  phases.push({key:'special', label:'Preguntas especiales', done:specialAns, total:visibleSpecial.length});
   const totalDone = phases.reduce((s,p)=>s+p.done,0);
   const totalAll  = phases.reduce((s,p)=>s+p.total,0);
   return { phases, totalDone, totalAll, bracket, complete: totalDone===totalAll };
@@ -1203,7 +1217,7 @@ function findByEmail(email){
   return DB.participants.find(p=> p.emailHash ? p.emailHash===h : norm(p.email)===norm(email));
 }
 
-function totalMatches(){ return 72 + KO_SLOT_IDS.length + SPECIAL_QUESTIONS.length; } // 72+32+8 = 112
+function totalMatches(){ return 72 + KO_SLOT_IDS.length + activeSpecialQuestions().length; } // 72+32+8 = 112 (menos las preguntas avanzadas apagadas)
 function countAnswered(pid){ return getCompletionStatus(pid).totalDone; }
 
 /* ════════════════════════════════════════
@@ -2921,7 +2935,9 @@ function buildKoStepHtml(key, bracket, preds, readOnly){
 function buildSpecialStepHtml(preds, readOnly, bracket){
   const sp = preds.special || {};
   const auto = computeAutoSpecial(bracket);
-  return SPECIAL_QUESTIONS.map(q=>{
+  const visible = activeSpecialQuestions();
+  if(!visible.length) return `<div class="note">El administrador desactivó todas las preguntas avanzadas de este torneo.</div>`;
+  return visible.map(q=>{
     const isAuto = AUTO_SPECIAL_IDS.includes(q.id);
 
     if(isAuto){
@@ -3981,7 +3997,7 @@ function buildPosterElimHtml(preds, bracket){
 function buildPosterSpecialHtml(preds, bracket){
   const autoSp = computeAutoSpecial(bracket);
   const sp = preds.special || {};
-  return SPECIAL_QUESTIONS.map(q=>{
+  return activeSpecialQuestions().map(q=>{
     const isAuto = AUTO_SPECIAL_IDS.includes(q.id);
     const raw = isAuto ? autoSp[q.id] : sp[q.id];
     const val = (raw!==undefined && raw!=='') ? raw : '—';

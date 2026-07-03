@@ -2,9 +2,11 @@
 // (ARULES/SPECIAL_QUESTIONS: campeón, subcampeón, 3er lugar, goleador,
 // goles del goleador, país más goleador, goles de ese país, país más
 // goleado) en Configuración del torneo → Reglas → 🎯 Preguntas
-// avanzadas. Apagar una NO oculta la pregunta ni bloquea la predicción
-// -- solo deja de sumar sus puntos (calcAdv, scoring.js) y la saca de la
-// pestaña pública "Reglas" (renderRules, app-predicciones.js).
+// avanzadas. Apagar una deja de sumar sus puntos (calcAdv, scoring.js),
+// la saca de la pestaña pública "Reglas" (renderRules, app-predicciones.js)
+// y -- desde v2.8.2 -- también la oculta del wizard de registro
+// (activeSpecialQuestions(), registro.js), que antes la seguía pidiendo
+// aunque el admin ya la hubiera apagado.
 //
 // Carga los 24 archivos de producción reales en el mismo orden que
 // index.html, mismo patrón de bridge que el resto de los tests de
@@ -153,6 +155,111 @@ console.log("\n── Reactivar 'campeón' restaura el total original ──");
 switchCampeon.dispatchEvent(new W.Event("click", {bubbles:true}));
 check("Tras reactivar, reglas.avanzado.campeon volvió a true", T.DB.configGlobal.reglas.avanzado.campeon === true);
 check("calcAdv(Juan) volvió a 79 (el total original completo)", T.calcAdv("Juan") === 79);
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 6 (v2.8.2) — El wizard de registro (registro.js) oculta la
+   pregunta apagada en vez de seguir pidiéndola. registro.js está
+   envuelto en una IIFE -- mismo patrón de bridge-antes-del-cierre que
+   test_v1_6_ajustes.js.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── registro.js: la pregunta apagada desaparece del wizard ──");
+
+const html2 = `<!doctype html><html><body>
+  <div id="rg-tabs"><button class="rg-tab on" data-tab="inicio">Inicio</button></div>
+  <div id="rg-content"></div>
+  <div id="torneo-content"></div>
+  <div id="toast"></div>
+  <div id="em_continue"></div><div id="em_save_exit"></div><div id="em_discard"></div>
+  <div id="block_ok"></div><div id="block_goto"></div>
+  <div id="exitModal" style="display:none"></div><div id="blockModal" style="display:none"></div>
+  <div id="blockModalText"></div><div id="pdfPoster"></div>
+  <div id="root"></div><div id="integ-banner"></div><img id="logo-img"><span id="admin-indicator"></span>
+</body></html>`;
+const dom2 = new JSDOM(html2, { url: "https://example.org/", runScripts: "dangerously" });
+const W2 = dom2.window;
+W2.toast = (m,e) => {};
+W2.setInterval = () => 0;
+W2.confirm = () => true;
+W2.alert = () => {};
+W2.__fb = null;
+W2.requestAnimationFrame = () => 0;
+
+for (const file of FILES_IN_ORDER){
+  const code = fs.readFileSync(path.join(__dirname, file), "utf8");
+  const script = W2.document.createElement("script");
+  script.textContent = code;
+  try{ W2.document.body.appendChild(script); }
+  catch(e){ console.log(`❌ (parte 6) ${file} lanzó un error al cargar: ${e.message}`); ok = false; }
+}
+let regCode = fs.readFileSync(path.join(__dirname, "registro.js"), "utf8");
+const closeIdx = regCode.lastIndexOf("})();");
+if (closeIdx === -1) throw new Error("No se encontró el cierre de la IIFE en registro.js");
+const regBridge = `
+window.__testReg = {
+  DB, S, get DRAFT_PID(){ return DRAFT_PID; }, set DRAFT_PID(v){ DRAFT_PID = v; },
+  get DRAFT_PREDS(){ return DRAFT_PREDS; }, set DRAFT_PREDS(v){ DRAFT_PREDS = v; },
+  get WIZ_STEP(){ return WIZ_STEP; }, set WIZ_STEP(v){ WIZ_STEP = v; },
+  get WIZ_DIRTY(){ return WIZ_DIRTY; }, set WIZ_DIRTY(v){ WIZ_DIRTY = v; },
+  render, renderQuinielaForm, activeSpecialQuestions, computeCompletionFromPreds, WIZARD_STEPS,
+};
+`;
+regCode = regCode.slice(0, closeIdx) + regBridge + regCode.slice(closeIdx);
+const regScript = W2.document.createElement("script");
+regScript.textContent = regCode;
+try{ W2.document.body.appendChild(regScript); }
+catch(e){ console.log(`❌ registro.js (con bridge, parte 6) lanzó un error al cargar: ${e.message}`); ok = false; }
+
+const T2 = W2.__testReg;
+W2.isAdmin = () => true;
+
+const p2 = {id:"p1", codigo:"QLB-2026-0001", name:"Juan Pérez", city:"C", country:"P",
+  email:"juan@example.com", clave:"111111", ownerUid:"anon-juan",
+  estadoQuiniela:"borrador", fechaCreacion:Date.now(), fechaActualizacion:Date.now(), lastStep:8};
+T2.DB.participants = [p2];
+T2.DB.predictions = {p1:{special:{}}};
+T2.DB.configGlobal.registroAbierto = true;
+W2.rebuildDynamicData();
+
+const specialIdx = T2.WIZARD_STEPS.findIndex(s=>s.key==='special');
+check("WIZARD_STEPS tiene un paso 'special' (Preguntas especiales)", specialIdx !== -1);
+
+T2.DRAFT_PID = "p1";
+T2.DRAFT_PREDS = {special:{}};
+T2.WIZ_STEP = specialIdx;
+T2.WIZ_DIRTY = false;
+
+// Con las 8 preguntas activas (default)
+check("Con todo activo, activeSpecialQuestions() devuelve las 8", T2.activeSpecialQuestions().length === 8);
+let compAllOn = T2.computeCompletionFromPreds(T2.DRAFT_PREDS);
+check("Con todo activo, el paso 'special' pide 8 respuestas", compAllOn.phases.find(ph=>ph.key==='special').total === 8);
+
+let renderEx = null;
+try{ T2.render(); }catch(e){ renderEx = e; }
+check("El wizard renderiza el paso 'special' sin excepción", !renderEx);
+let contentHtml2 = W2.document.getElementById("rg-content").innerHTML;
+check("Con 'goleador' activo, 'Goleador del torneo' SÍ aparece en el wizard", contentHtml2.includes("Goleador del torneo"));
+
+// Apagar 'goleador' desde Configuración del torneo (mismo estado que
+// leería isPreguntaAvanzadaActiva en cualquier otra pantalla)
+T2.DB.configGlobal.reglas.avanzado.goleador = false;
+
+check("Apagado 'goleador', activeSpecialQuestions() devuelve 7 (ya no lo incluye)",
+  T2.activeSpecialQuestions().length === 7 && !T2.activeSpecialQuestions().some(q=>q.id==='goleador'));
+let compGoleadorOff = T2.computeCompletionFromPreds(T2.DRAFT_PREDS);
+check("Apagado 'goleador', el paso 'special' ahora pide solo 7 respuestas (no 8)",
+  compGoleadorOff.phases.find(ph=>ph.key==='special').total === 7);
+
+renderEx = null;
+try{ T2.render(); }catch(e){ renderEx = e; }
+check("El wizard vuelve a renderizar sin excepción tras apagar 'goleador'", !renderEx);
+contentHtml2 = W2.document.getElementById("rg-content").innerHTML;
+check("Apagado 'goleador', 'Goleador del torneo' YA NO aparece en el wizard", !contentHtml2.includes("Goleador del torneo"));
+check("Las demás preguntas avanzadas ('País más goleador') siguen apareciendo", contentHtml2.includes("País más goleador"));
+
+// Reactivar deja todo como al principio
+T2.DB.configGlobal.reglas.avanzado.goleador = true;
+check("Reactivado 'goleador', activeSpecialQuestions() vuelve a devolver las 8",
+  T2.activeSpecialQuestions().length === 8);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);

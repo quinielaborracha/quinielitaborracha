@@ -99,10 +99,11 @@ function getDynamicSpec(name){
 
 // v2.7.6 — ¿Esta "Regla avanzada" puntual (ARULES/SPECIAL_QUESTIONS,
 // mismo id en ambas) sigue otorgando puntos? Apagada por el admin desde
-// Configuración del torneo → Reglas → 🎯 Preguntas avanzadas. Igual que
-// el resto de los switches de "reglas.*.activo": apagarla NO oculta la
-// pregunta ni bloquea que se siga respondiendo (registro.js no cambia),
-// solo deja de sumar sus puntos acá.
+// Configuración del torneo → Reglas → 🎯 Preguntas avanzadas.
+// v2.8.2 — registro.js (activeSpecialQuestions()) ahora también usa esta
+// misma función para OCULTAR del wizard/PDF cualquier pregunta apagada,
+// no solo dejar de puntuarla: antes el formulario seguía pidiéndola aunque
+// el admin ya la hubiera apagado, lo cual confundía a los participantes.
 function isPreguntaAvanzadaActiva(qid){
   const v=DB.configGlobal?.reglas?.avanzado?.[qid];
   return v!==false;

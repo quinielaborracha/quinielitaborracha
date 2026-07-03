@@ -386,7 +386,7 @@ function buildReglasHtml(R){
 
     <div class="card">
       <div class="card-title">🎯 Preguntas avanzadas</div>
-      <div class="muted" style="font-size:11.5px;margin-bottom:.5rem">Campeón, goleador del torneo, etc. -- puntos fijos (no editables), pero cada una se puede apagar por separado sin tocar las demás. Apagar una NO la oculta del wizard ni bloquea que se siga respondiendo: solo deja de sumar sus puntos.</div>
+      <div class="muted" style="font-size:11.5px;margin-bottom:.5rem">Campeón, goleador del torneo, etc. -- puntos fijos (no editables), pero cada una se puede apagar por separado sin tocar las demás. Apagar una la oculta del formulario de cada participante (v2.8.2) y deja de sumar sus puntos.</div>
       ${arulesRows}
     </div>
 
