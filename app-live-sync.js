@@ -151,6 +151,16 @@ function save(){
     localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
     pushStateToFirestore(payload);
   }catch(e){console.error("Error al guardar:",e);}
+  // v3.2.3 — mismo bug que la nota en applyRemoteState(), pero para quien
+  // ESTÁ haciendo el cambio (admin cargando un resultado a mano o vía
+  // ESPN Live): si esa misma pestaña/sesión también tiene abierta la
+  // pantalla de Mi Quiniela/Ranking (registro.js), antes se quedaba
+  // igual de desactualizada -- acá el eco de Firestore ni siquiera
+  // aplica (pushStateToFirestore se suprime a sí mismo vía
+  // _lastPushedStateJSON), así que sin este llamado nunca se enteraba.
+  if(typeof refreshRegistroViewFromStateChange==="function"){
+    try{refreshRegistroViewFromStateChange();}catch(e){}
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -288,6 +298,15 @@ function applyRemoteState(p){
     &&document.getElementById("t-stats")&&document.getElementById("t-stats").style.display!=="none"
     &&document.getElementById("stat-popular")&&document.getElementById("stat-popular").style.display!=="none"){
     try{renderTorneoReal();}catch(e){}
+  }
+  // v3.2.3 — BUG REPORTADO: un resultado real nuevo (ESPN Live o carga
+  // manual del admin) actualizaba el panel de Admin (renderRank() arriba)
+  // pero nunca la pantalla de Mi Quiniela/Ranking que ve cada participante
+  // (registro.js, "rg-content") — esa solo escuchaba cambios de
+  // registro_participants, un documento totalmente distinto. Ver la nota
+  // junto a refreshRegistroViewFromStateChange() en registro.js.
+  if(typeof refreshRegistroViewFromStateChange==="function"){
+    try{refreshRegistroViewFromStateChange();}catch(e){}
   }
 }
 

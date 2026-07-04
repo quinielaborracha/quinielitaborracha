@@ -895,6 +895,29 @@ function tryAutoLoginByOwnerUid(){
   });
 }
 
+// v3.2.3 — BUG URGENTE REPORTADO: "ya pasó un partido y está corriendo
+// otro y el ranking no actualiza la puntuación". render() (esta pantalla,
+// la que ve cada participante: Mi Quiniela/Ranking) solo se disparaba acá
+// abajo, en onParticipantesChange() -- que escucha cambios en la
+// colección registro_participants. Pero un resultado real (ESPN Live o
+// carga manual del admin) vive en un documento totalmente distinto
+// (quiniela/estado, ver S.elimScores/scores) -- su listener remoto
+// (wireFirestoreSync/applyRemoteState, app-live-sync.js) solo refrescaba
+// el panel de ADMIN (renderRank() de app-bracket-view.js), nunca esta
+// pantalla de registro.js. Un participante mirando su posición/puntos se
+// quedaba con el valor viejo hasta cambiar de pestaña o que -por
+// casualidad- algún OTRO participante tocara registro_participants.
+// Mismos criterios de "no pisar tecleo sin guardar" que
+// onParticipantesChange (WIZ_DIRTY/INICIO_DIRTY, ver ahí) -- se
+// reutilizan acá tal cual, porque un cambio de resultado real es
+// exactamente tan ajeno a lo que esta persona esté escribiendo como un
+// cambio de otro participante.
+function refreshRegistroViewFromStateChange(){
+  if(DRAFT_PID && WIZ_DIRTY) return;
+  if(!DRAFT_PID && (INICIO_VIEW==='crear'||INICIO_VIEW==='login') && INICIO_DIRTY) return;
+  render();
+}
+
 onParticipantesChange(()=>{
   tryAutoLoginByOwnerUid();
   if(DRAFT_PID){
@@ -4367,4 +4390,9 @@ render();
 window.render = render;
 window.renderAdminTab = renderAdminTab;
 window.tryAutoLoginByOwnerUid = tryAutoLoginByOwnerUid;
+// v3.2.3 — igual que las 3 líneas de arriba: sin esto, app-live-sync.js
+// (fuera de esta IIFE) nunca ve esta función -- su `typeof
+// refreshRegistroViewFromStateChange==="function"` da false en silencio
+// y el fix entero queda sin efecto, sin ningún error visible.
+window.refreshRegistroViewFromStateChange = refreshRegistroViewFromStateChange;
 })();
