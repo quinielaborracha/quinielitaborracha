@@ -907,6 +907,13 @@ onParticipantesChange(()=>{
     if(pEcho && pEcho.fechaActualizacion === _lastPushedFechaActualizacion) return;
   }
   if(DRAFT_PID && WIZ_DIRTY) return; // hay tecleo sin guardar: no pisar ni re-renderizar
+  // v3.2.2 — mismo criterio que la línea de arriba, pero para quien
+  // TODAVÍA no es participante (sin DRAFT_PID todavía): si está
+  // tecleando el formulario de "Crear nueva quiniela" o el de "Ver mi
+  // quiniela" (login por correo+Clave), no reconstruir ese formulario
+  // bajo sus dedos solo porque llegó un cambio remoto de OTRO
+  // participante -- ver la nota junto a INICIO_DIRTY.
+  if(!DRAFT_PID && (INICIO_VIEW==='crear'||INICIO_VIEW==='login') && INICIO_DIRTY) return;
   if(DRAFT_PID){
     const p = DB.participants.find(x=>x.id===DRAFT_PID);
     if(p) DRAFT_PREDS = JSON.parse(JSON.stringify(DB.predictions[DRAFT_PID] || {}));
@@ -1399,6 +1406,19 @@ let DRAFT_PREDS = {};       // predicciones en edición (en memoria), sincroniza
 let DRAFT_PERSONAL = {};    // cambios pendientes de nombre/ciudad/país/correo (paso "Datos personales")
 let WIZ_STEP = 0;           // paso actual del wizard (índice en WIZARD_STEPS)
 let WIZ_DIRTY = false;      // hay cambios escritos que el autoguardado todavía no confirmó
+// v3.2.2 — BUG URGENTE REPORTADO: alguien llenando el formulario de
+// "Crear nueva quiniela" o el de "Ver mi quiniela" (correo+Clave para
+// entrar) -- en AMBOS casos, ANTES de existir como participante, todavía
+// no hay DRAFT_PID -- perdía lo que tecleaba cada vez que llegaba un
+// cambio remoto de Firestore (cualquier OTRO participante registrándose
+// o autoguardando, no algo relacionado con esta persona) -- mismo bug de
+// fondo que WIZ_DIRTY ya resuelve para el wizard (ver la nota de
+// v1.9/v6.5 más abajo), pero ese guard solo aplica "si(DRAFT_PID)" --
+// acá DRAFT_PID es null, así que render() corría sin ningún freno. Con
+// el torneo en curso y mucha gente registrándose/editando al mismo
+// tiempo, estos cambios remotos llegan seguido -- de ahí "no he podido
+// registrar a varios".
+let INICIO_DIRTY = false;   // hay tecleo sin confirmar en Crear nueva quiniela o en Ver mi quiniela
 let ADMIN_OVERRIDE = false; // el admin entró por el lápiz ✏️: puede editar aunque esté bloqueada
 let PREVIEW_AS_PARTICIPANT = false; // el admin entró por 👁️ "Ver como participante" (vista idéntica, sin privilegios)
 let AUTOSAVE_TIMER = null;
@@ -1430,6 +1450,7 @@ function clearDraft(){
   DRAFT_PERSONAL = {};
   WIZ_STEP = 0;
   WIZ_DIRTY = false;
+  INICIO_DIRTY = false;
   ADMIN_OVERRIDE = false;
   PREVIEW_AS_PARTICIPANT = false;
   INICIO_VIEW = 'choice';
@@ -1707,6 +1728,11 @@ function renderInicioInner(){
 
 /* ---- Sub-vista: Crear nueva quiniela (antes pestaña "Registrarme") ---- */
 function renderCrear(c){
+  // v3.2.2 — este render reconstruye el formulario desde cero (nada
+  // tecleado todavía sobrevive de todos modos), así que es el punto
+  // correcto para bajar la bandera -- el guard de onParticipantesChange()
+  // solo debe frenar un re-render mientras haya tecleo sin proteger.
+  INICIO_DIRTY = false;
   const volverBtn = DB.configGlobal.modoConsultaHabilitado
     ? `<button class="rg-btn rg-btn-ghost" id="crear_back" style="margin-bottom:.75rem">← Volver</button>` : '';
 
@@ -1767,8 +1793,15 @@ function renderCrear(c){
       </div>
     </div>
   `;
-  document.getElementById('crear_back')?.addEventListener('click', ()=>{ INICIO_VIEW='choice'; render(); });
-  wireCountryCityFields('r');
+  document.getElementById('crear_back')?.addEventListener('click', ()=>{ INICIO_DIRTY=false; INICIO_VIEW='choice'; render(); });
+  // v3.2.2 — marca INICIO_DIRTY apenas la persona escribe algo, para que
+  // onParticipantesChange() (más abajo) sepa que no debe reconstruir
+  // este formulario bajo sus pies mientras tanto (ver la nota junto a
+  // la declaración de INICIO_DIRTY).
+  ['r_nombre','r_apellido','r_email','r_email2','r_clave','r_clave2'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input', ()=>{ INICIO_DIRTY = true; });
+  });
+  wireCountryCityFields('r', ()=>{ INICIO_DIRTY = true; });
   document.getElementById('r_submit').addEventListener('click', onCrearSubmit);
 }
 
@@ -1930,6 +1963,9 @@ function enterWizardAs(p, opts){
 }
 
 function renderLogin(c){
+  // v3.2.2 — ver la nota junto a INICIO_DIRTY: este render reconstruye
+  // el formulario desde cero, es el punto correcto para bajar la bandera.
+  INICIO_DIRTY = false;
   const volverBtn = DB.configGlobal.modoConsultaHabilitado
     ? `<button class="rg-btn rg-btn-ghost" id="login_back" style="margin-bottom:.75rem">← Volver</button>` : '';
   const prefill = PREFILL_EMAIL; PREFILL_EMAIL = '';
@@ -1958,7 +1994,10 @@ function renderLogin(c){
       </div>
     </div>
   `;
-  document.getElementById('login_back')?.addEventListener('click', ()=>{ INICIO_VIEW='choice'; render(); });
+  document.getElementById('login_back')?.addEventListener('click', ()=>{ INICIO_DIRTY=false; INICIO_VIEW='choice'; render(); });
+  ['e_user','e_clave'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input', ()=>{ INICIO_DIRTY = true; });
+  });
   document.getElementById('e_submit').addEventListener('click', ()=>{
     const usuario = document.getElementById('e_user').value.trim();
     const clave = document.getElementById('e_clave').value.trim();
