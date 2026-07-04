@@ -97,13 +97,23 @@ function renderAdv(){
     }else if(hasReal){
       badge=matched
         ?`<span style="color:#4dde8c;font-weight:700;font-size:10px">+${it.pts}pts</span>`
-        :`<span style="color:#ff8080;font-size:10px">✗ ${it.real}</span>`;
+        :`<span style="color:#ff8080;font-size:10px">✗ ${esc(String(it.real))}</span>`;
     }else{
       badge=`<span style="color:var(--qb-muted);font-size:10px">⏳</span>`;
     }
+    // v3.2 — BUG DE SEGURIDAD REPORTADO: it.val viene de la respuesta del
+    // participante a una "Regla avanzada" (predictions.special.*) --
+    // "Goleador del torneo" es directamente texto libre, y firestore.rules
+    // no valida el CONTENIDO de ningún campo de la predicción (solo
+    // dueño/estado/plazo). Sin esc() acá, un participante podía guardar
+    // un payload de HTML/script en su propia respuesta y ejecutarlo en el
+    // navegador del ADMIN (con su sesión ya autenticada) apenas mirara
+    // esta pestaña -- exactamente lo mismo que ya se corrigió para
+    // it.val/it.real en la copia gemela de este bloque (buildDashAvHtml,
+    // registro.js), que sí escapaba desde antes.
     return`<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid ${bc};border-radius:8px;margin-bottom:3px;background:${bg}${it.locked?"opacity:.7;":""}">
       <div style="flex:1;font-size:11px;color:${it.locked?"var(--qb-muted)":"var(--qb-text)"}">${it.l}</div>
-      <div style="font-family:var(--ff-display);font-size:14px;font-weight:800;color:${it.locked?"var(--qb-muted)":"var(--qb-text)"}">${it.val||"—"}</div>
+      <div style="font-family:var(--ff-display);font-size:14px;font-weight:800;color:${it.locked?"var(--qb-muted)":"var(--qb-text)"}">${esc(String(it.val||"—"))}</div>
       <div style="font-size:10px;min-width:50px;text-align:right">${badge}</div>
     </div>`;
   }).join("");

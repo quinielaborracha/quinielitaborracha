@@ -81,6 +81,18 @@ function renderBracket(){
       const cruce=!llave?findCruceValido(name,pid):null;
       const breakdown=calcElimMatchBreakdown(name,pid);
 
+      // v3.2 — BUG DE SEGURIDAD REPORTADO: pH/pA (y rH/rA/clsBadge.team
+      // más abajo) vienen de la huella _a/_b de la predicción de este
+      // participante -- un campo que firestore.rules deja escribir con
+      // CUALQUIER contenido (solo valida dueño/estado/plazo, nunca el
+      // texto en sí). La UI normal solo deja elegir un país real, pero
+      // nada impide escribir ahí, vía el SDK de Firebase directo, un
+      // payload de HTML/script -- que antes se insertaba SIN escapar acá
+      // abajo, ejecutándose en el navegador del ADMIN apenas mirara a
+      // este participante en 📝 Predicciones → 🎯 Eliminatoria (con su
+      // sesión YA autenticada). Ahora todo lo que sale de estas
+      // variables pasa por esc() antes de ir al HTML.
+      //
       // Equipos predichos (siempre se muestran)
       const pH=predTeams?predTeams.h:"⏳ Por resolver";
       const pA=predTeams?predTeams.a:"⏳ Por resolver";
@@ -112,7 +124,12 @@ function renderBracket(){
       } else if(!played && realTeams){
         badge=`<span style="font-size:9px;color:var(--qb-yellow)">📅 sin result.</span>`;
       } else if(cruce){
-        const tip=`Cruce válido: ${pH} vs ${pA} se enfrentaron realmente en P${cruce.pidReal} (misma ronda). Se reconoce el acierto aunque no quedó en tu llave exacta.`.replace(/"/g,"&quot;");
+        // v3.2 — pH/pA vienen de la huella _a/_b de la predicción (texto
+        // que el propio participante controla en su documento -- ver la
+        // nota de seguridad en registro.js/buildDashElimHtml). esc() acá
+        // además de en el badge de abajo, no solo el .replace(/"/g) de
+        // antes (que solo neutralizaba comillas, no < > ni &).
+        const tip=`Cruce válido: ${esc(pH)} vs ${esc(pA)} se enfrentaron realmente en P${cruce.pidReal} (misma ronda). Se reconoce el acierto aunque no quedó en tu llave exacta.`;
         badge=`<span title="${tip}" style="font-size:9px;color:#6ab8f7;font-weight:700;cursor:help">🔀 Cruce ${pts>0?`+${pts}pts`:""}</span>`;
       } else if(!llave){
         badge=`<span style="font-size:9px;color:#ff8080;font-weight:600">✗ llave</span>`;
@@ -126,7 +143,7 @@ function renderBracket(){
       let realBlock="";
       if(realTeams && (!predTeams || n(predTeams.h)!==n(realTeams.h) || n(predTeams.a)!==n(realTeams.a))){
         realBlock=`<div style="font-size:9px;color:var(--qb-muted);margin-top:2px;padding-top:2px;border-top:1px dashed var(--qb-border)">
-          Real: <span style="color:var(--qb-text)">${rH}</span> vs <span style="color:var(--qb-text)">${rA}</span>
+          Real: <span style="color:var(--qb-text)">${esc(rH)}</span> vs <span style="color:var(--qb-text)">${esc(rA)}</span>
           ${rScoreStr?`· <strong style="color:var(--qb-text)">${rScoreStr}</strong>`:""}
         </div>`;
       } else if(realTeams && rScoreStr){
@@ -153,7 +170,7 @@ function renderBracket(){
           clsBlock=`<div style="display:flex;align-items:center;gap:5px;margin-top:5px;padding:4px 7px;background:rgba(0,200,83,.08);border:1px solid rgba(0,200,83,.3);border-radius:6px">
             <span style="font-size:13px">${clsBadge.flag}</span>
             <div style="flex:1;min-width:0">
-              <span style="font-size:10px;font-weight:700;color:var(--qb-text)">${clsBadge.team}</span>
+              <span style="font-size:10px;font-weight:700;color:var(--qb-text)">${esc(clsBadge.team)}</span>
               <span style="font-size:9px;color:#4dde8c;margin-left:3px">clasificó a ${nextRoundName} ✓</span>
             </div>
             <span style="font-size:11px;font-weight:800;color:#4dde8c;white-space:nowrap">+${clsBadge.pts}pts</span>
@@ -162,7 +179,7 @@ function renderBracket(){
           clsBlock=`<div style="display:flex;align-items:center;gap:5px;margin-top:5px;padding:4px 7px;background:rgba(212,0,26,.06);border:1px solid rgba(212,0,26,.2);border-radius:6px">
             <span style="font-size:13px">${clsBadge.flag}</span>
             <div style="flex:1;min-width:0">
-              <span style="font-size:10px;font-weight:700;color:var(--qb-text)">${clsBadge.team}</span>
+              <span style="font-size:10px;font-weight:700;color:var(--qb-text)">${esc(clsBadge.team)}</span>
               <span style="font-size:9px;color:#ff8080;margin-left:3px">no clasificó ✗</span>
             </div>
             <span style="font-size:11px;font-weight:800;color:#ff8080;white-space:nowrap">0pts</span>
@@ -173,9 +190,9 @@ function renderBracket(){
       html+=`<div style="display:grid;grid-template-columns:1fr auto;align-items:start;gap:6px;padding:7px 9px;border:1px solid ${borderCol};border-radius:8px;margin-bottom:5px;background:${rowBg}">
         <div>
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
-            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${pH}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${esc(pH)}</span>
             <span style="font-size:10px;color:var(--qb-muted)">vs</span>
-            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${pA}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--qb-text)">${esc(pA)}</span>
           </div>
           <div style="font-size:10px;color:var(--qb-muted)">Predicción: <strong style="color:var(--qb-muted2)">${pScoreStr}</strong> · P${pid}</div>
           ${realBlock}
