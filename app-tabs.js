@@ -116,7 +116,7 @@ function fixTab(id){if(!isAdmin()){toast('🔒 Acceso restringido',true);return;
     document.getElementById("ftab-"+x)?.classList.toggle("on",x===id);
   });
   if(id==="grupos"){renderFix();fetchESPN();}
-  if(id==="elim"){renderElim();updateGenerarBtn();updateElimBtns();}
+  if(id==="elim"){renderElim();updateGenerarBtn();updateElimBtns();if(typeof renderEspnPlaceholderPanel==="function")renderEspnPlaceholderPanel();} // v3.0
 }
 
 // ── Predicciones inner tabs ──

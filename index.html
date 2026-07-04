@@ -174,7 +174,7 @@
       <img id="logo-img" src="" alt="QB" style="width:70px;height:70px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v2.9.2</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v3.0</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -321,6 +321,7 @@
       </div>
       <div class="status-bar" id="elim-st"></div>
       <div class="ib">Los equipos de Dieciseisavos se generan automáticamente al terminar grupos, o desde ESPN / manual. Las rondas posteriores se calculan solas.</div>
+      <div id="espn-placeholder-panel" style="margin-bottom:.75rem"></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:.75rem">
         <button id="btn-generar-llaves" class="btn btn-green" onclick="generarLlavesDieciseisavos()" disabled style="opacity:.5">🧮 Generar llaves de Dieciseisavos</button>
         <button id="btn-simular" class="btn btn-sm" onclick="simularMarcadoresChecked()">🎲 Simular marcadores</button>
@@ -696,9 +697,9 @@
 
 <div id="pdfPoster"></div>
 
-<script defer src="participantes.js?v=1.7.6"></script>
+<script defer src="participantes.js?v=1.7.7"></script>
 <script defer src="partidos-grupos.js?v=1.0"></script>
-<script defer src="utils.js?v=1.5"></script>
+<script defer src="utils.js?v=1.6"></script>
 <script defer src="app-static-data.js?v=1.2"></script>
 <script defer src="app-state.js?v=1.0"></script>
 <script defer src="scoring.js?v=2.8"></script>
@@ -716,13 +717,13 @@
 <script defer src="app-core-data.js?v=1.3"></script>
 <script defer src="app-admin-auth.js?v=1.4"></script>
 <script defer src="app-live-sync.js?v=1.3"></script>
-<script defer src="app-tabs.js?v=1.5"></script>
+<script defer src="app-tabs.js?v=1.6"></script>
 <script defer src="app-eliminatoria-data.js?v=1.0"></script>
 <script defer src="app-batallas.js?v=3.1"></script>
-<script defer src="app-bracket-render.js?v=1.3"></script>
+<script defer src="app-bracket-render.js?v=1.4"></script>
 <script defer src="app-bracket-annexc.js?v=1.0"></script>
 <script defer src="app-bracket-compute.js?v=1.4"></script>
-<script defer src="app-bracket-espn-sync.js?v=1.7"></script>
+<script defer src="app-bracket-espn-sync.js?v=1.8"></script>
 <script defer src="app-bracket-view.js?v=1.5"></script>
 <script defer src="app-bracket-espn-live.js?v=1.3"></script>
 <script defer src="app-integridad.js?v=1.1"></script>

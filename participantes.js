@@ -399,6 +399,44 @@ function rgPushToFirestore(d, _retryCount){
     });
 }
 
+// v3.0 — Corrige predicciones YA GUARDADAS que quedaron con un
+// placeholder de ESPN congelado (ej. "Round of 32 14 Winner") en vez de
+// un país real, ahora que ese país ya se conoce (ver
+// scanEspnPlaceholderFixes(), app-admin-tools.js, y la nota de
+// isRealEspnTeamName() en utils.js para el porqué de fondo).
+//
+// A propósito NO reutiliza rgPushToFirestore/saveData(DB): esa función
+// reescribe el documento COMPLETO de cada participante a partir de la
+// copia en memoria del admin -- exactamente el mecanismo que causó el
+// incidente de v2.10 (revertido): si la copia local del admin quedó un
+// instante desactualizada respecto a una edición concurrente de ese
+// mismo participante (autoguardado en curso), el push completo la
+// pisaba. Acá cada corrección se manda como una actualización PUNTUAL
+// por campo (batch.update con rutas con punto, ej.
+// "predictions.r16_1._a") -- Firestore solo toca esos campos exactos
+// sin necesidad de leer ni reescribir el resto del documento, así que
+// una edición simultánea de OTRO slot (o del marcador h/a de este mismo
+// slot) no se pisa.
+//
+// fixesByParticipant: { [participantId]: { "predictions.<slot>.<campo>": nuevoValor, ... } }
+// Devuelve una Promise<number> con la cantidad de participantes corregidos.
+function rgApplyEspnPlaceholderFixes(fixesByParticipant){
+  const fb = window.__fb;
+  const ids = Object.keys(fixesByParticipant||{});
+  if(!ids.length) return Promise.resolve(0);
+  if(!fb || !fb.PARTICIPANTS_COL || !fb.auth.currentUser){
+    return Promise.reject(new Error("Firebase todavía no está listo -- recargá la página e intentá de nuevo."));
+  }
+  const batch = fb.writeBatch(fb.db);
+  ids.forEach(pid=>{
+    const fields = fixesByParticipant[pid];
+    if(!fields || !Object.keys(fields).length) return;
+    const ref = fb.doc(fb.PARTICIPANTS_COL, pid);
+    batch.update(ref, { ...fields, fechaActualizacion: Date.now(), updatedAt: fb.serverTimestamp() });
+  });
+  return batch.commit().then(()=>ids.length);
+}
+
 // v7.5 — BUG REPORTADO: alguien se registraba (nombre+correo+Clave),
 // veía "¡Listo!", llenaba su quiniela tranquilo... y nunca aparecía en
 // el panel Admin. Al volver a entrar, todo había desaparecido y le

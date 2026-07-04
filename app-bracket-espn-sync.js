@@ -94,6 +94,22 @@ async function fetchESPNElim(){
       const awayES=espnNameES(awayNameEN);
       const st=ev.status||comp.status;const state=st?.type?.state||"pre";
 
+      // v3.0 — BUG REPORTADO: cuando el rival de un cruce de la fase
+      // manual todavía depende de un partido anterior sin jugar en la
+      // vida real, ESPN no devuelve un país -- devuelve un placeholder
+      // de su propio bracket (ej. "Round of 32 14 Winner"). Antes esto
+      // se aceptaba tal cual y se guardaba en S.elimTeams como si fuera
+      // un equipo real, dejando que el participante prediga un marcador
+      // contra ese texto -- que después queda congelado para siempre en
+      // su predicción (ver isLlaveCorrecta/getElimTeams). Ahora, para un
+      // pid de la fase manual, si CUALQUIERA de los 2 lados no es un
+      // país real reconocido (isRealEspnTeamName, utils.js), se descarta
+      // este evento por completo: ni equipos ni marcador -- se sigue
+      // mostrando "Pendiente" hasta que ESPN confirme a los 2 rivales.
+      if(manualPids.includes(pid)&&(!isRealEspnTeamName(homeNameEN)||!isRealEspnTeamName(awayNameEN))){
+        return;
+      }
+
       if(ev.date&&!S.elimTimes[pid]){
         S.elimTimes[pid]=ev.date;
       }

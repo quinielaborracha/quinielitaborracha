@@ -200,6 +200,29 @@ function abbr2name(abbr) {
 
 function espnNameES(name){return ESPN_NAME_ES[name]||name;}
 
+// v3.0 — universo de los 48 países reales del Mundial (nombres en
+// español, canónicos) -- se arma una sola vez, lazy (TEAM_NAMES se
+// declara más abajo en app-static-data.js; igual que espnNameES() de
+// arriba, esto es seguro porque el cuerpo de la función recién se
+// evalúa cuando alguien la LLAMA, mucho después de que todo terminó de
+// cargar -- nunca al definirla).
+let _KNOWN_TEAM_NAMES_ES=null;
+function isKnownTeamNameES(nameES){
+  if(!nameES)return false;
+  if(!_KNOWN_TEAM_NAMES_ES)_KNOWN_TEAM_NAMES_ES=new Set(Object.values(TEAM_NAMES));
+  return _KNOWN_TEAM_NAMES_ES.has(nameES);
+}
+// ¿el nombre crudo que reporta ESPN (antes de traducir) corresponde a
+// alguno de los 48 países reales, o es un placeholder de su propio
+// bracket (ej. "Round of 32 14 Winner", "TBD") para un cruce cuyo rival
+// depende de un partido anterior que todavía no terminó? Se resuelve
+// contra el mismo universo de 48 países que ya usa todo el motor de
+// puntaje (TEAM_NAMES) -- así no hace falta mantener una lista de
+// patrones de texto que ESPN podría cambiar de formato sin aviso.
+function isRealEspnTeamName(rawNameEN){
+  return isKnownTeamNameES(espnNameES(rawNameEN));
+}
+
 function parseESPNEvent(ev){
   const comp=ev.competitions?.[0]||{};const comps=comp.competitors||[];if(comps.length<2)return null;
   const home=comps.find(c=>c.homeAway==="home")||comps[0];

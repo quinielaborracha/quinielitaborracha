@@ -132,6 +132,30 @@ function espnEvent(id, homeName, awayName, homeScore, awayAbbr, awayScore, state
   await window.fetchESPNElim();
   check("Caso normal: P73 sigue cargando desde ESPN igual que siempre", T.getS().elimTeams[73] && T.getS().elimTeams[73].h === "Sudáfrica");
 
+  // ── Caso 4 (v3.0) — ESPN todavía no resolvió al rival real de un
+  //    cruce de la fase manual: devuelve su propio placeholder de
+  //    bracket ("Round of 32 14 Winner") en vez de un país. Esto YA NO
+  //    debe cargarse en S.elimTeams como si fuera un equipo real. ──
+  console.log("\n── v3.0: ESPN todavía no resolvió un rival (placeholder) ──");
+  T.getDB().configGlobal.fasesActivas = { grupos: false, r16: false };
+  T.getS().elimTeams = {}; T.getS().elimScores = {};
+  fetchResponses = { "20260703": [espnEvent(760503, "Round of 32 14 Winner", "Egypt", 0, "EGY", 0, "pre", "2026-07-03T19:00Z")] };
+  await window.fetchESPNElim();
+  check("P89 NO se cargó -- un lado sigue siendo el placeholder de ESPN", T.getS().elimTeams[89] === undefined);
+
+  // Si el partido YA se está jugando/terminó (estado in/post) con un
+  // lado todavía sin resolver -- caso extremo, no debería pasar en la
+  // vida real, pero tampoco debe colarse un marcador sin equipos reales.
+  fetchResponses = { "20260703": [espnEvent(760503, "Round of 32 14 Winner", "Egypt", 2, "EGY", 1, "in", "2026-07-03T19:00Z")] };
+  await window.fetchESPNElim();
+  check("P89 tampoco tomó un marcador mientras un lado siga siendo placeholder", T.getS().elimScores[89] === undefined);
+
+  // Cuando ESPN por fin confirma a los 2 rivales reales, ahí sí se carga normal.
+  fetchResponses = { "20260703": [espnEvent(760503, "Argentina", "Egypt", 0, "EGY", 0, "pre", "2026-07-03T19:00Z")] };
+  await window.fetchESPNElim();
+  check("P89 SÍ se carga en cuanto ESPN confirma a los 2 rivales reales",
+    T.getS().elimTeams[89] && T.getS().elimTeams[89].h === "Argentina" && T.getS().elimTeams[89].a === "Egipto");
+
   console.log(allOk ? "\n✅✅✅ TODO OK" : "\n❌❌❌ HAY FALLOS");
   process.exit(allOk ? 0 : 1);
 })();

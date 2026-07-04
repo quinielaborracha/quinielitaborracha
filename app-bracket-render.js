@@ -200,6 +200,120 @@ function saveTeamsEditor(){
 }
 
 // ══════════════════════════════════════════════════════════════
+// CORRECCIÓN DE PLACEHOLDERS DE ESPN CONGELADOS — v3.0
+// ══════════════════════════════════════════════════════════════
+// v2.9.2 hizo que ESPN Live sepa cargar equipos en la fase manual
+// correcta (getManualTeamPids), y v3.0 (más arriba en este archivo, ver
+// fetchESPNElim en app-bracket-espn-sync.js) hizo que ESPN deje de
+// aceptar su propio placeholder ("Round of 32 14 Winner") como si fuera
+// un país real. Pero eso NO arregla las predicciones que YA se guardaron
+// contra ese placeholder ANTES de este fix, mientras el rival real
+// todavía no se conocía -- ese texto queda congelado en la "huella"
+// _a/_b/pick de la predicción para siempre (ver getElimTeams, scoring.js
+// -- nunca se re-resuelve contra el equipo real actual). Este panel
+// detecta esos casos puntuales y, con confirmación del admin, los
+// corrige con una escritura acotada (ver rgApplyEspnPlaceholderFixes,
+// participantes.js, para por qué NO se reutiliza el guardado en bloque
+// de siempre).
+let _espnPlaceholderScan=null; // {rows, byParticipant} de la última corrida, o null si no se corrió aún
+
+// Recorre las predicciones YA GUARDADAS de todos los participantes
+// buscando slots de eliminatoria cuya huella (_a/_b/pick) haya quedado
+// con un texto que NO es uno de los 48 países reales (isKnownTeamNameES,
+// utils.js), para un pid cuyo equipo real YA se conoce hoy
+// (getRealElimTeams). Solo lectura -- no escribe nada, arma el reporte
+// que se le muestra al admin antes de aplicar nada.
+function scanEspnPlaceholderFixes(){
+  const rows=[];
+  const byParticipant={};
+  (DB.participants||[]).forEach(p=>{
+    const preds=DB.predictions[p.id];
+    if(!preds)return;
+    KO_SLOT_IDS_V62.forEach(slot=>{
+      const rec=preds[slot];
+      if(!rec||typeof rec!=="object")return;
+      const pid=SLOT_TO_PID[slot];
+      const real=getRealElimTeams(pid);
+      if(!real)return; // el equipo real todavía no se conoce -- nada para corregir aún
+      const oldA=rec._a, oldB=rec._b;
+      const fixesHere={};
+      if(oldA && !isKnownTeamNameES(oldA) && isKnownTeamNameES(real.h)){
+        fixesHere[`predictions.${slot}._a`]=real.h;
+        rows.push({participantId:p.id, participantName:p.name, pid, field:"_a", oldValue:oldA, newValue:real.h});
+      }
+      if(oldB && !isKnownTeamNameES(oldB) && isKnownTeamNameES(real.a)){
+        fixesHere[`predictions.${slot}._b`]=real.a;
+        rows.push({participantId:p.id, participantName:p.name, pid, field:"_b", oldValue:oldB, newValue:real.a});
+      }
+      if(rec.pick && !isKnownTeamNameES(rec.pick)){
+        const newPick = n(rec.pick)===n(oldA) ? real.h : (n(rec.pick)===n(oldB) ? real.a : null);
+        if(newPick && isKnownTeamNameES(newPick)){
+          fixesHere[`predictions.${slot}.pick`]=newPick;
+          rows.push({participantId:p.id, participantName:p.name, pid, field:"pick", oldValue:rec.pick, newValue:newPick});
+        }
+      }
+      if(Object.keys(fixesHere).length){
+        byParticipant[p.id]=Object.assign(byParticipant[p.id]||{}, fixesHere);
+      }
+    });
+  });
+  return {rows, byParticipant};
+}
+
+function renderEspnPlaceholderPanel(){
+  const el=document.getElementById("espn-placeholder-panel");
+  if(!el)return;
+  if(!_espnPlaceholderScan){
+    el.innerHTML=`<button class="btn btn-sm" onclick="runEspnPlaceholderScan()">🔍 Revisar predicciones con placeholder de ESPN</button>`;
+    return;
+  }
+  const {rows}=_espnPlaceholderScan;
+  if(!rows.length){
+    el.innerHTML=`<div class="ib" style="border-color:var(--qb-green);color:var(--qb-green)">✓ No hay predicciones con placeholders de ESPN pendientes de corregir. <button class="btn btn-sm" style="margin-left:8px" onclick="runEspnPlaceholderScan()">🔄 Revisar de nuevo</button></div>`;
+    return;
+  }
+  const list=rows.map(r=>`<div style="font-size:11px;padding:3px 0;border-bottom:1px dashed var(--qb-border)">${esc(r.participantName)} · P${r.pid} · "${esc(r.oldValue)}" → <strong style="color:var(--qb-green)">${esc(r.newValue)}</strong></div>`).join("");
+  el.innerHTML=`<div class="ib" style="border-color:var(--qb-yellow);color:var(--qb-yellow)">
+      ⚠️ ${rows.length} predicción(es) con un placeholder de ESPN congelado (el país ya se conoce hoy).
+    </div>
+    <div style="max-height:180px;overflow-y:auto;margin:6px 0;padding:6px 8px;background:var(--qb-surface2);border-radius:6px">${list}</div>
+    <div class="rg-btn-row">
+      <button class="btn btn-sm btn-green" onclick="applyEspnPlaceholderFixesChecked()">✅ Aplicar corrección a ${rows.length} predicción(es)</button>
+      <button class="btn btn-sm" onclick="runEspnPlaceholderScan()">🔄 Revisar de nuevo</button>
+    </div>`;
+}
+
+function runEspnPlaceholderScan(){
+  _espnPlaceholderScan=scanEspnPlaceholderFixes();
+  renderEspnPlaceholderPanel();
+}
+
+function applyEspnPlaceholderFixesChecked(){
+  if(!_espnPlaceholderScan||!_espnPlaceholderScan.rows.length)return;
+  const {rows, byParticipant}=_espnPlaceholderScan;
+  if(!confirm(`¿Corregir ${rows.length} predicción(es)? El país congelado se reemplaza por el que ya se confirmó -- el marcador de cada quien NO se toca.`))return;
+  return rgApplyEspnPlaceholderFixes(byParticipant).then(n=>{
+    // Optimista: reflejamos el cambio en la copia local YA (no hace
+    // falta esperar el round-trip del snapshot para que el admin vea el
+    // resultado en Predicciones/Dashboard).
+    rows.forEach(r=>{
+      const preds=DB.predictions[r.participantId];
+      if(!preds)return;
+      const slot=Object.keys(preds).find(s=>SLOT_TO_PID[s]===r.pid);
+      if(slot&&preds[slot])preds[slot][r.field]=r.newValue;
+    });
+    _espnPlaceholderScan=null;
+    runEspnPlaceholderScan();
+    renderBracket();
+    toast(`✓ ${n} participante(s) corregido(s)`);
+    return n;
+  }).catch(err=>{
+    console.error("Error al corregir placeholders de ESPN:", err);
+    toast(`⚠️ ${err.message||"No se pudo corregir"}`, true);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
 // SIMULACIÓN — carga países random para probar
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
