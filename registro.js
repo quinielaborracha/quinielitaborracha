@@ -1411,6 +1411,21 @@ function flushAutosave(){
       if(v.pick) obj.pick = v.pick;
       if(v._a) obj._a = v._a;
       if(v._b) obj._b = v._b;
+      // v3.1.3 — BUG REPORTADO (desde los inicios): esta reconstrucción no
+      // conservaba _migrated -- la marca que usa computeBracket() para
+      // confiar en la huella _a/_b de una predicción migrada del sistema
+      // viejo en vez de exigir que coincida con el sembrado "oficial"
+      // recalculado de los grupos (ver resolveKoMatch/computeBracket más
+      // arriba). Apenas corría UN autoguardado (con solo abrir "Editar" y
+      // cambiar de paso alcanzaba), _migrated desaparecía de las 32
+      // llaves de eliminatoria de un participante migrado -- y como su
+      // cruce migrado casi nunca coincide con el sembrado oficial (se
+      // cargó a mano, libremente, en el sistema anterior), TODOS los
+      // ganadores de esa fase en adelante dejaban de resolverse (null en
+      // cascada r32→r16→qf→sf→third→final), aunque el marcador y los
+      // equipos (_a/_b) seguían ahí intactos. De ahí "se ven vacíos" al
+      // editar y el % de avance bajando después de guardar.
+      if(v._migrated) obj._migrated = v._migrated;
       if(Object.keys(obj).length) cleaned[key] = obj;
     }
   });
