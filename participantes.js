@@ -867,6 +867,49 @@ function rgResetAll(){
   return Promise.all(promesas);
 }
 
+// v3.1.4 — Botón nuevo "Borrar datos de participantes": mismo borrado
+// destructivo que rgResetAll() de arriba (todos los documentos de
+// registro_participants/registro_privado + papelera), pero SIN tocar
+// meta.configGlobal -- rgResetAll() lo resetea a RG_DEFAULT_CONFIG a
+// propósito (por eso ese botón pasó a llamarse "Restaurar configuración
+// original"), mientras que este solo limpia datos de participantes,
+// dejando fasesActivas/reglas/fechaCierre/registroAbierto/etc. tal cual
+// estaban -- para cuando lo que hace falta es arrancar de cero con los
+// participantes sin perder cómo quedó configurado el torneo.
+function rgDeleteAllParticipants(){
+  const fb = window.__fb;
+  const promesas = [];
+
+  if(fb && fb.PARTICIPANTS_COL && _rgLatestParticipants.length){
+    const batch = fb.writeBatch(fb.db);
+    _rgLatestParticipants.forEach(p=>{
+      batch.delete(fb.doc(fb.PARTICIPANTS_COL, p.id));
+      if(fb.PRIVADO_COL) batch.delete(fb.doc(fb.PRIVADO_COL, p.id));
+    });
+    _rgLastKnownParticipantsJSON = {};
+    _rgLastKnownPrivadoJSON = {};
+    promesas.push(batch.commit().catch(err=>{
+      console.error("Error al borrar todos los participantes:", err);
+      if(err && err.code === 'permission-denied'){
+        toast('⚠️ No se pudo borrar a todos en el servidor (permiso denegado). Pueden seguir apareciendo en otros dispositivos.', true);
+      }
+    }));
+  }
+
+  if(fb && fb.REGISTRO_META_DOC){
+    // Solo nextSeq vuelve a 1 -- configGlobal se manda TAL CUAL está hoy
+    // (a diferencia de rgResetAll(), que lo pisa con RG_DEFAULT_CONFIG).
+    const metaPayload = { nextSeq:1, configGlobal: DB.configGlobal };
+    _rgLastKnownMetaJSON = JSON.stringify(metaPayload);
+    promesas.push(fb.setDoc(fb.REGISTRO_META_DOC, { ...metaPayload, updatedAt: fb.serverTimestamp() })
+      .catch(err=> console.error("Error al resetear meta:", err)));
+  }
+
+  rgSavePapelera([]);
+
+  return Promise.all(promesas);
+}
+
 // v1.5.1 — Restaura TODO el sistema de registro (participantes+
 // predicciones+papelera+meta) desde un backup integral, en modo REEMPLAZO
 // TOTAL: cualquier participante que hoy exista en Firestore pero NO esté

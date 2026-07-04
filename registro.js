@@ -572,6 +572,58 @@ function koLoser(pred, teamA, teamB, trustSlot){
   return w===teamA ? teamB : teamA;
 }
 
+// v3.1.4 — BUG REPORTADO: para una predicción MIGRADA (_migrated:true,
+// ver v6.2 más abajo), cada ronda confía en SU PROPIA huella _a/_b y
+// nunca mira el resultado de la ronda anterior -- a propósito, para no
+// mezclar equipos que en el bracket original de esa persona nunca se
+// enfrentaron (ver la nota grande de v6.2, computeBracket). Pero eso
+// también significa que si el ADMIN corrige el resultado de una ronda
+// migrada (ej. cambia quién ganó una Semifinal), la ronda siguiente
+// (Final/Tercer lugar), si TAMBIÉN es migrada, sigue mostrando el
+// mismo equipo de siempre -- la corrección del admin no tenía ningún
+// efecto río abajo.
+//
+// _downstreamMigratedSlots(slot) devuelve qué slot(s) consumen el
+// resultado de "slot" en la ronda siguiente -- misma estructura fija
+// que ya arma computeBracket() (r32 de a pares → r16, r16 de a pares →
+// qf, qf de a pares → sf, sf → third [con los PERDEDORES] + final [con
+// los GANADORES]).
+function _downstreamMigratedSlots(slot){
+  let m;
+  if((m=slot.match(/^r32_(\d+)$/))) return [{slot:`r16_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+  if((m=slot.match(/^r16_(\d+)$/))) return [{slot:`qf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+  if((m=slot.match(/^qf_(\d+)$/)))  return [{slot:`sf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+  if((m=slot.match(/^sf_(\d+)$/)))  return [{slot:'final', usesLoser:false}, {slot:'third', usesLoser:true}];
+  return [];
+}
+
+// Reemplaza, en la ronda siguiente (si también es migrada), al equipo
+// VIEJO (ganador/perdedor de "slot" ANTES del cambio que se le acaba de
+// aplicar, capturado en "oldRec" por el llamador ANTES de mutar "slot")
+// por el equipo NUEVO -- solo si ese equipo viejo sigue siendo uno de
+// los 2 lados de la ronda siguiente. No toca marcador ni pick de la
+// ronda siguiente, solo el nombre del equipo (mismo criterio que ya usa
+// v2.8.2 para "conservar el marcador aunque el equipo real cambie" --
+// acá el equipo cambia porque el admin corrigió QUIÉN avanzó, no porque
+// ESPN lo actualizó).
+function propagateMigratedKoChange(preds, slot, oldRec){
+  const rec = preds[slot];
+  if(!rec || !rec._migrated) return;
+  const oldWinner = oldRec ? koWinner(oldRec, oldRec._a, oldRec._b, true) : null;
+  const oldLoser  = oldRec ? koLoser(oldRec, oldRec._a, oldRec._b, true) : null;
+  const newWinner = koWinner(rec, rec._a, rec._b, true);
+  const newLoser  = koLoser(rec, rec._a, rec._b, true);
+  _downstreamMigratedSlots(slot).forEach(({slot:dSlot, usesLoser})=>{
+    const dRec = preds[dSlot];
+    if(!dRec || !dRec._migrated) return;
+    const oldTeam = usesLoser ? oldLoser : oldWinner;
+    const newTeam = usesLoser ? newLoser : newWinner;
+    if(!oldTeam || !newTeam || oldTeam===newTeam) return;
+    if(dRec._a===oldTeam) dRec._a = newTeam;
+    else if(dRec._b===oldTeam) dRec._b = newTeam;
+  });
+}
+
 function computeBracket(preds){
   // v1.2 — Constructor de Torneos (fase 1). Antes esta función SIEMPRE
   // exigía la fase de grupos completa y sembraba Dieciseisavos desde los
@@ -3241,9 +3293,11 @@ function renderQuinielaForm(pid, originTab){
         inp.addEventListener('input', ()=>{
           const slot=inp.dataset.slot, side=inp.dataset.side, ta=inp.dataset.a, tb=inp.dataset.b;
           const val = inp.value==='' ? null : Math.max(0, Math.min(20, parseInt(inp.value,10)||0));
+          const oldRec = DRAFT_PREDS[slot] ? {...DRAFT_PREDS[slot]} : null; // v3.1.4 — foto de ANTES, para propagar el cambio de ganador
           DRAFT_PREDS[slot] = DRAFT_PREDS[slot] || {};
           DRAFT_PREDS[slot][side] = val;
           DRAFT_PREDS[slot]._a = ta; DRAFT_PREDS[slot]._b = tb;
+          propagateMigratedKoChange(DRAFT_PREDS, slot, oldRec); // v3.1.4
           scheduleAutosave();
 
           // Reactivo: aparece/desaparece al instante, sin esperar a cambiar
@@ -3258,8 +3312,10 @@ function renderQuinielaForm(pid, originTab){
       c.querySelectorAll('.ko-pick').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const slot=btn.dataset.slot, ta=btn.dataset.a, tb=btn.dataset.b, team=btn.dataset.team;
+          const oldRec = DRAFT_PREDS[slot] ? {...DRAFT_PREDS[slot]} : null; // v3.1.4
           DRAFT_PREDS[slot] = DRAFT_PREDS[slot] || {};
           DRAFT_PREDS[slot].pick = team; DRAFT_PREDS[slot]._a=ta; DRAFT_PREDS[slot]._b=tb;
+          propagateMigratedKoChange(DRAFT_PREDS, slot, oldRec); // v3.1.4
           c.querySelectorAll(`.ko-pick[data-slot="${slot}"]`).forEach(x=>x.classList.toggle('sel', x===btn));
           scheduleAutosave(50);
         });
@@ -3815,7 +3871,8 @@ function renderAdmin(){
         <button class="rg-btn rg-btn-ghost" id="a_import_info" title="Agrega como NUEVOS (con su quiniela completa) solo los participantes del .json que todavía no existen acá -- a los que ya existen no los toca ni los duplica. (También acepta el .csv de versiones anteriores y el backup .json de la migración, para esos sí parchea correo/ubicación/clave/estado de quien ya existe, como siempre)">⬆️ Importar info de participantes</button>
         <input id="import_info_file" type="file" accept=".json,.csv" style="display:none">
         <button class="rg-btn rg-btn-ghost" id="a_toggle_papelera">🗑️ Papelera (${(DB.papelera||[]).length})</button>
-        <button class="rg-btn rg-btn-danger" id="a_reset">Borrar todos los datos de prueba</button>
+        <button class="rg-btn rg-btn-danger" id="a_del_participantes" title="Borra a todos los participantes y sus predicciones (y vacía la Papelera) -- la configuración del torneo (fases activas, reglas, fecha de cierre, etc.) NO se toca">Borrar datos de participantes</button>
+        <button class="rg-btn rg-btn-danger" id="a_reset" title="Borra participantes+predicciones Y restaura la configuración del torneo a los valores originales">Restaurar configuración original</button>
       </div>
     </div>
 
@@ -3941,13 +3998,36 @@ function renderAdmin(){
     renderAdminTab();
   });
 
+  // v3.1.4 — "Borrar datos de participantes": mismo borrado destructivo
+  // que "Restaurar configuración original" de abajo, pero SIN tocar
+  // configGlobal (fasesActivas, reglas, fechaCierre, registroAbierto,
+  // etc.) -- para cuando lo que hace falta es limpiar participantes de
+  // prueba sin perder cómo quedó configurado el torneo. Ver
+  // rgDeleteAllParticipants() (participantes.js) para la contraparte de
+  // rgResetAll() que no resetea meta.configGlobal.
+  document.getElementById('a_del_participantes').addEventListener('click', ()=>{
+    if(!confirm('⚠️ Esto borra a TODOS los participantes y sus predicciones (para todos, vía Firestore), incluyendo la Papelera. La configuración del torneo (fases activas, reglas, fecha de cierre, etc.) NO se toca. ¿Continuar?')) return;
+    if(!confirm('Última confirmación: se perderán todas las quinielas registradas hasta ahora, sin posibilidad de restaurar nada. ¿Seguro?')) return;
+    DB.participants = [];
+    DB.predictions = {};
+    DB.papelera = [];
+    DB.nextSeq = 1;
+    ADMIN_SEARCH = '';
+    ADMIN_FILTER = 'all';
+    SHOW_PAPELERA = false;
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }catch(e){}
+    rgDeleteAllParticipants();
+    toast('Participantes borrados (en todos los dispositivos). La configuración del torneo se conservó.');
+    renderAdminTab();
+  });
+
   document.getElementById('a_reset').addEventListener('click', ()=>{
     // v6.0 — ¡OJO! Ya no es un reset solo-local: esto sobreescribe el doc
     // compartido registro/estado en Firestore, afectando a TODOS los
     // dispositivos conectados (no solo este navegador). Doble confirmación
     // a propósito por ser ahora una acción realmente destructiva y compartida.
-    if(!confirm('⚠️ Esto borra TODOS los participantes y predicciones de Mi Quiniela para TODOS (no solo en este navegador — se sincroniza por Firestore), incluyendo la Papelera. ¿Continuar?')) return;
-    if(!confirm('Última confirmación: se perderán todas las quinielas registradas hasta ahora, sin posibilidad de restaurar nada. ¿Seguro?')) return;
+    if(!confirm('⚠️ Esto borra TODOS los participantes y predicciones de Mi Quiniela para TODOS (no solo en este navegador — se sincroniza por Firestore), incluyendo la Papelera, Y restaura la configuración del torneo (fases activas, reglas, fecha de cierre, etc.) a los valores originales. ¿Continuar?')) return;
+    if(!confirm('Última confirmación: se perderán todas las quinielas registradas hasta ahora Y la configuración del torneo, sin posibilidad de restaurar nada. ¿Seguro?')) return;
     DB = {participants:[], predictions:{}, papelera:[], nextSeq:1, configGlobal:{modoConsultaHabilitado:true, registroAbierto:true, loginPorNombreHabilitado:true, fechaCierre:'', horaCierre:'23:59', usarMiQuinielaComoInicio:false}};
     ADMIN_SEARCH = '';
     ADMIN_FILTER = 'all';
@@ -3959,7 +4039,7 @@ function renderAdmin(){
     // que sigue en la lista). rgResetAll() borra de verdad cada documento
     // de la colección, resetea meta y vacía la papelera en el servidor.
     rgResetAll();
-    toast('Datos de Mi Quiniela borrados (en todos los dispositivos).');
+    toast('Datos de Mi Quiniela borrados y configuración restaurada (en todos los dispositivos).');
     renderAdminTab();
   });
 }
