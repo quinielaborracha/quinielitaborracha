@@ -410,10 +410,27 @@ const WIZARD_STEPS = [
 // a TODOS los participantes por igual (no hace falta que cada uno haya
 // "enviado" su quiniela), pero el admin siempre puede seguir editando
 // (ver ADMIN_OVERRIDE en renderQuinielaForm, que ya ignora isLocked()).
+// v3.2.1 — BUG URGENTE REPORTADO: a varios participantes les aparecía
+// "No se pudo guardar (permiso denegado)" con el formulario TODAVÍA
+// visible como editable (sin ningún aviso de "cerrado") -- porque este
+// cálculo interpretaba fechaCierre+horaCierre como hora LOCAL del
+// navegador de quien mira la pantalla (new Date("...T...") sin sufijo
+// de zona horaria se parsea así), mientras que firestore.rules
+// (_isPastDeadlineInner(), donde vive la única prohibición real del
+// servidor) SIEMPRE lo interpretó como UTC (le agrega ":00Z" a
+// propósito, para tener UN solo instante real sin importar desde dónde
+// se mire -- ver la nota completa en firestore.rules). Para cualquiera
+// en una zona horaria detrás de UTC (todo Latinoamérica), el servidor
+// cerraba HORAS antes de que el cliente mostrara el cierre -- el
+// participante veía el formulario abierto y guardable, pero cada
+// autoguardado se rechazaba en silencio (bien silencioso: el único
+// aviso era ese toast rojo, sin explicar por qué). Ahora el cliente
+// interpreta EXACTAMENTE lo mismo que el servidor (":00Z"), eliminando
+// la ventana de "parece abierto pero ya está cerrado".
 function getCierreTimestamp(){
   const fc = DB.configGlobal.fechaCierre;
   if(!fc) return null;
-  const t = new Date(`${fc}T${DB.configGlobal.horaCierre || '23:59'}`).getTime();
+  const t = new Date(`${fc}T${DB.configGlobal.horaCierre || '23:59'}:00Z`).getTime();
   return isNaN(t) ? null : t;
 }
 function isGloballyClosed(){
@@ -3833,9 +3850,10 @@ function renderAdmin(){
         <div style="width:100%">
           <div style="font-weight:700;margin-bottom:4px">⏰ Cierre automático de inscripciones</div>
           <div class="muted" style="font-size:11.5px;margin-bottom:10px">${cierreStatusText}</div>
+          <div class="note" style="font-size:11px;margin-bottom:10px">⚠️ La hora se interpreta en <b>UTC</b> (no en tu hora local) -- es la que de verdad hace cumplir el servidor. Ej.: si querés que cierre a las 6pm hora de Panamá (UTC-5), cargá <b>23:00</b> acá.</div>
           <div class="row2">
             <div class="field"><label>Fecha de cierre</label><input type="date" id="a_fecha_cierre" value="${esc(DB.configGlobal.fechaCierre||'')}"></div>
-            <div class="field"><label>Hora de cierre</label><input type="time" id="a_hora_cierre" value="${esc(DB.configGlobal.horaCierre||'23:59')}"></div>
+            <div class="field"><label>Hora de cierre (UTC)</label><input type="time" id="a_hora_cierre" value="${esc(DB.configGlobal.horaCierre||'23:59')}"></div>
           </div>
           <div class="rg-btn-row">
             <button class="rg-btn rg-btn-primary" id="a_guardar_cierre">Guardar cierre</button>

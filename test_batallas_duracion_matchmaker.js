@@ -111,6 +111,19 @@ console.log("\n── Duración por cantidad de partidos (getMatchIdsByCount) �
 // el mid "de hoy" ya habría quedado en el pasado y jamás podría entrar en
 // una ventana que mira hacia adelante. Mids nuevos (30-34), offsets
 // relativos al instante real de ejecución.
+//
+// FLAKY DETECTADO (v3.2.1): mid=1 ("hoy a las 12:00", Parte 1) nunca se
+// borraba de S.matchTimes antes de esta parte -- si el test corre en
+// las horas cercanas al mediodía LOCAL de quien lo ejecuta, "hoy 12:00"
+// cae DENTRO de la ventana de horas que mira getMatchIdsByCount acá
+// abajo, colándose antes que los mids 30/31 esperados y rompiendo el
+// resultado exacto. Se guardan y se sacan los mids de la Parte 1 antes
+// de arrancar esta (se restauran después, ver más abajo -- la Parte 2
+// todavía los necesita), para que esta parte quede aislada sin importar
+// la hora real.
+const _mids1a5Backup = {1:T.S.matchTimes[1],2:T.S.matchTimes[2],3:T.S.matchTimes[3],4:T.S.matchTimes[4],5:T.S.matchTimes[5]};
+delete T.S.matchTimes[1];delete T.S.matchTimes[2];delete T.S.matchTimes[3];
+delete T.S.matchTimes[4];delete T.S.matchTimes[5];
 const nowMs = Date.now();
 T.S.matchTimes[30] = nowMs + 1*3600000;  // dentro de 1h
 T.S.matchTimes[31] = nowMs + 2*3600000;  // dentro de 2h
@@ -131,9 +144,11 @@ check("Con 0 (inválido), cae a 1 partido en vez de romper",
   JSON.stringify(cInvalido.groupMids) === JSON.stringify([30]));
 
 // Limpiar para no contaminar la Parte 2 (que sigue usando mids 1-5 con
-// horarios fijados por día calendario).
+// horarios fijados por día calendario) -- y restaurar los mids 1-5
+// guardados arriba, que la Parte 2 necesita de vuelta.
 delete T.S.matchTimes[30];delete T.S.matchTimes[31];delete T.S.matchTimes[32];
 delete T.S.matchTimes[33];delete T.S.matchTimes[34];
+Object.assign(T.S.matchTimes, _mids1a5Backup);
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 2 — startBattle respeta el input de días/partidos y lo guarda en
