@@ -1989,26 +1989,22 @@ function groupRowHtml(m, preds, readOnly){
     </div>`;
 }
 
+// v3.1 — antes esta tarjeta mostraba el desglose fase por fase (una
+// fila con ✅/▫️ + "N/M" por cada una: Octavos, Cuartos, Semis, etc.) más
+// el % en el título -- pedido explícito: dejar solo el aviso final
+// (100% completa, o qué falta + el botón para ir ahí), sin la tabla.
+// getCompletionStatus() sigue calculando st.phases completo porque
+// missing/firstMissing lo necesitan para el botón "Ir al pendiente".
 function buildStatusCard(pid){
   const st = getCompletionStatus(pid);
-  const rows = st.phases.map(ph=>{
-    const ok = ph.done===ph.total;
-    return `<div class="status-row">
-        <span>${ok?'✅':'▫️'} ${esc(ph.label)}</span>
-        <span class="badge ${ok?'badge-green':'badge-muted'}">${ph.done}/${ph.total}</span>
-      </div>`;
-  }).join('');
-  const pct = Math.round((st.totalDone/st.totalAll)*100);
   const firstMissing = st.phases.find(ph=>ph.done<ph.total);
   const missing = st.phases.filter(ph=>ph.done<ph.total).map(ph=>`${ph.label} (faltan ${ph.total-ph.done})`);
   const gotoIdx = firstMissing ? WIZARD_STEPS.findIndex(s=>s.key===firstMissing.key) : -1;
   return `<div class="card">
-      <div class="card-title">📋 Estado de tu quiniela <span class="badge ${st.complete?'badge-green':'badge-yellow'}">${pct}%</span></div>
-      ${rows}
       ${missing.length
-        ? `<div class="note" style="margin-top:.75rem">Falta completar: ${esc(missing.join(' · '))}.
+        ? `<div class="note">Falta completar: ${esc(missing.join(' · '))}.
             <button class="rg-btn rg-btn-gold" id="status_goto_pending" data-idx="${gotoIdx}" style="margin-top:.5rem;font-size:11.5px;padding:6px 12px;display:block">📍 Ir al pendiente</button></div>`
-        : `<div class="note" style="margin-top:.75rem;border-color:var(--qb-green);color:var(--qb-green)">¡Tu quiniela está 100% completa!</div>`}
+        : `<div class="note" style="border-color:var(--qb-green);color:var(--qb-green)">¡Tu quiniela está 100% completa!</div>`}
     </div>`;
 }
 
