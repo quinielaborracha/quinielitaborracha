@@ -1,8 +1,17 @@
-// Test funcional de v3.1: el paso "Revisión final" del wizard ya NO
-// muestra la tabla "📋 Estado de tu quiniela" (fase por fase, con
-// badges ✅/▫️ y el % en el título) — pedido explícito para simplificar
-// esa pantalla. Se conserva SOLO el aviso final (100% completa, o qué
-// falta + el botón "Ir al pendiente").
+// Test funcional de v3.1 + v3.1.1: el paso "Revisión final" del wizard.
+//
+// v3.1 — ya NO muestra la tabla "📋 Estado de tu quiniela" (fase por
+// fase, con badges ✅/▫️ y el % en el título) — pedido explícito para
+// simplificar esa pantalla.
+//
+// v3.1.1 — esa tarjeta (buildStatusCard) se eliminó por completo: el
+// aviso de "100% completa" se fusionó dentro de la tarjeta "📨 Enviar
+// mi quiniela", al lado del aviso "¡Todo listo para enviar!" que ya
+// existía ahí — una sola línea: "¡Todo listo para enviar tu quiniela
+// está 100% completa!". El botón "Ir al pendiente" (que vivía en la
+// tarjeta eliminada) se fue con ella; el caso incompleto sigue
+// mostrando su propio aviso ("Aún falta: ...") en la misma tarjeta de
+// envío, como ya hacía antes.
 //
 // Mismo patrón de harness que test_ko_equipos_reales_persistencia.js.
 const { JSDOM } = require("jsdom");
@@ -90,23 +99,19 @@ T.WIZ_STEP = reviewIdx;
 console.log("── Caso incompleto ──");
 T.renderQuinielaForm("p1", "inicio");
 let bodyHtml = W.document.getElementById("rg-content").innerHTML;
-check("YA NO aparece el título 'Estado de tu quiniela'", !bodyHtml.includes("Estado de tu quiniela"));
+check("YA NO aparece el título 'Estado de tu quiniela' (tarjeta eliminada)", !bodyHtml.includes("Estado de tu quiniela"));
 // La fila vieja de "Fase de grupos" rendeaba "<span class=\"badge ...\">0/72</span>"
-// (formato N/M) -- la nota nueva dice "faltan N", sin barra. Si ">0/72<"
-// ya no aparece, confirma que la fila-tabla se fue (el nombre de la fase
-// SÍ puede seguir apareciendo dentro de la frase "Falta completar: ...").
+// (formato N/M) -- si ">0/72<" ya no aparece, confirma que esa fila-tabla se fue.
 check("YA NO aparece la fila-tabla de Grupos con formato N/M (ej. '0/72')", !bodyHtml.includes("0/72<"));
-check("SÍ aparece el aviso de qué falta completar", bodyHtml.includes("Falta completar"));
-check("SÍ aparece el botón 'Ir al pendiente'", bodyHtml.includes("status_goto_pending"));
+check("YA NO existe el botón 'Ir al pendiente' (se fue con la tarjeta eliminada)", !bodyHtml.includes("status_goto_pending"));
+check("SÍ aparece 'Aún falta' en la tarjeta de envío (mismo mensaje de siempre, sin duplicar)", bodyHtml.includes("Aún falta"));
+check("Solo aparece UNA vez la tarjeta 'Enviar mi quiniela' (no quedó una segunda tarjeta de estado)",
+  (bodyHtml.match(/Enviar mi quiniela/g)||[]).length === 1);
 
 /* ════════════════════════════════════════════════════════════════
    Caso completo — cargamos las 72 predicciones de grupos (mínimo para
-   que isFaseActiva('grupos') cuente como completa) + el resto de KO
-   se resuelve solo porque en este setup mínimo no hay fases de
-   eliminatoria activas configuradas explícitamente... para simplificar,
-   en vez de armar las 72+32+8 predicciones reales, desactivamos todas
-   las fases de eliminatoria/especiales salvo grupos, así "completa"
-   depende solo de esas 72.
+   que isFaseActiva('grupos') cuente como completa) + desactivamos el
+   resto de fases/preguntas para que "completa" dependa solo de esas 72.
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── Caso 100% completo ──");
 T.DB.configGlobal.fasesActivas = { r16:false, r8:false, qf:false, sf:false, final:false, third:false };
@@ -118,8 +123,11 @@ T.DB.predictions.p1 = preds;
 T.renderQuinielaForm("p1", "inicio");
 bodyHtml = W.document.getElementById("rg-content").innerHTML;
 check("YA NO aparece el título 'Estado de tu quiniela' (caso completo)", !bodyHtml.includes("Estado de tu quiniela"));
-check("SÍ aparece el aviso de 100% completa", bodyHtml.includes("100% completa"));
-check("NO aparece 'Falta completar' cuando ya está completa", !bodyHtml.includes("Falta completar"));
+check("La línea fusionada dice EXACTAMENTE '¡Todo listo para enviar tu quiniela está 100% completa!'",
+  bodyHtml.includes("¡Todo listo para enviar tu quiniela está 100% completa!"));
+check("NO aparece 'Aún falta' cuando ya está completa", !bodyHtml.includes("Aún falta"));
+check("Solo aparece UNA vez la tarjeta 'Enviar mi quiniela'",
+  (bodyHtml.match(/Enviar mi quiniela/g)||[]).length === 1);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);

@@ -1989,25 +1989,6 @@ function groupRowHtml(m, preds, readOnly){
     </div>`;
 }
 
-// v3.1 — antes esta tarjeta mostraba el desglose fase por fase (una
-// fila con ✅/▫️ + "N/M" por cada una: Octavos, Cuartos, Semis, etc.) más
-// el % en el título -- pedido explícito: dejar solo el aviso final
-// (100% completa, o qué falta + el botón para ir ahí), sin la tabla.
-// getCompletionStatus() sigue calculando st.phases completo porque
-// missing/firstMissing lo necesitan para el botón "Ir al pendiente".
-function buildStatusCard(pid){
-  const st = getCompletionStatus(pid);
-  const firstMissing = st.phases.find(ph=>ph.done<ph.total);
-  const missing = st.phases.filter(ph=>ph.done<ph.total).map(ph=>`${ph.label} (faltan ${ph.total-ph.done})`);
-  const gotoIdx = firstMissing ? WIZARD_STEPS.findIndex(s=>s.key===firstMissing.key) : -1;
-  return `<div class="card">
-      ${missing.length
-        ? `<div class="note">Falta completar: ${esc(missing.join(' · '))}.
-            <button class="rg-btn rg-btn-gold" id="status_goto_pending" data-idx="${gotoIdx}" style="margin-top:.5rem;font-size:11.5px;padding:6px 12px;display:block">📍 Ir al pendiente</button></div>`
-        : `<div class="note" style="border-color:var(--qb-green);color:var(--qb-green)">¡Tu quiniela está 100% completa!</div>`}
-    </div>`;
-}
-
 /* ════════════════════════════════════════
    DASHBOARD DEL PARTICIPANTE (post-bloqueo) — v6.3, Fase 1
    Una vez que la quiniela queda bloqueada (enviada, o cerrado el plazo
@@ -3020,7 +3001,7 @@ function buildReviewSummaryHtml(p, preds, bracket, readOnly){
 
 function buildReviewStepHtml(pid, p, preds, bracket, readOnly){
   const status = getCompletionStatus(pid);
-  let html = buildReviewSummaryHtml(p, preds, bracket, readOnly) + buildStatusCard(pid);
+  let html = buildReviewSummaryHtml(p, preds, bracket, readOnly);
 
   if(p.estadoQuiniela==='enviada'){
     // v1.0 — Una vez enviada, el botón cambia para siempre a "generar
@@ -3037,12 +3018,16 @@ function buildReviewStepHtml(pid, p, preds, bracket, readOnly){
     // Antes existían dos botones separados (Enviar / Generar PDF) y eso
     // generaba confusión sobre cuál de los dos "contaba" como el envío
     // real; ahora es una sola acción atómica.
+    // v3.1.1 — el aviso de "100% completa" (antes en su propia tarjeta,
+    // buildStatusCard(), ya eliminada) se fusiona acá mismo, al lado del
+    // aviso de "todo listo" -- misma información (ambos dependen de
+    // status.complete), una sola tarjeta en vez de dos.
     const missing = status.phases.filter(ph=>ph.done<ph.total).map(ph=>`${ph.label} (faltan ${ph.total-ph.done})`);
     html += `<div class="card">
         <div class="card-title">📨 Enviar mi quiniela</div>
         ${missing.length
           ? `<div class="note">Aún falta: ${esc(missing.join(' · '))}.</div>`
-          : `<div class="note" style="border-color:var(--qb-green);color:var(--qb-green)">¡Todo listo para enviar!</div>`}
+          : `<div class="note" style="border-color:var(--qb-green);color:var(--qb-green)">¡Todo listo para enviar tu quiniela está 100% completa!</div>`}
         <label class="confirm-check">
           <input type="checkbox" id="confirm_check" ${status.complete?'':'disabled'}>
           <span>Confirmo que mis predicciones son correctas y deseo enviarlas.</span>
@@ -3324,10 +3309,6 @@ function renderQuinielaForm(pid, originTab){
   // como si quedó cerrada por fecha límite sin enviar (ambos casos son
   // readOnly), así que se conecta FUERA del bloque if(!readOnly) de arriba.
   document.getElementById('btn_pdf_copy')?.addEventListener('click', ()=> generarPDF(p));
-  document.getElementById('status_goto_pending')?.addEventListener('click', (e)=>{
-    const idx = parseInt(e.currentTarget.dataset.idx, 10);
-    if(!isNaN(idx) && idx>=0) jumpToStepUnchecked(idx);
-  });
 
   document.getElementById('wiz_save_exit')?.addEventListener('click', ()=>{
     flushAutosave();
