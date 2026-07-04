@@ -1094,15 +1094,43 @@ function importarInfoParticipantes(file){
 // se puede reimportar el mismo backup las veces que haga falta sin
 // arriesgar pisar en silencio la quiniela de alguien que ya está
 // jugando, y sin crear duplicados de quien ya está.
+//
+// v3.1.2 — BUG REPORTADO: nextCode() (participantes.js) lee
+// DB.nextSeq LOCAL para generar el código de un participante nuevo —
+// si 2+ personas se registran casi al mismo tiempo desde dispositivos
+// distintos, cada una puede leer el mismo DB.nextSeq (todavía no le
+// llegó el commit de la otra) y terminar con el MISMO código (ej.
+// 4 participantes reales distintos, los 4 con "QLB-2026-0001"). El
+// chequeo de "repetido DENTRO del archivo" identificaba a cada
+// participante SOLO por su código -- con códigos duplicados, la
+// 2da/3ra/4ta persona del archivo quedaban "vistas" como si fueran la
+// 1ra repetida, y se descartaban en silencio (de 4 personas reales,
+// solo se importaba 1). Ahora ESE chequeo puntual usa el CORREO
+// normalizado cuando está (prácticamente siempre único por persona
+// real, a diferencia del código autogenerado), cayendo al código solo
+// si no hay correo.
+//
+// El chequeo de "¿ya existe entre los participantes ACTUALES?" NO se
+// toca -- sigue siendo por código nada más, a propósito: si alguien
+// activamente registrado hoy comparte código con una fila del archivo
+// pero el archivo trae un correo distinto (ej. un correo viejo/de
+// prueba), igual se lo debe tratar como la MISMA persona y dejarlo
+// intacto -- no como alguien nuevo a agregar. Cambiar este chequeo a
+// correo rompería esa protección (ver test_export_import_predicciones.js).
+function _identidadPorCorreo(correoOEmail, codigo){
+  const correoNorm = (correoOEmail||'').trim().toLowerCase();
+  return correoNorm || `codigo:${codigo}`;
+}
 function importarInfoParticipantesComoNuevos(participantesDelArchivo){
   const codigosExistentes = new Set(DB.participants.map(p=>p.codigo));
-  const vistosEnArchivo = new Set(); // por si el archivo trae el mismo código repetido
+  const vistosEnArchivo = new Set(); // por si el archivo trae a la misma persona repetida
   const nuevos = [];
   participantesDelArchivo.forEach(p=>{
     if(!p || !p.codigo || !p.nombre) return; // sin código o sin nombre no alcanza para crear un participante de verdad
     if(codigosExistentes.has(p.codigo)) return; // ya existe -- se deja intacto
-    if(vistosEnArchivo.has(p.codigo)) return;
-    vistosEnArchivo.add(p.codigo);
+    const identidad = _identidadPorCorreo(p.correo, p.codigo);
+    if(vistosEnArchivo.has(identidad)) return;
+    vistosEnArchivo.add(identidad);
     nuevos.push(p);
   });
 
@@ -1131,10 +1159,21 @@ function importarInfoParticipantesComoNuevos(participantesDelArchivo){
   URL.revokeObjectURL(urlBk);
 
   const now = Date.now();
+  // v3.1.2 — el código duplicado (ver nota de arriba) ya no le impide a
+  // nadie importarse, pero seguiría mostrando 2+ personas reales con el
+  // MISMO "código" en la tabla del admin (confuso, y ese código deja de
+  // servir para identificar a alguien puntual). Si el código que trae
+  // el archivo ya está en uso -- por un participante ya existente, o por
+  // otro de este mismo lote -- se le asigna uno nuevo de verdad con
+  // nextCode() (participantes.js), único garantizado.
+  const codigosEnUso = new Set(DB.participants.map(p=>p.codigo));
   nuevos.forEach(p=>{
     const id = uid();
+    let codigo = p.codigo;
+    if(codigosEnUso.has(codigo)) codigo = nextCode();
+    codigosEnUso.add(codigo);
     DB.participants.push({
-      id, codigo: p.codigo,
+      id, codigo,
       name: p.nombre, city: p.ciudad||'', country: p.pais||'', countryIso: p.paisIso||'',
       email: p.correo||'', clave: p.clave||genClave(), ownerUid: null,
       estadoQuiniela: (p.estado==='enviada') ? 'enviada' : 'borrador',
