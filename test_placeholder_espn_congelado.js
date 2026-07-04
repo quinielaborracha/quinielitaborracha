@@ -1,15 +1,24 @@
-// Test funcional/diagnóstico: cuando ESPN todavía no resolvió el rival
-// real de un cruce (devuelve un placeholder tipo "Round of 32 14 Winner"
-// en vez de un país), ese texto puede terminar escrito en S.elimTeams y
-// mostrado al participante mientras arma su predicción -- si el
-// participante predice un marcador en ese momento, su predicción guarda
-// ese mismo texto como "huella" (_a/_b) del cruce.
+// Test funcional de v3.2.4 — este archivo empezó como un DIAGNÓSTICO
+// (sin fix) que confirmaba un bug real: cuando ESPN todavía no resolvía
+// el rival de un cruce de la fase manual (devuelve un placeholder tipo
+// "Round of 32 14 Winner" en vez de un país) y el participante predecía
+// un marcador en ese momento, su predicción guardaba ese texto como
+// "huella" congelada (_a/_b) -- y esa huella NUNCA se actualizaba
+// después, aunque el equipo real ya se hubiera confirmado (Argentina).
+// Este mismo mecanismo es la causa raíz del bug real reportado por el
+// usuario en producción: "configuré el torneo para arrancar en Octavos y
+// el ranking no suma los puntos de un partido ya jugado" -- cualquier
+// corrección/actualización posterior del nombre del equipo real (typo,
+// ESPN resolviendo el rival, etc.) dejaba a quien ya había predicho con
+// una huella desincronizada, e isLlaveCorrecta() (scoring.js) empezaba a
+// dar false aunque el participante hubiera acertado el resultado real.
 //
-// Pregunta a responder con evidencia (no solo lectura de código): cuando
-// más tarde el equipo real se confirma (S.elimTeams se actualiza con el
-// país de verdad), ¿la vista de Predicciones (panel Admin, renderBracket()
-// en app-bracket-view.js) empieza a mostrar el país real, o se queda
-// mostrando el placeholder viejo para siempre?
+// FIX (getElimTeams(), scoring.js): para el pid de la fase MANUAL
+// (getManualTeamPids()), ya no se confía en la huella congelada -- se
+// usa siempre el equipo real VIGENTE (S.elimTeams), igual que ya hacía
+// la UI del wizard (trustSlot, registro.js). Este test ahora verifica
+// que la vista de Predicciones (panel Admin) y getElimTeams() SÍ se
+// actualizan al equipo real, en vez de quedarse con el placeholder viejo.
 //
 // Carga los archivos de producción reales, mismo patrón que los demás
 // test_*.js del repo.
@@ -123,17 +132,16 @@ check("getRealElimTeams(95) YA devuelve 'Argentina' (el motor de puntaje SÍ est
 
 const stillShowsPlaceholder = bodyHtml.includes("Round of 32 14 Winner");
 const nowShowsRealName = bodyHtml.includes(">Argentina<");
-check("DIAGNÓSTICO: la vista de Predicciones (admin) sigue mostrando el PLACEHOLDER viejo, no el país real",
-  stillShowsPlaceholder);
-console.log(`   (¿aparece "Argentina" en el HTML como equipo predicho? ${nowShowsRealName ? "SÍ" : "NO"})`);
-console.log(`   (¿sigue apareciendo el placeholder "Round of 32 14 Winner"? ${stillShowsPlaceholder ? "SÍ" : "NO"})`);
+check("FIX: la vista de Predicciones (admin) ahora muestra el país real (Argentina), no el placeholder viejo",
+  nowShowsRealName && !stillShowsPlaceholder);
 
-// Confirmamos la causa raíz: getElimTeams() (lo que alimenta pH/pA en
-// renderBracket) lee _a/_b tal como quedaron guardados en la predicción
-// del participante -- nunca se re-resuelve contra el equipo real actual.
-const frozenHuella = T.getElimTeams("Juan Pérez", 95);
-check("CAUSA RAÍZ: getElimTeams() sigue devolviendo la huella _a/_b congelada del momento en que se guardó",
-  frozenHuella && frozenHuella.h === "Round of 32 14 Winner");
+// getElimTeams() (lo que alimenta pH/pA en renderBracket, y lo que usa
+// isLlaveCorrecta() para puntuar) ahora se re-resuelve contra el equipo
+// real VIGENTE en vez de la huella _a/_b congelada -- ya no se queda
+// pegado al placeholder ni a un nombre viejo/con typo.
+const equipoActual = T.getElimTeams("Juan Pérez", 95);
+check("FIX: getElimTeams() ahora devuelve el equipo real vigente (Argentina), no la huella congelada",
+  equipoActual && equipoActual.h === "Argentina");
 
-console.log(`\n${ok ? "TODO OK ✅ (diagnóstico confirmado)" : "HAY FALLOS ❌"}`);
+console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);

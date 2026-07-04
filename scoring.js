@@ -152,7 +152,37 @@ function getElimTeams(name,pid){
   if(!person)return null;
   const slot=PID_TO_SLOT[pid];if(!slot)return null;
   const rec=(DB.predictions[person.id]||{})[slot];
-  if(!rec||!rec._a||!rec._b||rec._a==="?")return null;
+  if(!rec)return null;
+  // v3.2.4 — BUG REAL (torneo arrancando en una fase posterior a Grupos,
+  // ej. Octavos): para el pid de la fase MANUAL (getManualTeamPids()), el
+  // wizard siempre MUESTRA los equipos reales vigentes (S.elimTeams,
+  // ver trustSlot/renderKoRow en registro.js) -- pero al tipear un
+  // marcador congelaba esos nombres en _a/_b de la predicción, tal cual
+  // estaban EN ESE MOMENTO. Si el admin corrige después ese nombre
+  // (typo/acento, o ESPN reordena local/visitante), la copia congelada
+  // del participante queda desincronizada del equipo real actual --
+  // isLlaveCorrecta() (compara set de nombres) empieza a dar false para
+  // ese participante aunque haya acertado el resultado real: 0pts
+  // silencioso, sin ningún error visible, y sin forma de que se
+  // autocorrija.
+  //
+  // OJO: esto SOLO aplica cuando la fase manual es el punto de entrada
+  // real del torneo para TODOS por igual (Grupos desactivada, o
+  // Dieciseisavos no es la primera fase activa) -- ahí nadie "adivina" el
+  // cruce, todos comparten el mismo. Si en cambio Grupos está activa Y
+  // Dieciseisavos es la primera fase (el caso de SIEMPRE hasta ahora),
+  // CADA participante arma su propio cruce de Dieciseisavos desde SUS
+  // PROPIOS resultados de grupo (ver r32SembradoDeGrupos en
+  // registro.js::computeBracket) -- ahí la huella congelada SIGUE siendo
+  // necesaria: es lo que permite comparar "¿tu bracket propio predijo el
+  // MISMO cruce que realmente ocurrió en este pid oficial?", que es
+  // justamente lo que puntúa la llave.
+  const manualPhaseSembradaDeGrupos = isFaseActiva('grupos') && getFirstActiveElimPhase()?.key==='r16';
+  if(!manualPhaseSembradaDeGrupos && getManualTeamPids().includes(pid)){
+    const real=S.elimTeams[pid];
+    if(real&&real.h&&real.a)return{h:real.h,a:real.a};
+  }
+  if(!rec._a||!rec._b||rec._a==="?")return null;
   return{h:rec._a,a:rec._b};
 }
 

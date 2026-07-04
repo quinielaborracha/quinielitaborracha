@@ -99,12 +99,23 @@ function noInjectedElements(container, label){
 }
 
 /* ════════════════════════════════════════════════════════════════
-   SETUP — un participante cuya predicción de eliminatoria (r16_1, un
-   slot "Octavos" -- torneo con Grupos+Dieciseisavos desactivados, para
+   SETUP — un participante cuya predicción de eliminatoria (qf_1, un
+   slot de Cuartos -- torneo con Grupos+Dieciseisavos desactivados, para
    no tener que completar 72 grupos) trae un payload de XSS en la
    huella _a/_b (simulando una escritura directa a Firestore, no vía la
    UI/dropdown), y cuya respuesta a "Goleador del torneo" (texto libre)
    trae otro payload distinto.
+   //
+   // v3.2.4 — se usa un pid de una ronda POSTERIOR a la fase manual
+   // (qf_1/P97, no r16_1/P89) a propósito: desde v3.2.4, getElimTeams()
+   // ya NO confía en la huella _a/_b para el pid de la fase manual (P89,
+   // Octavos con este torneo) -- siempre usa el equipo real vigente
+   // (S.elimTeams), así que un payload ahí ya ni siquiera llega a
+   // insertarse en el DOM (más seguro, pero deja de ejercitar el camino
+   // de escapado que este test necesita probar). Las rondas posteriores
+   // siguen leyendo _a/_b tal cual se guardó (se resuelven del bracket
+   // PROPIO del participante), así que siguen siendo el lugar correcto
+   // para esta prueba de escapado.
    ════════════════════════════════════════════════════════════════ */
 const XSS_TEAM = `<img src=x onerror=alert(1)>"'`;
 const XSS_SCORER = `<script>alert(2)</script>Messi"'`;
@@ -119,16 +130,15 @@ T.DB.configGlobal.fasesActivas = { grupos:false, r16:false }; // arranca en Octa
 T.DB.participants = [participant];
 T.DB.predictions = {
   p1: {
-    r16_1: { h:2, a:1, _a: XSS_TEAM, _b:"Egipto" },
+    qf_1: { h:2, a:1, _a: XSS_TEAM, _b:"Egipto" },
     special: { goleador: XSS_SCORER, campeon:"Argentina" },
   }
 };
-T.S.elimTeams = { 89: { h:"Argentina", a:"Egipto" } }; // real confirmado, para que getRealElimTeams no bloquee el bracket
 // buildDashElimHtml() (registro.js) solo pinta una fila si el partido
 // YA tiene marcador real cargado ("graded") -- sin esto, la fila ni se
 // renderiza y el payload nunca llega a insertarse en el DOM (falso
 // negativo, no una confirmación real de que escapa bien).
-T.S.elimScores = { 89: { h:1, a:0 } };
+T.S.elimScores = { 97: { h:1, a:0 } };
 W.rebuildDynamicData();
 
 /* ── 1) app-bracket-view.js / renderBracket() — 📝 Predicciones → 🎯 Eliminatoria ── */
