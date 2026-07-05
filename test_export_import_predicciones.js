@@ -113,7 +113,7 @@ W.document.createElement = (tag) => {
 W.exportarInfoParticipantes();
 
 check("Se generó y 'descargó' el archivo (createObjectURL + click)", !!exportedPayload && clickedAnchor);
-check("version quedó en '2.8.1'", exportedPayload.version === "2.8.1");
+check("version quedó en '2.9'", exportedPayload.version === "2.9");
 const expJuan = exportedPayload.participantes.find(p => p.codigo === "QLB-2026-0001");
 check("El participante exportado trae 'predicciones' con su quiniela real",
   !!expJuan && expJuan.predicciones && expJuan.predicciones[1] && expJuan.predicciones[1].h === 2 && expJuan.predicciones.special.campeon === "Argentina");

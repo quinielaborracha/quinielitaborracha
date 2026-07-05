@@ -36,5 +36,14 @@ let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{
   // solo para consulta del propio admin. [{ts,fase,id,label,before,after,live}],
   // más nuevo primero, tope de entradas en _clAppendChangeLogEntries()
   // (app-live-sync.js) para no crecer sin límite dentro de este mismo doc.
-  changeLog:[]
+  changeLog:[],
+  // v3.6 — Historial de comparaciones contra un respaldo offline de
+  // predicciones (Admin → 🔒 Integridad, ver compararRespaldoOffline() en
+  // app-integridad.js). Solo guarda un RESUMEN de cada corrida
+  // ([{ts,archivo,totalComparados,numConCambios,numFaltantes,numNuevos,
+  // afectados:[{codigo,nombre,numCambios}]}], más nuevo primero) -- el
+  // detalle campo por campo de qué cambió se muestra en pantalla en el
+  // momento pero no se persiste, para no hacer crecer este documento con
+  // el contenido completo de las predicciones en cada corrida manual.
+  integrityChecks:[]
 };

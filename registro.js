@@ -1314,7 +1314,7 @@ function exportarInfoParticipantes(){
   const total = totalMatches();
   const payload = {
     tipo: "quinielaborracha_info_participantes",
-    version: "2.8.1",
+    version: "2.9",
     exportedAt: new Date().toISOString(),
     participantes: DB.participants.slice()
       .sort((a,b)=> a.name.localeCompare(b.name))
@@ -1333,6 +1333,11 @@ function exportarInfoParticipantes(){
           enviado: p.fechaEnvio || null,
           estado: p.estadoQuiniela || '',
           avance: pct,
+          // v2.9 — se agrega para poder detectar, en compararRespaldoOffline()
+          // (app-integridad.js), si una cuenta cambió de dueño (reclamo)
+          // entre el momento de este export y ahora. No es un dato sensible:
+          // ya viaja público en registro_participants (ver firestore.rules).
+          ownerUid: p.ownerUid || '',
           predicciones: DB.predictions[p.id] || {}
         };
       })
