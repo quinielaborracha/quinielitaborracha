@@ -31,5 +31,10 @@ let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{
   snapshots:[],    // [{id, label, ts, positions:{name:pos,...}}]
   reality:{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountryGoals:0,mostConceded:""},adv:{},
   battles:{},  // {1:{p1,p2,groupMids,elimMids,startedAt,closed}, 2:{...}} — duelos diarios v5.0
-  battleHistory:[]  // [{name,p1,p2,pts1,pts2,winner,date}] — historial de duelos cerrados, v5.4
+  battleHistory:[],  // [{name,p1,p2,pts1,pts2,winner,date}] — historial de duelos cerrados, v5.4
+  // v3.4 — Historial de cambios de resultados (Admin → 🔒 Integridad),
+  // solo para consulta del propio admin. [{ts,fase,id,label,before,after,live}],
+  // más nuevo primero, tope de entradas en _clAppendChangeLogEntries()
+  // (app-live-sync.js) para no crecer sin límite dentro de este mismo doc.
+  changeLog:[]
 };

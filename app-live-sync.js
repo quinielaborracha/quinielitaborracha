@@ -82,6 +82,7 @@ function load(){
       S.adv=p.adv||p.advPreds||{};
       if(p.battles)S.battles=p.battles;
       if(p.battleHistory)S.battleHistory=p.battleHistory;
+      if(p.changeLog)S.changeLog=p.changeLog;
       let corrupted=0;
       Object.keys(S.scores).forEach(mid=>{
         const sc=S.scores[mid];
@@ -106,7 +107,7 @@ function buildStatePayload(){
   const hiddenPLobj={};
   if(S.hiddenPL instanceof Set)S.hiddenPL.forEach(n=>{hiddenPLobj[n]=true;});
   else Object.assign(hiddenPLobj,S.hiddenPL||{});
-  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory};
+  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory,changeLog:S.changeLog};
 }
 
 // v1.5.1 — Contraparte de buildStatePayload(): aplica un payload completo
@@ -137,6 +138,79 @@ function applyStatePayload(p){
   S.adv=p.adv||{};
   S.battles=p.battles||{};
   S.battleHistory=p.battleHistory||[];
+  S.changeLog=p.changeLog||[];
+  // v3.4 — un backup restaurado reemplaza el estado entero: la línea de
+  // base contra la que se compara el próximo save() (ver más abajo) queda
+  // obsoleta, así que se resetea para que se re-establezca sola contra ESTE
+  // estado recién restaurado, sin loguear un "cambio" fantasma comparando
+  // contra lo que había antes de importar.
+  _clBaselineScores=null;
+  _clBaselineElim=null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// HISTORIAL DE CAMBIOS DE RESULTADOS (v3.4 — Admin → 🔒 Integridad)
+// ══════════════════════════════════════════════════════════════
+// Solo para que el propio admin pueda consultar "¿cuándo cambió este
+// resultado, y de qué a qué?" -- no es un requisito de seguridad ni algo
+// que vean los participantes (ver renderChangeLogCard(), app-
+// integridad.js, dentro del panel Admin). Se calcula por DIFF contra una
+// "foto" de S.scores/S.elimScores tomada la última vez que se pudo
+// comparar -- no se engancha en cada uno de los ~4 lugares que escriben
+// un resultado (carga manual, editor de llaves, ESPN Auto-Sync, ESPN
+// Live), sino acá, en save(), el único cuello de botella por el que
+// pasan todos antes de llegar a Firestore.
+let _clBaselineScores=null;
+let _clBaselineElim=null;
+const CL_MAX_ENTRIES=300; // tope generoso (72 grupos + 32 elim, con margen para varias correcciones de cada uno) para no crecer sin límite dentro de quiniela/estado
+
+function _clLabelGrupos(mid){
+  return (typeof MD!=="undefined" && MD[mid] && MD[mid].lbl) || `Partido ${mid}`;
+}
+function _clLabelElim(pid){
+  const t=S.elimTeams && S.elimTeams[pid];
+  if(t && t.h && t.a && typeof abbr2name==="function"){
+    return `${abbr2name(t.h)} vs ${abbr2name(t.a)}`;
+  }
+  return `Partido ${pid} (Eliminatoria)`;
+}
+function _clDiffOne(id,before,after,labelFn){
+  if(!after||typeof after.h!=="number"||typeof after.a!=="number")return null;
+  if(before&&before.h===after.h&&before.a===after.a)return null; // sin cambio real
+  return{
+    id:Number(id),
+    label:labelFn(id),
+    before:(before&&typeof before.h==="number")?{h:before.h,a:before.a}:null,
+    after:{h:after.h,a:after.a},
+    live:!!after.live
+  };
+}
+// Compara S.scores/S.elimScores CONTRA la última foto conocida y agrega
+// al historial solo lo que de verdad cambió. La primera vez que corre
+// (recién cargó la página, todavía no hay foto contra qué comparar) NO
+// loguea nada -- solo establece la foto inicial, para no generar un
+// historial fantasma comparando contra "nada".
+function _clRecordChanges(){
+  if(_clBaselineScores===null||_clBaselineElim===null){
+    _clBaselineScores=JSON.parse(JSON.stringify(S.scores||{}));
+    _clBaselineElim=JSON.parse(JSON.stringify(S.elimScores||{}));
+    return;
+  }
+  const ts=Date.now();
+  const nuevas=[];
+  Object.keys(S.scores||{}).forEach(mid=>{
+    const e=_clDiffOne(mid,_clBaselineScores[mid],S.scores[mid],_clLabelGrupos);
+    if(e)nuevas.push({ts,fase:"grupos",...e});
+  });
+  Object.keys(S.elimScores||{}).forEach(pid=>{
+    const e=_clDiffOne(pid,_clBaselineElim[pid],S.elimScores[pid],_clLabelElim);
+    if(e)nuevas.push({ts,fase:"elim",...e});
+  });
+  if(nuevas.length){
+    S.changeLog=nuevas.concat(S.changeLog||[]).slice(0,CL_MAX_ENTRIES);
+  }
+  _clBaselineScores=JSON.parse(JSON.stringify(S.scores||{}));
+  _clBaselineElim=JSON.parse(JSON.stringify(S.elimScores||{}));
 }
 
 function save(){
@@ -147,6 +221,7 @@ function save(){
         S.checksums[mid]=makeChecksum(Number(mid),sc.h,sc.a);
       }
     });
+    _clRecordChanges();
     const payload=buildStatePayload();
     localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
     pushStateToFirestore(payload);
@@ -272,6 +347,14 @@ function applyRemoteState(p){
   S.adv=p.adv||{};
   if(p.battles)S.battles=p.battles;
   if(p.battleHistory)S.battleHistory=p.battleHistory;
+  if(p.changeLog)S.changeLog=p.changeLog;
+  // v3.4 — este snapshot es la verdad confirmada por el servidor (llega
+  // acá solo en la primera carga o ante un cambio remoto genuino de
+  // otra sesión, ver el filtro de eco en wireFirestoreSync()) -- se
+  // re-establece la foto base para el próximo _clRecordChanges() (save())
+  // contra ESTE estado, no contra uno viejo.
+  _clBaselineScores=JSON.parse(JSON.stringify(S.scores||{}));
+  _clBaselineElim=JSON.parse(JSON.stringify(S.elimScores||{}));
   // Persistimos también localmente como caché/respaldo
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(p));}catch(e){}
   // Re-renderizamos todas las vistas relevantes
@@ -280,6 +363,9 @@ function applyRemoteState(p){
   if(typeof updateGenerarBtn==="function")updateGenerarBtn();
   if(typeof updateElimBtns==="function")updateElimBtns();
   if(typeof renderBonosPanel==="function")renderBonosPanel();
+  if(typeof renderChangeLogCard==="function"&&document.getElementById("admin-integ")&&document.getElementById("admin-integ").style.display!=="none"){
+    renderChangeLogCard();
+  }
   if(typeof renderBattlesPanel==="function"&&document.getElementById("t-battles")&&document.getElementById("t-battles").style.display!=="none"){
     renderBattlesPanel();
     const histWrap=document.getElementById("battles-history-wrap");

@@ -22,6 +22,33 @@
 // ══════════════════════════════════════════════════════════════
 function renderIntegPanel(){
   document.getElementById("integ-results").innerHTML=`<div class="ib">Usa los botones de arriba para verificar la integridad de los datos guardados.</div>`;
+  renderChangeLogCard();
+}
+
+// v3.4 — Historial de cambios de resultados: solo lectura, solo para
+// consulta del propio admin (ver _clRecordChanges(), app-live-sync.js,
+// que arma cada entrada comparando el resultado guardado antes/después
+// dentro de save()). No hay botón para editarlo/borrarlo a propósito --
+// sería contradictorio con el propósito del historial (poder confiar en
+// que lo que dice ahí de verdad pasó).
+function renderChangeLogCard(){
+  const el=document.getElementById("integ-changelog");
+  if(!el)return;
+  const log=S.changeLog||[];
+  if(!log.length){
+    el.innerHTML=`<div class="ib">Todavía no se registró ningún cambio de resultado.</div>`;
+    return;
+  }
+  let html="";
+  log.forEach(entry=>{
+    const despues=`${entry.after.h}-${entry.after.a}`;
+    const tipo=entry.before?"✏️ Corregido":"🆕 Cargado";
+    const antes=entry.before?`${entry.before.h}-${entry.before.a} → `:"";
+    const origen=entry.live?" · ⚡ en vivo":"";
+    const fecha=new Date(entry.ts).toLocaleString("es",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    html+=`<div class="integ-row" style="font-size:11px">${tipo} — <b>${esc(entry.label)}</b>: ${antes}<b>${despues}</b><span style="color:var(--qb-muted)"> — ${fecha}${origen}</span></div>`;
+  });
+  el.innerHTML=html;
 }
 
 // v2.6 — BUG REPORTADO: "Verificar checksums" y "Validar resultados"
