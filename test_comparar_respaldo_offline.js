@@ -82,9 +82,9 @@ function baseRespaldo(){
     exportedAt: new Date().toISOString(),
     participantes: [
       { codigo: "QLB-1", nombre: "Ana", estado: "enviada", ownerUid: "uid-ana",
-        predicciones: { 1: { h: 2, a: 1 }, special: { campeon: "Argentina" } } },
+        predicciones: { 1: { h: 2, a: 1 }, r16_1: { h: 2, a: 0, _a: "México", _b: "Alemania" }, special: { campeon: "Argentina" } } },
       { codigo: "QLB-2", nombre: "Beto", estado: "enviada", ownerUid: "uid-beto",
-        predicciones: { 1: { h: 0, a: 0 } } },
+        predicciones: { 1: { h: 0, a: 0 }, r16_1: { h: 1, a: 1, pick: "Alemania", _a: "México", _b: "Alemania" } } },
     ],
   };
 }
@@ -94,8 +94,8 @@ T.getDB().participants = [
   { id: "p2", codigo: "QLB-2", name: "Beto", estadoQuiniela: "enviada", ownerUid: "uid-beto" },
 ];
 T.getDB().predictions = {
-  p1: { 1: { h: 2, a: 1 }, special: { campeon: "Argentina" } },
-  p2: { 1: { h: 0, a: 0 } },
+  p1: { 1: { h: 2, a: 1 }, r16_1: { h: 2, a: 0, _a: "México", _b: "Alemania" }, special: { campeon: "Argentina" } },
+  p2: { 1: { h: 0, a: 0 }, r16_1: { h: 1, a: 1, pick: "Alemania", _a: "México", _b: "Alemania" } },
 };
 
 /* ════════════════════════════════════════════════════════════════
@@ -123,6 +123,28 @@ check("Ana aparece en el detalle de diferencias", resultHtml2.includes("Ana"));
 check("Se ve el resultado viejo (2-1) y el nuevo (3-1)", resultHtml2.includes("2-1") && resultHtml2.includes("3-1"));
 check("Beto NO aparece como afectado (su predicción no cambió)",
   !W.S.integrityChecks[0].afectados.some(a => a.codigo === "QLB-2"));
+
+/* ════════════════════════════════════════════════════════════════
+   CASO 2B — BUG REPORTADO (v3.6.1): cuando el bracket avanza, _a/_b (los
+   nombres de los dos equipos de un slot de eliminatoria) se actualizan
+   SOLOS para todo el mundo (ver registro.js:639-640) -- eso NO es un
+   cambio de predicción y NO debe marcarse como diferencia, aunque el pick
+   real (h/a) siga siendo exactamente el mismo.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── _a/_b cambian solos por avance del bracket: NO debe marcarse como diferencia ──");
+T.getDB().predictions.p1[1] = { h: 2, a: 1 }; // deshacer el cambio del CASO anterior
+T.getDB().predictions.p1.r16_1 = { h: 2, a: 0, _a: "México (corregido)", _b: "Alemania" }; // mismo pick, solo cambió el nombre snapshot
+subirRespaldo(baseRespaldo());
+check("Sin diferencias: _a/_b no son parte de la predicción real", W.S.integrityChecks[0].numConCambios === 0);
+
+console.log("\n── Pero un pick real distinto SÍ se detecta, aunque _a/_b sean iguales ──");
+T.getDB().predictions.p2.r16_1 = { h: 1, a: 1, pick: "México", _a: "México", _b: "Alemania" }; // Beto predijo Alemania, ahora dice México
+subirRespaldo(baseRespaldo());
+const resultHtml2b = W.document.getElementById("integ-compare-result").innerHTML;
+check("Se detecta el cambio de pick real (Alemania → México)",
+  W.S.integrityChecks[0].numConCambios === 1 && resultHtml2b.includes("Ganador: Alemania") && resultHtml2b.includes("Ganador: México"));
+T.getDB().predictions.p1.r16_1 = { h: 2, a: 0, _a: "México", _b: "Alemania" }; // restaurar
+T.getDB().predictions.p2.r16_1 = { h: 1, a: 1, pick: "Alemania", _a: "México", _b: "Alemania" }; // restaurar
 
 /* ════════════════════════════════════════════════════════════════
    CASO 3 — El "special" (Reglas Avanzadas) también se compara, no solo

@@ -187,19 +187,43 @@ function _icLabelSlot(key,predA,predB){
   return (teams&&teams._a&&teams._b) ? `${round}: ${teams._a} vs ${teams._b}` : round;
 }
 
-function _icFmtValue(val){
-  if(val===null||val===undefined)return '—';
-  if(typeof val==="object"){
-    if(typeof val.h==="number"&&typeof val.a==="number")return `${val.h}-${val.a}`;
-    if(val.pick)return `Ganador: ${val.pick}`;
-    return JSON.stringify(val);
-  }
-  return String(val);
+// v3.6.1 — BUG REPORTADO: la primera versión comparaba el objeto de
+// predicción COMPLETO (JSON.stringify), incluyendo _a/_b -- los nombres
+// de los dos equipos de cada slot de eliminatoria. Esos dos campos NO son
+// parte de lo que el participante predijo: se actualizan SOLOS, para
+// TODOS los participantes, cada vez que el bracket avanza (ver
+// "propagación de ganador", registro.js:639-640 -- dRec._a=newTeam /
+// dRec._b=newTeam). Resultado: cualquier corrección o avance real del
+// torneo entre el momento del respaldo y ahora marcaba a TODO el mundo
+// como "predicción distinta", aunque el pick/resultado cargado por cada
+// quien nunca cambió. Ahora se compara solo lo que de verdad es la
+// predicción -- h/a (resultado) y pick (equipo elegido, cuando no hay
+// resultado numérico) -- ignorando _a/_b/_migrated.
+function _icNormalizePred(val){
+  if(val===null||val===undefined||typeof val!=="object")return null;
+  const out={};
+  const h=Number(val.h),a=Number(val.a);
+  if(typeof val.h==="number"&&!Number.isNaN(h))out.h=h;
+  if(typeof val.a==="number"&&!Number.isNaN(a))out.a=a;
+  if(val.pick)out.pick=val.pick;
+  return out;
+}
+
+function _icFmtValue(normVal){
+  if(!normVal||!Object.keys(normVal).length)return '—';
+  const partes=[];
+  if(typeof normVal.h==="number"&&typeof normVal.a==="number")partes.push(`${normVal.h}-${normVal.a}`);
+  // v3.6.1 — el resultado (h-a) puede ser IGUAL en ambos lados y aun así
+  // haber una diferencia real si "pick" (a quién eligió en penales/empate)
+  // cambió -- mostrar solo el marcador ocultaría esa diferencia (se vería
+  // "1-1 → 1-1", idéntico e inexplicable). Se muestran ambos si están.
+  if(normVal.pick)partes.push(`Ganador: ${normVal.pick}`);
+  return partes.length?partes.join(' · '):JSON.stringify(normVal);
 }
 
 // Compara las predicciones de UN participante (respaldo vs en línea).
-// Devuelve solo lo que de verdad difiere -- mismo criterio de comparación
-// "por valor" (JSON.stringify) que ya usa _clDiffOne() para resultados.
+// Devuelve solo lo que de verdad difiere en el PICK real (ver nota v3.6.1
+// arriba) -- no en metadata de display que se actualiza sola.
 function _icDiffPredicciones(backupPred,livePred){
   backupPred=backupPred||{};livePred=livePred||{};
   const cambios=[];
@@ -211,15 +235,18 @@ function _icDiffPredicciones(backupPred,livePred){
       sk.forEach(f=>{
         const av=a[f]??null,bv=b[f]??null;
         if(JSON.stringify(av)!==JSON.stringify(bv)){
-          cambios.push({label:IC_SPECIAL_LABELS[f]||f,antes:_icFmtValue(av),despues:_icFmtValue(bv)});
+          cambios.push({label:IC_SPECIAL_LABELS[f]||f,antes:av==null?'—':String(av),despues:bv==null?'—':String(bv)});
         }
       });
       return;
     }
     const a=backupPred[key],b=livePred[key];
-    if(JSON.stringify(a??null)===JSON.stringify(b??null))return;
+    const an=_icNormalizePred(a),bn=_icNormalizePred(b);
+    const anEmpty=!an||!Object.keys(an).length,bnEmpty=!bn||!Object.keys(bn).length;
+    if(anEmpty&&bnEmpty)return; // "sin respuesta" en ambos lados (aunque uno sea null y el otro {_a,_b} sin pick) no es una diferencia real
+    if(JSON.stringify(an)===JSON.stringify(bn))return;
     const label=(typeof MD!=="undefined"&&MD[key]&&MD[key].lbl)?MD[key].lbl:_icLabelSlot(key,a,b);
-    cambios.push({label,antes:_icFmtValue(a),despues:_icFmtValue(b)});
+    cambios.push({label,antes:_icFmtValue(an),despues:_icFmtValue(bn)});
   });
   return cambios;
 }
