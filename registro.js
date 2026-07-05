@@ -1912,7 +1912,11 @@ function onCrearSubmit(){
   const now = Date.now();
   const p = {
     id: uid(),
-    codigo: nextCode(),
+    // v3.6.3 — el código YA NO se calcula acá (ver rgCreateParticipantConfirmed,
+    // participantes.js): se reserva de forma atómica DENTRO de la
+    // transacción de creación, para que dos altas simultáneas nunca
+    // puedan terminar con el mismo código.
+    codigo: '',
     name: name.trim(), city: city.trim(), country: country.trim(), countryIso,
     email: email,
     clave, ownerUid,

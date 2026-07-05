@@ -479,16 +479,66 @@ function rgApplyEspnPlaceholderFixes(fixesByParticipant){
 // documento privado), pero devuelve la Promise para que el llamador
 // pueda reaccionar de verdad si el servidor la rechaza, en vez de
 // asumir éxito de antemano.
+//
+// v3.6.3 — BUG REPORTADO: 19 de 22 participantes reales terminaron con
+// el MISMO código (QLB-2026-0002). Causa raíz real, doble:
+//   1) nextCode() (más arriba) calculaba el código LEYENDO DB.nextSeq
+//      LOCAL de forma síncrona, ANTES de que este batch siquiera
+//      empezara a hablar con el servidor -- si 2+ personas entraban a
+//      registrarse con la misma foto local de nextSeq (nada raro: cada
+//      una recién cargó la página), las dos calculaban el MISMO código,
+//      y NINGUNA se enteraba porque cada una veía "¡Listo!" con su
+//      propio dispositivo.
+//   2) Peor: el incremento real de nextSeq NUNCA viajaba en ESTE batch
+//      -- pasaba en una llamada aparte a saveData(DB) (ver
+//      onCrearSubmit, registro.js), que reescribía TODO
+//      registro/meta (nextSeq + configGlobal). Si el configGlobal local
+//      de ese dispositivo estaba un instante desactualizado respecto al
+//      del servidor (rebote de Firestore que todavía no llegó, típico
+//      en alguien que recién abrió la página), la regla de Firestore
+//      (que solo permite tocar nextSeq/updatedAt desde una sesión no-
+//      admin) rechazaba ESE batch completo -- nextSeq JAMÁS avanzaba en
+//      el servidor, así que TODOS los que se registraban después volvían
+//      a leer el mismo nextSeq de siempre.
+//
+// FIX: el código ya no se calcula en el cliente ni de antemano. Se pide
+// y se reserva DENTRO de una transacción de Firestore (fb.runTransaction)
+// que lee registro/meta.nextSeq, calcula el código, y en la MISMA
+// operación atómica escribe el participante + su documento privado +
+// el nextSeq incrementado (solo ese campo, con merge -- nunca toca
+// configGlobal, así que no puede chocar con la regla de arriba). Una
+// transacción de Firestore reintenta sola si otra transacción concurrente
+// ya modificó registro/meta antes de que esta confirme -- por diseño, dos
+// registros simultáneos NUNCA pueden terminar leyendo el mismo nextSeq.
 function rgCreateParticipantConfirmed(p){
   const fb = window.__fb;
-  if(!fb || !fb.PARTICIPANTS_COL || !fb.PRIVADO_COL || !fb.auth.currentUser){
+  if(!fb || !fb.PARTICIPANTS_COL || !fb.PRIVADO_COL || !fb.REGISTRO_META_DOC || !fb.runTransaction || !fb.auth.currentUser){
     return Promise.reject(new Error("Todavía estamos preparando tu sesión — espera un segundo y vuelve a intentar."));
   }
   const preds = {};
-  const batch = fb.writeBatch(fb.db);
-  batch.set(fb.doc(fb.PARTICIPANTS_COL, p.id), { ..._rgPublicFieldsOf(p), predictions: preds, updatedAt: fb.serverTimestamp() });
-  batch.set(fb.doc(fb.PRIVADO_COL, p.id), _rgPrivadoFieldsOf(p));
-  return batch.commit().then(()=>{
+  return fb.runTransaction(fb.db, (tx)=>{
+    return Promise.resolve(tx.get(fb.REGISTRO_META_DOC)).then(metaSnap=>{
+      const metaActual = (metaSnap && metaSnap.exists && metaSnap.exists()) ? metaSnap.data() : {};
+      const seq = (metaActual && metaActual.nextSeq) || 1;
+      p.codigo = `QLB-${CODE_YEAR}-${String(seq).padStart(4,'0')}`;
+      tx.set(fb.doc(fb.PARTICIPANTS_COL, p.id), { ..._rgPublicFieldsOf(p), predictions: preds, updatedAt: fb.serverTimestamp() });
+      tx.set(fb.doc(fb.PRIVADO_COL, p.id), _rgPrivadoFieldsOf(p));
+      tx.set(fb.REGISTRO_META_DOC, { nextSeq: seq + 1, updatedAt: fb.serverTimestamp() }, { merge: true });
+      return seq;
+    });
+  }).then((seq)=>{
+    // Mantiene sincronizada la copia local para el resto de usos de
+    // nextCode() (ej. altas manuales del admin) hasta que llegue el
+    // próximo snapshot real de registro/meta.
+    DB.nextSeq = seq + 1;
+    // v3.6.3 — el nextSeq incrementado ya quedó confirmado en el servidor
+    // DENTRO de esta misma transacción -- sin esto, el saveData(DB) que
+    // onCrearSubmit() llama justo después (registro.js) vería su propia
+    // copia de _rgLastKnownMetaJSON todavía desactualizada y reintentaría
+    // reescribir registro/meta ENTERO (nextSeq+configGlobal) por la vía
+    // vieja, reabriendo la misma ventana de rechazo por configGlobal
+    // desincronizado que causó este bug en primer lugar.
+    _rgLastKnownMetaJSON = JSON.stringify({ nextSeq: seq + 1, configGlobal: DB.configGlobal });
     // Mismo motivo que en rgPushToFirestore: deja las cachés de "último
     // JSON conocido" ya al día, así el próximo saveData() normal (el
     // autoguardado de la quiniela recién creada) no vuelve a reescribir

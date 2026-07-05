@@ -324,6 +324,56 @@ function makeFakeFirestore() {
       };
     },
 
+    // v3.6.3 — runTransaction(): usado por rgCreateParticipantConfirmed()
+    // para reservar el código de forma atómica (leer registro/meta.nextSeq
+    // y escribir participante+privado+meta en una sola operación). Misma
+    // validación de reglas que writeBatch (todo-o-nada), aplicada recién
+    // al terminar el updateFn (que es cuando Firestore real también
+    // resuelve/rechaza la transacción completa).
+    runTransaction(_db, updateFn) {
+      const ops = [];
+      const tx = {
+        get(ref) {
+          if (ref.__isMetaDoc) return Promise.resolve({ exists: () => metaStore.current !== null, data: () => metaStore.current });
+          if (ref.__isPrivadoDoc) return Promise.resolve({ exists: () => privadoStore[ref.id] !== undefined, data: () => privadoStore[ref.id] });
+          if (ref.__isParticipantDoc) return Promise.resolve({ exists: () => participantsStore[ref.id] !== undefined, data: () => participantsStore[ref.id] });
+          return Promise.reject(new Error("transaction.get: ref desconocida en el mock"));
+        },
+        set(ref, data, opts) { ops.push({ ref, data, merge: !!(opts && opts.merge) }); },
+      };
+      return Promise.resolve().then(() => updateFn(tx)).then((result) => {
+        for (const op of ops) {
+          if (op.ref.__isParticipantDoc) {
+            const before = participantsStore[op.ref.id] || null;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            currentParticipantIdBeingChecked = op.ref.id;
+            const allowed = rulesAllowParticipantSet(currentAuthUser, before, after);
+            currentParticipantIdBeingChecked = null;
+            if (!allowed) { const err = new Error(`permission-denied en transaction.set(${op.ref.id})`); err.code = "permission-denied"; throw err; }
+          }
+          if (op.ref.__isPrivadoDoc) {
+            const before = privadoStore[op.ref.id] || null;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            if (!rulesAllowPrivadoSet(currentAuthUser, before, after)) { const err = new Error(`permission-denied en transaction.set(privado/${op.ref.id})`); err.code = "permission-denied"; throw err; }
+          }
+          if (op.ref.__isMetaDoc) {
+            const before = metaStore.current;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            if (!rulesAllowMetaSet(currentAuthUser, before, after)) { const err = new Error("permission-denied en transaction.set(registro/meta)"); err.code = "permission-denied"; throw err; }
+          }
+        }
+        ops.forEach(op => {
+          if (op.ref.__isMetaDoc) metaStore.current = op.merge ? { ...(metaStore.current || {}), ...op.data } : op.data;
+          else if (op.ref.__isPrivadoDoc) privadoStore[op.ref.id] = op.merge ? { ...(privadoStore[op.ref.id] || {}), ...op.data } : op.data;
+          else if (op.ref.__isParticipantDoc) participantsStore[op.ref.id] = op.merge ? { ...(participantsStore[op.ref.id] || {}), ...op.data } : op.data;
+        });
+        notifyParticipants();
+        notifyPrivado();
+        notifyMeta();
+        return result;
+      });
+    },
+
     onSnapshot(ref, onNext) {
       if (ref.__isParticipantsCol) {
         participantListeners.push(onNext);

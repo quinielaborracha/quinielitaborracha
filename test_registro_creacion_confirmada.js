@@ -110,6 +110,51 @@ function makeFakeFirestore() {
         }
       };
     },
+    // v3.6.3 — runTransaction(): usado por rgCreateParticipantConfirmed()
+    // para reservar el código de forma atómica. Misma validación de
+    // reglas que writeBatch, aplicada al terminar el updateFn.
+    runTransaction(_db, updateFn) {
+      const ops = [];
+      const tx = {
+        get(ref) {
+          if (ref.__isMetaDoc) return Promise.resolve({ exists: () => metaStore.current !== null, data: () => metaStore.current });
+          if (ref.__isPrivadoDoc) return Promise.resolve({ exists: () => privadoStore[ref.id] !== undefined, data: () => privadoStore[ref.id] });
+          return Promise.resolve({ exists: () => participantsStore[ref.id] !== undefined, data: () => participantsStore[ref.id] });
+        },
+        set(ref, data, opts) { ops.push({ ref, data, merge: !!(opts && opts.merge) }); },
+      };
+      return Promise.resolve().then(() => updateFn(tx)).then((result) => {
+        for (const op of ops) {
+          if (op.ref.__isParticipantDoc) {
+            const before = participantsStore[op.ref.id] || null;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            if (!rulesAllowParticipantSet(currentAuthUser, before, after)) {
+              const e = new Error("permission-denied (simulado, transaction participant)"); e.code = "permission-denied"; throw e;
+            }
+          }
+          if (op.ref.__isPrivadoDoc) {
+            const before = privadoStore[op.ref.id] || null;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            if (!rulesAllowPrivadoSet(currentAuthUser, before, after)) {
+              const e = new Error("permission-denied (simulado, transaction privado)"); e.code = "permission-denied"; throw e;
+            }
+          }
+          if (op.ref.__isMetaDoc) {
+            const before = metaStore.current;
+            const after = op.merge ? { ...(before || {}), ...op.data } : op.data;
+            if (!rulesAllowMetaSet(currentAuthUser, before, after)) {
+              const e = new Error("permission-denied (simulado, transaction meta)"); e.code = "permission-denied"; throw e;
+            }
+          }
+        }
+        ops.forEach(op => {
+          if (op.ref.__isMetaDoc) metaStore.current = op.merge ? { ...(metaStore.current || {}), ...op.data } : op.data;
+          else if (op.ref.__isPrivadoDoc) privadoStore[op.ref.id] = op.merge ? { ...(privadoStore[op.ref.id] || {}), ...op.data } : op.data;
+          else participantsStore[op.ref.id] = op.merge ? { ...(participantsStore[op.ref.id] || {}), ...op.data } : op.data;
+        });
+        return result;
+      });
+    },
     __setAuthUser(u) { currentAuthUser = u; },
     __setPrivadoRulesMissing(v) { privadoRulesMissing = !!v; },
     __rawParticipants() { return participantsStore; },
