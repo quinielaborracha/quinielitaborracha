@@ -1466,6 +1466,7 @@ let ADMIN_FILTER = 'all';   // 'all' | 'completas' | 'incompletas' — filtro r�
 let SHOW_PAPELERA = false;  // v6.1 — si la sección de Papelera está expandida o no
 let DASH_TAB = 'perfil';    // v6.3 — sub-pestaña activa del Dashboard del participante (post-bloqueo)
 let DASH_PRED_SUBTAB = 'grupos'; // v6.6 — sub-pestaña activa DENTRO de "Predicciones" (grupos/elim/avanzado)
+let DASH_COMPARE_RIVAL = ''; // v3.5 — id del participante elegido en "⚖️ Comparar" (vacío = nadie elegido todavía)
 
 function clearDraft(){
   DRAFT_PID = null;
@@ -2198,6 +2199,7 @@ const DASH_TABS = [
   {key:'perfil',       label:'Mi Perfil',     icon:'👤'},
   {key:'predicciones', label:'Predicciones',  icon:'📝'},
   {key:'evolucion',    label:'Evolución',     icon:'📈'},
+  {key:'comparar',     label:'Comparar',      icon:'⚖️'}, // v3.5
 ];
 
 // v2.7.2 — Botón "Unirte al grupo de WhatsApp", compartido entre el
@@ -2287,6 +2289,7 @@ function renderParticipantDashboard(pid){
     bodyHtml = DASH_TAB==='perfil' ? buildDashPerfilHtml(p)
       : DASH_TAB==='predicciones' ? buildDashPrediccionesHtml(p)
       : DASH_TAB==='evolucion' ? buildDashEvolucionHtml(p) // v6.6 — Fase B
+      : DASH_TAB==='comparar' ? buildDashCompararHtml(p) // v3.5
       : buildDashComingSoonHtml(activeLabel);
   }catch(err){
     console.error("Error al renderizar el Dashboard (pestaña "+DASH_TAB+"):", err);
@@ -2318,6 +2321,12 @@ function renderParticipantDashboard(pid){
   document.getElementById('dash-pred-subtabs')?.addEventListener('click', e=>{
     const b = e.target.closest('.inner-tab'); if(!b) return;
     DASH_PRED_SUBTAB = b.dataset.predsub;
+    renderParticipantDashboard(pid);
+  });
+  // v3.5 — Comparador: elegir rival del dropdown vuelve a pintar el
+  // dashboard completo, mismo patrón que los demás sub-tabs de acá arriba.
+  document.getElementById('dash-cmp-select')?.addEventListener('change', e=>{
+    DASH_COMPARE_RIVAL = e.target.value;
     renderParticipantDashboard(pid);
   });
   document.getElementById('dash_pdf_btn')?.addEventListener('click', ()=> generarPDF(p));
@@ -2925,6 +2934,136 @@ function buildDashAvanzadoHtml(p){
     <div style="margin-bottom:.5rem;font-size:10px;color:var(--qb-muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--ff-display);font-weight:700">Tus predicciones especiales</div>
     ${specHtml}
   </div>`;
+}
+
+// ── Comparador de quinielas — v3.5 ──────────────────────────────────
+// Cara a cara contra otro participante elegido en el dropdown
+// (DASH_COMPARE_RIVAL, un id — no un nombre, para no chocar si dos
+// participantes comparten nombre). No reimplementa NADA del motor de
+// puntaje: reusa exactamente las mismas funciones que ya usan
+// Predicciones/Ranking/Batallas (calcPts/calcAdv/calcElimPts/calcBonos,
+// getDynamicSpec, getElimTeams/getPredWinner, getActiveElimRounds,
+// groupPickResult) — acá solo se comparan los resultados de esas
+// funciones entre dos personas, no se recalcula puntaje de cero.
+function buildDashCompararHtml(p){
+  const others = DB.participants.filter(x=>x.id!==p.id).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  const optionsHtml = others.map(o=>`<option value="${esc(o.id)}" ${DASH_COMPARE_RIVAL===o.id?'selected':''}>${esc(o.name)}</option>`).join('');
+  const pickerHtml = `
+    <div class="pc">
+      <div class="field" style="margin-bottom:0">
+        <label>Comparar con</label>
+        ${others.length
+          ? `<select id="dash-cmp-select"><option value="">Elegí un participante…</option>${optionsHtml}</select>`
+          : `<div class="muted" style="font-size:12px">No hay nadie más registrado todavía.</div>`}
+      </div>
+    </div>`;
+
+  const rival = others.find(o=>o.id===DASH_COMPARE_RIVAL);
+  if(!rival) return pickerHtml + `<div class="ib" style="margin-top:.625rem">Elegí a alguien de la lista para ver la comparación.</div>`;
+
+  const meName=p.name, rivalName=rival.name, rivalFirst=esc((rival.name||'').split(' ')[0]||rival.name);
+  const nn=s=>(s||'').trim().toLowerCase();
+  const myTotal = getDashStatsInfo(p).total;
+  const rivalTotal = getDashStatsInfo(rival).total;
+
+  // ── Avanzado: comparar pick contra pick (no contra la realidad — eso
+  // ya lo muestra buildDashAvanzadoHtml de cada uno por separado) ──
+  const mySpec = getDynamicSpec(meName)||{}, rivalSpec = getDynamicSpec(rivalName)||{};
+  const AVANZADO_FIELDS = [
+    {key:'champ',  label:'Campeón'},
+    {key:'runner', label:'Subcampeón'},
+    {key:'third',  label:'Tercer lugar'},
+    {key:'scorer', label:'Goleador'},
+  ];
+  let avanzadoMatches=0, avanzadoTotal=0;
+  const avanzadoRows = AVANZADO_FIELDS.map(f=>{
+    const mv=mySpec[f.key], rv=rivalSpec[f.key];
+    if(!mv && !rv) return '';
+    avanzadoTotal++;
+    const same = mv && rv && nn(mv)===nn(rv);
+    if(same) avanzadoMatches++;
+    const pillHtml = (!mv||!rv)
+      ? `<span class="pill" style="background:var(--qb-surface2);color:var(--qb-muted)">— falta</span>`
+      : same
+        ? `<span class="pill" style="background:var(--qb-green-dim);color:var(--qb-green)">✓ coinciden</span>`
+        : `<span class="pill" style="background:var(--qb-surface2);color:var(--qb-muted2)">✗ distinto</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--qb-border)">
+      <div style="flex:1;text-align:right;font-size:12px;font-weight:600">${esc(mv||'—')}</div>
+      <div style="flex-shrink:0">${pillHtml}</div>
+      <div style="flex:1;font-size:12px;font-weight:600">${esc(rv||'—')}</div>
+    </div>
+    <div style="font-size:9.5px;color:var(--qb-muted);text-transform:uppercase;letter-spacing:.04em;text-align:center;margin:-2px 0 4px">${esc(f.label)}</div>`;
+  }).join('');
+
+  // ── Eliminatoria: por ronda, ¿a quién eligieron para avanzar? ──
+  let elimMatches=0, elimTotal=0, elimRoundsHtml='';
+  (typeof getActiveElimRounds==='function'?getActiveElimRounds():[]).forEach(round=>{
+    let roundOk=0, roundTot=0, detailLines='';
+    round.ids.forEach(pid=>{
+      const myTeams=getElimTeams(meName,pid), rivalTeams=getElimTeams(rivalName,pid);
+      if(!myTeams && !rivalTeams) return;
+      roundTot++;
+      const myWinner=getPredWinner(meName,pid), rivalWinner=getPredWinner(rivalName,pid);
+      const same = myWinner && rivalWinner && nn(myWinner)===nn(rivalWinner);
+      if(same) roundOk++;
+      detailLines += `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-top:1px dotted var(--qb-border2);color:var(--qb-muted2)">
+        <span>Vos: <b style="color:var(--qb-text)">${esc(myWinner||'⏳ sin cargar')}</b></span>
+        <span>${same?'✓':(myWinner&&rivalWinner?'✗':'')}</span>
+        <span>${esc(rivalFirst)}: <b style="color:var(--qb-text)">${esc(rivalWinner||'⏳ sin cargar')}</b></span>
+      </div>`;
+    });
+    if(roundTot===0) return;
+    elimMatches+=roundOk; elimTotal+=roundTot;
+    const pct = Math.round(roundOk/roundTot*100);
+    elimRoundsHtml += `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--qb-border)">
+        <span style="font-size:12px;font-weight:700;min-width:100px">${esc(round.lbl)}</span>
+        <span style="flex:1;height:5px;background:var(--qb-border2);border-radius:4px;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:var(--qb-gold);border-radius:4px"></span></span>
+        <span style="font-size:11px;color:var(--qb-muted2);min-width:32px;text-align:right">${roundOk}/${roundTot}</span>
+      </div>
+      <details style="margin-bottom:4px"><summary style="cursor:pointer;font-size:10.5px;color:var(--qb-blue);padding:4px 0">Ver cruces de ${esc(round.lbl)}</summary>${detailLines}</details>`;
+  });
+
+  // ── Grupos: resumen (no 72 filas) + detalle opcional ──
+  let sameExact=0, sameResult=0, gruposComparados=0, gruposDetail='';
+  (typeof MIDS!=='undefined'?MIDS:[]).forEach(mid=>{
+    const myP = MD[mid]?.preds?.[meName], rivalP = MD[mid]?.preds?.[rivalName];
+    if(!myP || !rivalP) return;
+    gruposComparados++;
+    const exact = myP.h===rivalP.h && myP.a===rivalP.a;
+    if(exact) sameExact++;
+    const myRes=groupPickResult(mid,meName), rivalRes=groupPickResult(mid,rivalName);
+    if(myRes && rivalRes && myRes===rivalRes) sameResult++;
+    gruposDetail += `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-top:1px dotted var(--qb-border2);color:var(--qb-muted2)">
+      <span>${esc(MD[mid]?.lbl||`Partido ${mid}`)}</span>
+      <span>Vos <b style="color:var(--qb-text)">${myP.h}-${myP.a}</b> · ${esc(rivalFirst)} <b style="color:var(--qb-text)">${rivalP.h}-${rivalP.a}</b> ${exact?'✓':''}</span>
+    </div>`;
+  });
+
+  const totalItems = avanzadoTotal + elimTotal + gruposComparados;
+  const totalMatches = avanzadoMatches + elimMatches + sameResult;
+  const afinidad = totalItems ? Math.round(totalMatches/totalItems*100) : null;
+
+  return pickerHtml + `
+    <div class="pc" style="margin-top:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-around;text-align:center">
+        <div><div style="font-family:var(--ff-display);font-size:24px;font-weight:800;color:var(--qb-gold)">${myTotal}</div><div style="font-size:9.5px;color:var(--qb-muted);text-transform:uppercase">Vos</div></div>
+        <div style="font-family:var(--ff-display);font-weight:800;color:var(--qb-muted);font-size:13px">VS</div>
+        <div><div style="font-family:var(--ff-display);font-size:24px;font-weight:800;color:var(--qb-text)">${rivalTotal}</div><div style="font-size:9.5px;color:var(--qb-muted);text-transform:uppercase">${rivalFirst}</div></div>
+      </div>
+      ${afinidad!==null ? `<div style="text-align:center;margin-top:.625rem;padding-top:.625rem;border-top:1px dashed var(--qb-border2);font-size:11.5px;color:var(--qb-muted2)">🔥 Afinidad de picks: <b style="color:var(--qb-yellow)">${afinidad}%</b></div>` : ''}
+    </div>
+    ${avanzadoRows ? `<div class="pc" style="margin-top:.625rem"><div style="font-weight:700;font-size:13px;margin-bottom:.5rem">🏆 Avanzado</div>${avanzadoRows}</div>` : ''}
+    ${elimRoundsHtml ? `<div class="pc" style="margin-top:.625rem"><div style="font-weight:700;font-size:13px;margin-bottom:.5rem">🎯 Eliminatoria</div>${elimRoundsHtml}</div>` : ''}
+    ${gruposComparados ? `<div class="pc" style="margin-top:.625rem">
+        <div style="font-weight:700;font-size:13px;margin-bottom:.5rem">⚽ Fase de Grupos</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;text-align:center;background:var(--qb-surface2);border-radius:8px;padding:9px"><div style="font-family:var(--ff-display);font-size:19px;font-weight:800;color:var(--qb-gold)">${sameExact}<span style="font-size:11px;color:var(--qb-muted2)">/${gruposComparados}</span></div><div style="font-size:9px;color:var(--qb-muted2)">Mismo marcador exacto</div></div>
+          <div style="flex:1;text-align:center;background:var(--qb-surface2);border-radius:8px;padding:9px"><div style="font-family:var(--ff-display);font-size:19px;font-weight:800">${sameResult}<span style="font-size:11px;color:var(--qb-muted2)">/${gruposComparados}</span></div><div style="font-size:9px;color:var(--qb-muted2)">Mismo resultado (G/E/P)</div></div>
+        </div>
+        <details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:10.5px;color:var(--qb-blue);padding:4px 0">Ver los ${gruposComparados} partidos en detalle</summary>${gruposDetail}</details>
+      </div>` : `<div class="ib" style="margin-top:.625rem">Todavía no hay partidos de Grupos cargados por los dos para comparar.</div>`}
+  `;
 }
 
 // Puntos totales + posición en el ranking público (excluye ocultos, igual

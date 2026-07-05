@@ -85,6 +85,18 @@ function calcPts(name){
   });return pts;
 }
 
+// v3.5 — Comparador de Quinielas: clasifica el resultado (H/A/D) de la
+// predicción de UN partido de Grupos para UN participante, sin calcular
+// puntos (eso ya lo hace calcPts()) -- para poder comparar el pick de dos
+// personas ENTRE SÍ sin duplicar una cuarta vez la lógica de puntaje que
+// ya está inline en calcPts()/buildDashGruposHtml()/renderPred()/
+// calcularDiffPrediccion().
+function groupPickResult(mid,name){
+  const p=MD[mid]?.preds?.[name];
+  if(!p)return null;
+  return p.h>p.a?"H":p.h<p.a?"A":"D";
+}
+
 function getDynamicSpec(name){
   const person=(DB.participants||[]).find(p=>p.name===name);
   if(!person)return null;
