@@ -95,6 +95,10 @@ onParticipantesChange(()=>{
   // Admin bloquee/desbloquee a todos los demás conectados al instante,
   // sin que nadie tenga que refrescar la página.
   if(typeof applyMaintenanceGuard==="function")applyMaintenanceGuard();
+  // v3.7 — Aviso a Participantes: mismo motivo que el guard de arriba --
+  // si el admin activa el switch o guarda un texto nuevo mientras hay
+  // gente conectada, les aparece el popup al instante.
+  if(typeof applyAvisoGuard==="function")applyAvisoGuard();
   rebuildDynamicData();
   setHeaderToday();
   renderRank();

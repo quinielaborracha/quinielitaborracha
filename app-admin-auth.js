@@ -433,6 +433,10 @@ function applyAdminUI(){
   // o llega un cambio remoto de configGlobal vía onParticipantesChange en
   // app-bootstrap.js) -- ver applyMaintenanceGuard() más abajo.
   applyMaintenanceGuard();
+  // v3.7 — Aviso a Participantes: mismo motivo -- re-evaluar acá hace que
+  // activar el switch (o guardar un texto nuevo) muestre el popup a todos
+  // los que ya están conectados, sin que nadie tenga que refrescar.
+  if(typeof applyAvisoGuard==="function")applyAvisoGuard();
 }
 
 // v3.3 — Modo Mantenimiento (panel Admin → 🚧 Modo Mantenimiento).
@@ -463,6 +467,56 @@ function applyMaintenanceGuard(){
 
   const badge=document.getElementById("maint-admin-badge");
   if(badge)badge.style.display=(activo&&admin)?"flex":"none";
+}
+
+// v3.7 — Aviso a Participantes (panel Admin → 📢 Aviso a Participantes).
+// A diferencia de Modo Mantenimiento, esto NUNCA bloquea nada -- es un
+// popup cerrable (#qb-aviso, definido en index.html) que se muestra a
+// cada participante (no admin) al iniciar sesión, una sola vez por
+// navegador. La clave es avisoActualizadoEn (timestamp que el admin
+// bumpea cada vez que guarda el texto, ver registro.js): se compara
+// contra localStorage["wb26-aviso-visto"] (el timestamp del último aviso
+// que ESE navegador ya cerró) -- así el mismo switch sirve para
+// cualquier aviso futuro sin que el admin tenga que resetear nada a
+// mano: cambia el texto, se lo vuelve a mostrar a todos solo.
+const AVISO_VISTO_KEY="wb26-aviso-visto";
+function applyAvisoGuard(){
+  const overlay=document.getElementById("qb-aviso");
+  if(!overlay)return; // test_full_page_load.js u otros harnesses sin este markup
+  const cfg=(typeof DB!=="undefined"&&DB.configGlobal)||{};
+  const activo=!!cfg.avisoActivo;
+  const admin=isAdmin();
+  const version=cfg.avisoActualizadoEn||0;
+  let visto=0;
+  try{ visto=parseInt(localStorage.getItem(AVISO_VISTO_KEY)||"0",10)||0; }catch(e){}
+  const debeMostrar=activo&&!admin&&version>0&&visto<version;
+  overlay.style.display=debeMostrar?"flex":"none";
+  if(debeMostrar)_pintarAviso(cfg.avisoTitulo||RG_DEFAULT_CONFIG.avisoTitulo, cfg.avisoMensaje||"");
+}
+function _pintarAviso(titulo, mensaje){
+  const titleEl=document.getElementById("qb-aviso-title");
+  const msgEl=document.getElementById("qb-aviso-msg");
+  if(titleEl)titleEl.textContent=titulo;
+  if(msgEl)msgEl.textContent=mensaje;
+}
+// Cerrar el popup -- graba en ESTE navegador que ya vio la versión
+// actual del aviso (no uno futuro todavía no guardado), para que no
+// vuelva a aparecer hasta que el admin publique un texto nuevo.
+function cerrarAviso(){
+  const cfg=(typeof DB!=="undefined"&&DB.configGlobal)||{};
+  try{ localStorage.setItem(AVISO_VISTO_KEY, String(cfg.avisoActualizadoEn||Date.now())); }catch(e){}
+  const overlay=document.getElementById("qb-aviso");
+  if(overlay)overlay.style.display="none";
+}
+// Vista previa desde el panel Admin -- ignora a propósito el chequeo de
+// "ya lo vi" (localStorage) y el switch de activo/inactivo: el admin
+// quiere ver CÓMO QUEDA el popup con el texto que está tipeando ahora
+// mismo, sin que eso cuente como que "ya se mostró" para nadie.
+function mostrarAvisoPreview(titulo, mensaje){
+  const overlay=document.getElementById("qb-aviso");
+  if(!overlay){toast&&toast("No encontré el popup de aviso en esta página.",true);return;}
+  _pintarAviso(titulo, mensaje);
+  overlay.style.display="flex";
 }
 
 // Show login modal or logout if already admin

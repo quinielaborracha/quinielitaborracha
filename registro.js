@@ -4072,6 +4072,23 @@ function renderAdmin(){
       </div>
     </div>
 
+    <div class="card" id="aviso_card" style="border:1px solid var(--qb-blue)">
+      <div class="card-title">📢 Aviso a Participantes</div>
+      <div class="switch-row">
+        <div>
+          <div style="font-weight:700">${DB.configGlobal.avisoActivo ? '🔵 Activo — se muestra al iniciar sesión' : '⚪ Apagado'}</div>
+          <div class="muted" style="font-size:11.5px">A diferencia de Mantenimiento, esto NO bloquea nada -- es un popup que cada participante (no admin) puede cerrar, y que se muestra una sola vez por navegador. Al guardar el texto (con el switch prendido) se vuelve a mostrar a todos, aunque ya lo hayan cerrado antes -- así sirve para cualquier aviso nuevo, no solo el de hoy.</div>
+        </div>
+        <div class="switch ${DB.configGlobal.avisoActivo?'on':''}" id="a_switch_aviso"><div class="switch-knob"></div></div>
+      </div>
+      <div class="field" style="margin-top:.6rem"><label>Título</label><input type="text" id="a_aviso_titulo" maxlength="120" value="${esc(DB.configGlobal.avisoTitulo||'')}"></div>
+      <div class="field"><label>Mensaje</label><input type="text" id="a_aviso_mensaje" maxlength="500" value="${esc(DB.configGlobal.avisoMensaje||'')}"></div>
+      <div class="rg-btn-row">
+        <button class="rg-btn rg-btn-ghost" id="a_aviso_preview">👁️ Vista previa</button>
+        <button class="rg-btn rg-btn-primary" id="a_guardar_aviso">Guardar y volver a mostrar a todos</button>
+      </div>
+    </div>
+
     <div class="card" id="test_mode_card" style="border:1px solid var(--qb-yellow)">
       <div class="card-title">🧪 Modo Prueba</div>
       ${TEST_MODE ? `
@@ -4288,6 +4305,33 @@ function renderAdmin(){
     saveData(DB);
     toast('✓ Título y mensaje de Mantenimiento guardados.');
     renderAdminTab();
+  });
+  document.getElementById('a_switch_aviso').addEventListener('click', ()=>{
+    DB.configGlobal.avisoActivo = !DB.configGlobal.avisoActivo;
+    saveData(DB);
+    toast(DB.configGlobal.avisoActivo ? '📢 Aviso activado.' : '✅ Aviso desactivado.');
+    renderAdminTab();
+    if(typeof applyAvisoGuard==='function')applyAvisoGuard();
+  });
+  document.getElementById('a_aviso_preview').addEventListener('click', ()=>{
+    const titulo = document.getElementById('a_aviso_titulo').value.trim() || RG_DEFAULT_CONFIG.avisoTitulo;
+    const mensaje = document.getElementById('a_aviso_mensaje').value.trim();
+    if(typeof mostrarAvisoPreview==='function') mostrarAvisoPreview(titulo, mensaje);
+  });
+  document.getElementById('a_guardar_aviso').addEventListener('click', ()=>{
+    const titulo = document.getElementById('a_aviso_titulo').value.trim();
+    const mensaje = document.getElementById('a_aviso_mensaje').value.trim();
+    if(!mensaje){ toast('Escribí un mensaje antes de guardar.', true); return; }
+    // v3.7 — bumpear avisoActualizadoEn es lo que hace que TODOS vuelvan
+    // a ver el popup, aunque ya hubieran cerrado uno anterior -- ver
+    // applyAvisoGuard() en app-admin-auth.js.
+    DB.configGlobal.avisoTitulo = titulo || RG_DEFAULT_CONFIG.avisoTitulo;
+    DB.configGlobal.avisoMensaje = mensaje;
+    DB.configGlobal.avisoActualizadoEn = Date.now();
+    saveData(DB);
+    toast('✓ Aviso guardado -- se les va a volver a mostrar a todos los participantes.');
+    renderAdminTab();
+    if(typeof applyAvisoGuard==='function')applyAvisoGuard();
   });
   document.getElementById('a_guardar_cierre').addEventListener('click', ()=>{
     const fecha = document.getElementById('a_fecha_cierre').value;

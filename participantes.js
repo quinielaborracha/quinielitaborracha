@@ -92,6 +92,19 @@ const RG_DEFAULT_CONFIG = {
   mantenimientoActivo:false,
   mantenimientoTitulo:'Estamos ordenando la pea 🍺',
   mantenimientoMensaje:'Borrachi se pasó de tragos... estamos acomodando el estadio antes de volver al partido.',
+  // v3.7 — Aviso a Participantes: popup cerrable (NO bloquea nada, a
+  // diferencia de Modo Mantenimiento) que se muestra una vez por
+  // navegador al iniciar sesión, para anuncios puntuales (ver
+  // applyAvisoGuard() en app-admin-auth.js). avisoActualizadoEn es la
+  // clave de todo: cada vez que el admin guarda el texto desde el panel
+  // se pisa con Date.now(), y eso es lo único que se compara contra lo
+  // último que cada navegador ya vio (localStorage) -- así el mismo
+  // switch sirve para cualquier aviso futuro sin resetear nada a mano:
+  // cambiás el texto, se lo vuelve a mostrar a todos solo.
+  avisoActivo:false,
+  avisoTitulo:'Aviso importante',
+  avisoMensaje:'',
+  avisoActualizadoEn:0,
   // v1.2 — Constructor de Torneos (fase 1): qué fases usa este torneo.
   // Claves iguales a BONUS_PHASES (app-eliminatoria-data.js), así todo el
   // motor de puntaje/UI puede preguntar isFaseActiva(key) sin traducir
