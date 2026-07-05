@@ -3862,6 +3862,22 @@ function renderAdmin(){
   c.innerHTML = `
     <div class="note">Panel administrativo sin autenticación (prototipo). El badge de <b>Estado</b> reabre una quiniela enviada (vuelve a borrador, habilita edición) o la marca como enviada manualmente. El lápiz ✏️ edita en modo administrador; el ojo 👁️ muestra exactamente la vista del participante (sin privilegios).</div>
 
+    <div class="card" id="maint_mode_card" style="border:1px solid var(--qb-red)">
+      <div class="card-title">🚧 Modo Mantenimiento</div>
+      <div class="switch-row">
+        <div>
+          <div style="font-weight:700">${DB.configGlobal.mantenimientoActivo ? '🔴 Activo — el sitio está cerrado al público' : '🟢 Apagado — el sitio funciona normal'}</div>
+          <div class="muted" style="font-size:11.5px">Mientras está activo, cualquiera que no sea admin ve solo la pantalla de mantenimiento (sin Ranking, sin Mi Quiniela, sin poder registrarse ni guardar predicciones). Vos, como admin, seguís viendo la app entera siempre — nunca te vas a poder bloquear a vos mismo con este switch.</div>
+        </div>
+        <div class="switch ${DB.configGlobal.mantenimientoActivo?'on':''}" id="a_switch_mantenimiento"><div class="switch-knob"></div></div>
+      </div>
+      <div class="field" style="margin-top:.6rem"><label>Título</label><input type="text" id="a_maint_titulo" maxlength="120" value="${esc(DB.configGlobal.mantenimientoTitulo||'')}"></div>
+      <div class="field"><label>Mensaje</label><input type="text" id="a_maint_mensaje" maxlength="300" value="${esc(DB.configGlobal.mantenimientoMensaje||'')}"></div>
+      <div class="rg-btn-row">
+        <button class="rg-btn rg-btn-primary" id="a_guardar_maint">Guardar</button>
+      </div>
+    </div>
+
     <div class="card" id="test_mode_card" style="border:1px solid var(--qb-yellow)">
       <div class="card-title">🧪 Modo Prueba</div>
       ${TEST_MODE ? `
@@ -4060,6 +4076,23 @@ function renderAdmin(){
     DB.configGlobal.usarMiQuinielaComoInicio = !DB.configGlobal.usarMiQuinielaComoInicio;
     saveData(DB);
     toast(`Página inicial: ${DB.configGlobal.usarMiQuinielaComoInicio?'Mi Quiniela':'Ranking'}.`);
+    renderAdminTab();
+  });
+  document.getElementById('a_switch_mantenimiento').addEventListener('click', ()=>{
+    DB.configGlobal.mantenimientoActivo = !DB.configGlobal.mantenimientoActivo;
+    saveData(DB);
+    toast(DB.configGlobal.mantenimientoActivo
+      ? '🚧 Modo Mantenimiento ACTIVADO — el sitio ya está cerrado al público.'
+      : '✅ Modo Mantenimiento desactivado — todos vuelven a entrar normal.');
+    renderAdminTab();
+  });
+  document.getElementById('a_guardar_maint').addEventListener('click', ()=>{
+    const titulo = document.getElementById('a_maint_titulo').value.trim();
+    const mensaje = document.getElementById('a_maint_mensaje').value.trim();
+    DB.configGlobal.mantenimientoTitulo = titulo || RG_DEFAULT_CONFIG.mantenimientoTitulo;
+    DB.configGlobal.mantenimientoMensaje = mensaje || RG_DEFAULT_CONFIG.mantenimientoMensaje;
+    saveData(DB);
+    toast('✓ Título y mensaje de Mantenimiento guardados.');
     renderAdminTab();
   });
   document.getElementById('a_guardar_cierre').addEventListener('click', ()=>{

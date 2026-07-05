@@ -88,6 +88,13 @@ aplicarTabInicialSiCorresponde();
 // antiguos), reconstruimos PL/PM/MD/MIDS y volvemos a pintar todo lo que
 // depende de ellos. Mismo patrón reactivo que ya usa Mi Quiniela.
 onParticipantesChange(()=>{
+  // v3.3 — Modo Mantenimiento: configGlobal.mantenimientoActivo llega acá
+  // como cualquier otro cambio remoto de configGlobal (fasesActivas,
+  // fechaCierre, etc.) -- re-evaluar el guard en CADA disparo de este
+  // hook es lo que hace que activar/desactivar el switch desde el panel
+  // Admin bloquee/desbloquee a todos los demás conectados al instante,
+  // sin que nadie tenga que refrescar la página.
+  if(typeof applyMaintenanceGuard==="function")applyMaintenanceGuard();
   rebuildDynamicData();
   setHeaderToday();
   renderRank();

@@ -48,7 +48,8 @@ function simAllowUpdate(auth, before, after, ctx) {
   const isAdmin = auth.email === ADMIN_EMAIL;
   if (before.ownerUid === auth.uid) {
     const pastDeadline = !!(ctx && ctx.pastDeadline);
-    return before.estadoQuiniela !== 'enviada' && !pastDeadline;
+    const mantenimientoActivo = !!(ctx && ctx.mantenimientoActivo);
+    return before.estadoQuiniela !== 'enviada' && !pastDeadline && !mantenimientoActivo;
   }
   if (isAdmin) return true;
   // v6.9 — el re-claim del documento público ya NO compara una clave
@@ -287,6 +288,29 @@ check(
     { ...docDeJuan, estadoQuiniela: "enviada" },
     { ...docDeJuan, estadoQuiniela: "enviada", ownerUid: "anon-DISPOSITIVO-NUEVO-LEGITIMO", fechaActualizacion: 1000 },
     { pastDeadline: true, privadoOwnerUid: "anon-DISPOSITIVO-NUEVO-LEGITIMO" }
+  )
+);
+
+console.log("\n=== UPDATE — Modo Mantenimiento (v3.3) ===");
+check(
+  "Dueño intenta editar sus predicciones con Mantenimiento ACTIVO -> rechazado",
+  !simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, predictions: { m1: { h: 3, a: 1 } } }, { mantenimientoActivo: true })
+);
+check(
+  "Dueño edita sus predicciones con Mantenimiento INACTIVO -> permitido",
+  simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, predictions: { m1: { h: 3, a: 1 } } }, { mantenimientoActivo: false })
+);
+check(
+  "El admin SIGUE pudiendo editar con Mantenimiento ACTIVO (override) -> permitido",
+  simAllowUpdate({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, docDeJuan, { ...docDeJuan, predictions: { m1: { h: 3, a: 1 } } }, { mantenimientoActivo: true })
+);
+check(
+  "El re-claim (paso 2) SIGUE funcionando con Mantenimiento ACTIVO (recuperar acceso, no es editar predicciones) -> permitido",
+  simAllowUpdate(
+    { uid: "anon-DISPOSITIVO-NUEVO-LEGITIMO", isAnonymous: true },
+    docDeJuan,
+    { ...docDeJuan, ownerUid: "anon-DISPOSITIVO-NUEVO-LEGITIMO", fechaActualizacion: 1000 },
+    { mantenimientoActivo: true, privadoOwnerUid: "anon-DISPOSITIVO-NUEVO-LEGITIMO" }
   )
 );
 

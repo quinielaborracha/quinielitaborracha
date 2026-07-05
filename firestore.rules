@@ -78,6 +78,22 @@ service cloud.firestore {
       return _metaConfigGlobal().get('registroAbierto', true) != false;
     }
 
+    // ── Helper (v3.3 — Modo Mantenimiento) ────────────────────────────
+    // Mismo patrón que isPastDeadline()/isRegistroAbierto() de arriba: si
+    // registro/meta no existe, o existe pero nunca declaró
+    // mantenimientoActivo, se trata como INACTIVO (default en el cliente,
+    // RG_DEFAULT_CONFIG, también es mantenimientoActivo:false). Solo se
+    // usa para bloquear escrituras de participantes -- la LECTURA de
+    // registro/meta sigue abierta para cualquiera con sesión (ver la
+    // regla de arriba) porque si no, nadie podría enterarse de que el
+    // mantenimiento está activo (el propio aviso depende de leer este
+    // documento). El admin nunca pasa por esta función: sus reglas de
+    // escritura ya lo aprueban por email antes de llegar acá.
+    function isMantenimientoActivo() {
+      return exists(/databases/$(database)/documents/registro/meta)
+             && _metaConfigGlobal().get('mantenimientoActivo', false) == true;
+    }
+
     // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
     // Antes, el único requisito para dar de alta un participante nuevo
     // era que ownerUid fuera el uid de quien escribe -- cualquier sesión
@@ -203,11 +219,17 @@ service cloud.firestore {
       // la papelera) sigue exactamente igual que antes, sin estas dos
       // exigencias -- un registro restaurado puede legítimamente traer
       // estadoQuiniela:'enviada' y predicciones ya cargadas.
+      //
+      // v3.3 — Modo Mantenimiento: mismo criterio que isRegistroAbierto()
+      // de la línea de arriba, sumado con &&. El admin (segunda rama)
+      // sigue sin esta exigencia -- restaurar desde la papelera tiene que
+      // seguir funcionando aunque el sitio esté "cerrado" al público.
       allow create: if request.auth != null
                     && (
                          (
                            request.resource.data.ownerUid == request.auth.uid
                            && isRegistroAbierto()
+                           && !isMantenimientoActivo()
                            && esAltaValidaDeParticipante(request.resource.data)
                          )
                          ||
@@ -230,12 +252,20 @@ service cloud.firestore {
       // propósito: para cuando este segundo paso se evalúa, el primero
       // ya quedó confirmado en el servidor, así que get() ve el ownerUid
       // ya actualizado. Ver rgClaimOwnership() en participantes.js.
+      // v3.3 — Modo Mantenimiento: se suma a la primera rama (la del
+      // dueño editando su propia quiniela), igual que !isPastDeadline()
+      // en la línea de al lado. El admin (segunda rama) y el re-claim
+      // (tercera rama, solo reasigna ownerUid, no toca predicciones)
+      // siguen sin esta exigencia -- el admin tiene que poder seguir
+      // trabajando, y recuperar el acceso a un dispositivo nuevo no es
+      // "usar la app" en el sentido que Mantenimiento quiere bloquear.
       allow update: if request.auth != null
                     && (
                          (
                            resource.data.ownerUid == request.auth.uid
                            && resource.data.estadoQuiniela != 'enviada'
                            && !isPastDeadline()
+                           && !isMantenimientoActivo()
                          )
                          ||
                          request.auth.token.email == "quinielaborracha@gmail.com"

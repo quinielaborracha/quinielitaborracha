@@ -428,6 +428,41 @@ function applyAdminUI(){
   // Re-render historial de batallas si está visible, para mostrar/ocultar controles admin
   const histWrap=document.getElementById("battles-history-wrap");
   if(histWrap&&histWrap.style.display!=="none")renderBattleHistory();
+  // v3.3 — Modo Mantenimiento: se re-evalúa acá porque applyAdminUI() ya
+  // se llama en los dos momentos que importan (cambia el estado de admin,
+  // o llega un cambio remoto de configGlobal vía onParticipantesChange en
+  // app-bootstrap.js) -- ver applyMaintenanceGuard() más abajo.
+  applyMaintenanceGuard();
+}
+
+// v3.3 — Modo Mantenimiento (panel Admin → 🚧 Modo Mantenimiento).
+// Decide qué ve cada visitante: si mantenimientoActivo es true y NO sos
+// admin, se tapa toda la app con #qb-maintenance (definido en index.html)
+// -- nadie puede navegar, ver el Ranking ni predecir mientras esto esté
+// activo, sin necesidad de refrescar la página (se re-evalúa solo, ver el
+// comentario de arriba). El bypass de admin NO es una opción configurable
+// (a propósito: isAdmin() es la única condición) -- así nunca hay forma
+// de que el propio admin quede afuera por error. Si sos admin y el modo
+// está activo, en cambio, ves la app normal MÁS una banda fija arriba
+// (#maint-admin-badge) para que no se te olvide que el sitio está cerrado
+// al público mientras seguís trabajando.
+function applyMaintenanceGuard(){
+  const overlay=document.getElementById("qb-maintenance");
+  if(!overlay)return; // test_full_page_load.js u otros harnesses sin este markup
+  const cfg=(typeof DB!=="undefined"&&DB.configGlobal)||{};
+  const activo=!!cfg.mantenimientoActivo;
+  const admin=isAdmin();
+  const bloquea=activo&&!admin;
+
+  overlay.style.display=bloquea?"flex":"none";
+
+  const titleEl=document.getElementById("qb-maint-title");
+  const msgEl=document.getElementById("qb-maint-msg");
+  if(titleEl)titleEl.textContent=cfg.mantenimientoTitulo||RG_DEFAULT_CONFIG.mantenimientoTitulo;
+  if(msgEl)msgEl.textContent=cfg.mantenimientoMensaje||RG_DEFAULT_CONFIG.mantenimientoMensaje;
+
+  const badge=document.getElementById("maint-admin-badge");
+  if(badge)badge.style.display=(activo&&admin)?"flex":"none";
 }
 
 // Show login modal or logout if already admin

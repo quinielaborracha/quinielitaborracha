@@ -83,6 +83,15 @@ const RG_DEFAULT_CONFIG = {
   // el admin cargue un link acá -- mismo criterio que fechaCierre vacía
   // ("sin cierre configurado").
   whatsappGroupLink:'',
+  // v3.3 — Modo Mantenimiento: cierra la app entera a cualquiera que no
+  // sea admin (ver applyMaintenanceGuard() en app-admin-auth.js). El
+  // admin SIEMPRE puede entrar -- eso NO es un campo acá (a propósito:
+  // si fuera un switch más, un desmarcado por error dejaría afuera
+  // también al propio admin; el bypass de admin queda fijo en el código,
+  // ver isAdmin() dentro de applyMaintenanceGuard()).
+  mantenimientoActivo:false,
+  mantenimientoTitulo:'Estamos ordenando la pea 🍺',
+  mantenimientoMensaje:'Borrachi se pasó de tragos... estamos acomodando el estadio antes de volver al partido.',
   // v1.2 — Constructor de Torneos (fase 1): qué fases usa este torneo.
   // Claves iguales a BONUS_PHASES (app-eliminatoria-data.js), así todo el
   // motor de puntaje/UI puede preguntar isFaseActiva(key) sin traducir
