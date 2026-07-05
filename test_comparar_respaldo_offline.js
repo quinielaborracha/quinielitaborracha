@@ -81,17 +81,17 @@ function baseRespaldo(){
     version: "2.9",
     exportedAt: new Date().toISOString(),
     participantes: [
-      { codigo: "QLB-1", nombre: "Ana", estado: "enviada", ownerUid: "uid-ana",
+      { codigo: "QLB-1", nombre: "Ana", correo: "ana@x.com", estado: "enviada", ownerUid: "uid-ana",
         predicciones: { 1: { h: 2, a: 1 }, r16_1: { h: 2, a: 0, _a: "México", _b: "Alemania" }, special: { campeon: "Argentina" } } },
-      { codigo: "QLB-2", nombre: "Beto", estado: "enviada", ownerUid: "uid-beto",
+      { codigo: "QLB-2", nombre: "Beto", correo: "beto@x.com", estado: "enviada", ownerUid: "uid-beto",
         predicciones: { 1: { h: 0, a: 0 }, r16_1: { h: 1, a: 1, pick: "Alemania", _a: "México", _b: "Alemania" } } },
     ],
   };
 }
 
 T.getDB().participants = [
-  { id: "p1", codigo: "QLB-1", name: "Ana", estadoQuiniela: "enviada", ownerUid: "uid-ana" },
-  { id: "p2", codigo: "QLB-2", name: "Beto", estadoQuiniela: "enviada", ownerUid: "uid-beto" },
+  { id: "p1", codigo: "QLB-1", name: "Ana", email: "ana@x.com", estadoQuiniela: "enviada", ownerUid: "uid-ana" },
+  { id: "p2", codigo: "QLB-2", name: "Beto", email: "beto@x.com", estadoQuiniela: "enviada", ownerUid: "uid-beto" },
 ];
 T.getDB().predictions = {
   p1: { 1: { h: 2, a: 1 }, r16_1: { h: 2, a: 0, _a: "México", _b: "Alemania" }, special: { campeon: "Argentina" } },
@@ -200,6 +200,44 @@ subirRespaldo(respaldoConBorrado); // Carla (en línea) no está en el respaldo;
 const resultHtml6 = W.document.getElementById("integ-compare-result").innerHTML;
 check("Diego aparece como faltante (estaba en el respaldo, ya no en línea)", /Diego/.test(resultHtml6) && /ya no existen en línea/i.test(resultHtml6));
 check("Carla aparece como nueva (está en línea, no en el respaldo)", /Carla/.test(resultHtml6) && /no estaban en el respaldo/i.test(resultHtml6));
+
+/* ════════════════════════════════════════════════════════════════
+   CASO 6B — BUG REPORTADO (v3.6.2): "codigo" NO es único en la base real
+   (un caso reportado tenía 19 de 22 participantes compartiendo el mismo
+   código). Emparejar por código nada más hacía que TODOS los que
+   comparten código se compararan contra la predicción de uno solo. Ahora
+   se empareja por correo -- cada quien debe quedar comparado contra SU
+   PROPIA predicción, sin importar que el código esté duplicado, y encima
+   debe avisarse el código duplicado como problema aparte.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Código duplicado en línea: cada quien se compara contra SU propia predicción (no la de otro) ──");
+T.getDB().participants.push(
+  { id: "p4", codigo: "QLB-DUP", name: "Diana", email: "diana@x.com", estadoQuiniela: "enviada", ownerUid: "uid-diana" },
+  { id: "p5", codigo: "QLB-DUP", name: "Emilio", email: "emilio@x.com", estadoQuiniela: "enviada", ownerUid: "uid-emilio" },
+);
+T.getDB().predictions.p4 = { 1: { h: 1, a: 1 } };
+T.getDB().predictions.p5 = { 1: { h: 2, a: 2 } };
+const respaldoConDup = baseRespaldo();
+respaldoConDup.participantes.push(
+  { codigo: "QLB-DUP", nombre: "Diana", correo: "diana@x.com", estado: "enviada", predicciones: { 1: { h: 1, a: 1 } } },
+  { codigo: "QLB-DUP", nombre: "Emilio", correo: "emilio@x.com", estado: "enviada", predicciones: { 1: { h: 2, a: 2 } } },
+);
+subirRespaldo(respaldoConDup);
+check("Sin diferencias: Diana y Emilio quedaron cada uno comparado contra SU propia predicción",
+  W.S.integrityChecks[0].numConCambios === 0);
+check("Se avisa el código duplicado como problema aparte", W.S.integrityChecks[0].numCodigosDuplicados === 1);
+const resultHtmlDup = W.document.getElementById("integ-compare-result").innerHTML;
+check("El aviso de código duplicado menciona a ambos nombres", /Diana/.test(resultHtmlDup) && /Emilio/.test(resultHtmlDup));
+
+console.log("\n── Con código duplicado, un cambio real en SOLO uno de los dos se detecta en el correcto ──");
+T.getDB().predictions.p5 = { 1: { h: 3, a: 3 } }; // Emilio cambió, Diana no
+subirRespaldo(respaldoConDup);
+check("Se marca 1 participante con diferencias (Emilio, no Diana)", W.S.integrityChecks[0].numConCambios === 1);
+check("El afectado es Emilio", W.S.integrityChecks[0].afectados[0].nombre === "Emilio");
+T.getDB().predictions.p5 = { 1: { h: 2, a: 2 } }; // restaurar
+T.getDB().participants = T.getDB().participants.filter(p => p.codigo !== "QLB-DUP");
+delete T.getDB().predictions.p4;
+delete T.getDB().predictions.p5;
 
 /* ════════════════════════════════════════════════════════════════
    CASO 7 — Un archivo que no es del formato esperado se rechaza sin

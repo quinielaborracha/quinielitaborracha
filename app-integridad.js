@@ -251,18 +251,50 @@ function _icDiffPredicciones(backupPred,livePred){
   return cambios;
 }
 
-// Empareja por "codigo" (el identificador estable que ve el propio
-// participante) -- el archivo exportado no trae el id interno de
-// Firestore, así que no puede emparejarse por otra cosa.
+function _icNormEmail(email){
+  return (email||"").trim().toLowerCase();
+}
+
+// v3.6.2 — BUG REPORTADO: comparar el mismo archivo contra sí mismo daba
+// decenas de "diferencias" falsas. Causa real: emparejar por "codigo" es
+// frágil -- "codigo" NO es único en la base real (un caso reportado tenía
+// 19 de 22 participantes compartiendo literalmente el mismo código
+// "QLB-2026-0002", un bug aparte de asignación de códigos que esta
+// herramienta expuso sin querer). Un Map(codigo -> participante) se queda
+// con SOLO EL ÚLTIMO cuando hay códigos repetidos, así que todos los
+// demás quedaban comparados contra la predicción de una sola persona al
+// azar. Ahora se empareja por CORREO (normalizado a minúsculas/sin
+// espacios) -- cada participante se registra con su propio correo, así
+// que es la llave más confiable que viaja en el archivo. "codigo" queda
+// solo como respaldo para los pocos casos sin correo, y además se sigue
+// avisando si se detectan códigos duplicados -- es un problema de datos
+// real que el admin debería resolver aparte, no algo que esta
+// herramienta deba ocultar silenciosamente.
 function _icCompararConLive(backupParticipantes){
-  const porCodigo=new Map(DB.participants.map(p=>[p.codigo,p]));
-  const codigosBackup=new Set();
+  const porCorreo=new Map(); // correo normalizado -> [participante, ...]
+  const porCodigo=new Map(); // codigo -> [participante, ...] (respaldo + detección de duplicados)
+  DB.participants.forEach(p=>{
+    const ck=_icNormEmail(p.email);
+    if(ck){ if(!porCorreo.has(ck))porCorreo.set(ck,[]); porCorreo.get(ck).push(p); }
+    if(!porCodigo.has(p.codigo))porCodigo.set(p.codigo,[]);
+    porCodigo.get(p.codigo).push(p);
+  });
+  const codigosDuplicadosEnLinea=[...porCodigo.entries()].filter(([cod,ps])=>cod&&ps.length>1).map(([cod,ps])=>({codigo:cod,nombres:ps.map(p=>p.name)}));
+
+  const matchedIds=new Set();
   const conCambios=[];
   const faltantes=[];
   backupParticipantes.forEach(bp=>{
-    codigosBackup.add(bp.codigo);
-    const live=porCodigo.get(bp.codigo);
+    const ck=_icNormEmail(bp.correo);
+    let candidatos=ck?(porCorreo.get(ck)||[]):[];
+    let live=candidatos.length<=1?candidatos[0]:candidatos.find(p=>p.name===bp.nombre);
+    if(!live){
+      // Sin correo utilizable (respaldo viejo o campo vacío) -- respaldo por código+nombre.
+      const porCod=porCodigo.get(bp.codigo)||[];
+      live=porCod.length<=1?porCod[0]:porCod.find(p=>p.name===bp.nombre);
+    }
     if(!live){faltantes.push({codigo:bp.codigo,nombre:bp.nombre});return;}
+    matchedIds.add(live.id);
     const cambios=_icDiffPredicciones(bp.predicciones,DB.predictions[live.id]);
     if(bp.estado&&live.estadoQuiniela&&bp.estado!==live.estadoQuiniela){
       cambios.unshift({label:"Estado de la quiniela",antes:bp.estado,despues:live.estadoQuiniela});
@@ -275,8 +307,8 @@ function _icCompararConLive(backupParticipantes){
     }
     if(cambios.length)conCambios.push({codigo:bp.codigo,nombre:bp.nombre,cambios});
   });
-  const nuevos=DB.participants.filter(p=>!codigosBackup.has(p.codigo)).map(p=>({codigo:p.codigo,nombre:p.name}));
-  return{totalComparados:backupParticipantes.length,conCambios,faltantes,nuevos};
+  const nuevos=DB.participants.filter(p=>!matchedIds.has(p.id)).map(p=>({codigo:p.codigo,nombre:p.name}));
+  return{totalComparados:backupParticipantes.length,conCambios,faltantes,nuevos,codigosDuplicadosEnLinea};
 }
 
 function _icRenderResultado(r,nombreArchivo){
@@ -303,6 +335,15 @@ function _icRenderResultado(r,nombreArchivo){
   if(r.nuevos.length){
     html+=`<div class="integ-row" style="margin-top:.5rem;color:var(--qb-muted)">ℹ️ ${r.nuevos.length} participante(s) en línea no estaban en el respaldo (probablemente se registraron después): ${r.nuevos.map(n=>esc(n.nombre)).join(', ')}</div>`;
   }
+  // v3.6.2 — Este es un problema de DATOS real (asignación de códigos),
+  // no algo que esta herramienta pueda o deba corregir sola -- solo avisa
+  // fuerte para que el admin lo revise aparte.
+  if(r.codigosDuplicadosEnLinea&&r.codigosDuplicadosEnLinea.length){
+    html+=`<div class="integ-row integ-err" style="margin-top:.5rem">🚨 Código duplicado en línea (esto es un problema aparte, no de esta comparación):</div>`;
+    r.codigosDuplicadosEnLinea.forEach(d=>{
+      html+=`<div class="integ-row integ-err" style="font-size:10px">${esc(d.codigo)} — ${d.nombres.length} participantes: ${d.nombres.map(n=>esc(n)).join(', ')}</div>`;
+    });
+  }
   el.innerHTML=html;
 }
 
@@ -317,6 +358,7 @@ function _icGuardarEnHistorial(r,nombreArchivo){
     numConCambios:r.conCambios.length,
     numFaltantes:r.faltantes.length,
     numNuevos:r.nuevos.length,
+    numCodigosDuplicados:(r.codigosDuplicadosEnLinea||[]).length,
     afectados:r.conCambios.map(p=>({codigo:p.codigo,nombre:p.nombre,numCambios:p.cambios.length}))
   };
   S.integrityChecks=[entry].concat(S.integrityChecks||[]).slice(0,IC_MAX_ENTRIES);
@@ -336,7 +378,8 @@ function renderIntegCheckHistory(){
   log.forEach(entry=>{
     const fecha=new Date(entry.ts).toLocaleString("es",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
     const estado=entry.numConCambios?`❌ ${entry.numConCambios} con diferencias`:`✅ sin diferencias`;
-    html+=`<div class="integ-row" style="font-size:10px">${fecha} — ${esc(entry.archivo)} — ${estado} de ${entry.totalComparados} comparados</div>`;
+    const dup=entry.numCodigosDuplicados?` · 🚨 ${entry.numCodigosDuplicados} código(s) duplicado(s)`:"";
+    html+=`<div class="integ-row" style="font-size:10px">${fecha} — ${esc(entry.archivo)} — ${estado} de ${entry.totalComparados} comparados${dup}</div>`;
   });
   el.innerHTML=html;
 }
