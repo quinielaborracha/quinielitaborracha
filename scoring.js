@@ -270,24 +270,42 @@ function calcClassifiedPtsForRealMatch(name,pid){
   return getTeamAdvancePickers(winner,roundIds).includes(name)?classifiedPts:0;
 }
 
+// v3.5.1 — Reescrita: antes decidía PRIMERO si el pid es "manual" hoy
+// (getManualTeamPids(), que sigue a la fase activa en cada momento) y
+// solo si no lo era intentaba derivar del árbol (ELIM_TREE). BUG
+// REPORTADO: "Torneo real" (Estadísticas) se veía en blanco para
+// Dieciseisavos -- y en cascada, TODAS las rondas posteriores -- apenas
+// el admin apagaba esa fase en el Constructor de Torneos, aunque los
+// equipos/resultado real YA estaban cargados de antes. Causa: al apagar
+// la fase, Dieciseisavos deja de ser "la fase manual" (pasa a serlo la
+// siguiente activa, ej. Octavos) -- pero Dieciseisavos NUNCA tiene
+// entrada en ELIM_TREE para derivarse de una ronda anterior (el árbol
+// arranca en Octavos/pid 89: Dieciseisavos SIEMPRE es la raíz) -- sin
+// ningún camino válido, quedaba en null. Y como cada ronda posterior
+// depende de resolver la anterior (getRealWinner()->getRealElimTeams()
+// en cadena), la raíz en null tumbaba también Octavos/Cuartos/etc.
+//
+// Ahora el orden es al revés: primero intenta derivar del árbol SI hay
+// entrada (no le importa si el pid es "manual" ahora mismo); si eso no
+// resuelve nada (porque no hay entrada -- Dieciseisavos siempre cae acá
+// -- o porque la ronda anterior real todavía no tiene resultado, ej.
+// Constructor de Torneos arrancando directo en Octavos, donde 89-96 SÍ
+// tienen entrada en el árbol pero sus "padres" de Dieciseisavos nunca
+// van a tener resultado real), recién ahí cae a S.elimTeams[pid] --
+// donde vive cualquier dato cargado a mano/ESPN para ESE pid puntual, sin
+// importar si sigue siendo "la fase manual" según la config de hoy.
+// Apagar una fase solo debe afectar sus PUNTOS (isFaseActiva) -- nunca
+// debe borrar ni ocultar lo que de verdad pasó.
 function getRealElimTeams(pid){
-  // v1.2 — antes esto era "if(ELIM_1_16_IDS.includes(pid))", hardcodeado a
-  // Dieciseisavos. getManualTeamPids() devuelve eso MISMO cuando todas las
-  // fases están activas (comportamiento idéntico), pero si Dieciseisavos
-  // (y/o Grupos) están desactivados, devuelve los pids de la PRIMERA fase
-  // activa (ej. Octavos) — esos pasan a cargarse a mano/ESPN en vez de
-  // calcularse del árbol, porque no hay ronda anterior real de la cual
-  // derivarlos.
-  if(getManualTeamPids().includes(pid)){
-    const t=S.elimTeams[pid];
-    if(!t||!t.h||!t.a)return null;
-    return{h:t.h,a:t.a};
+  const node=ELIM_TREE[pid];
+  if(node){
+    const teamH=getRealWinner(node.parentH,node.useLoserH);
+    const teamA=getRealWinner(node.parentA,node.useLoserA);
+    if(teamH&&teamA)return{h:teamH,a:teamA};
   }
-  const node=ELIM_TREE[pid];if(!node)return null;
-  const teamH=getRealWinner(node.parentH,node.useLoserH);
-  const teamA=getRealWinner(node.parentA,node.useLoserA);
-  if(!teamH||!teamA)return null;
-  return{h:teamH,a:teamA};
+  const t=S.elimTeams[pid];
+  if(!t||!t.h||!t.a)return null;
+  return{h:t.h,a:t.a};
 }
 
 function getRealWinner(pid,wantLoser=false){

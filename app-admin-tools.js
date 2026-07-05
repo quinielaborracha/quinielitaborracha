@@ -235,7 +235,7 @@ function renderTorneoConfig(){
     <div class="card">
       <div class="card-title">⚙️ Fases activas</div>
       <div class="muted" style="font-size:11.5px;margin-bottom:.75rem">
-        Elige qué fases usa este torneo. Una fase desactivada deja de existir para todos: no aparece en la navegación, predicciones, calendario, estadísticas, llaves ni rankings, y no otorga puntos. Útil para arrancar una quiniela directamente desde, por ejemplo, Octavos de Final, reutilizando todo el motor existente.
+        Elige qué fases usa este torneo. Una fase desactivada deja de existir para las predicciones, calendario, llaves y rankings, y no otorga puntos. Útil para arrancar una quiniela directamente desde, por ejemplo, Octavos de Final, reutilizando todo el motor existente. <b>Excepción (v3.5.1):</b> 🏆 Torneo real (dentro de Estadísticas) siempre muestra los resultados reales ya cargados para esa fase, sin importar este switch — apagar una fase acá solo afecta el puntaje, nunca oculta lo que de verdad pasó en el Mundial.
       </div>
       ${row('grupos','⚽ Fase de grupos')}
       ${row('r16','🔥 Dieciseisavos')}
