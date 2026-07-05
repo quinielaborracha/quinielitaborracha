@@ -601,17 +601,38 @@ function koLoser(pred, teamA, teamB, trustSlot){
 // efecto río abajo.
 //
 // _downstreamMigratedSlots(slot) devuelve qué slot(s) consumen el
-// resultado de "slot" en la ronda siguiente -- misma estructura fija
-// que ya arma computeBracket() (r32 de a pares → r16, r16 de a pares →
-// qf, qf de a pares → sf, sf → third [con los PERDEDORES] + final [con
-// los GANADORES]).
+// resultado de "slot" en la ronda siguiente -- según ELIM_TREE
+// (app-eliminatoria-data.js), el mismo árbol real de FIFA que ya usa el
+// motor de puntaje (getRealElimTeams(), scoring.js), NO un emparejamiento
+// secuencial por posición (r32 de a pares → r16, etc.) -- ese cruce
+// secuencial no es el cruce real de FIFA (ver nota en computeBracket,
+// v6.5) y acá tenía el mismo bug. Recorre ELIM_TREE buscando qué pid(s)
+// tienen a "slot" como parentH/parentA -- para sf_1/sf_2 esto encuentra
+// solas tanto 'third' (con el PERDEDOR, useLoserH/A:true) como 'final'
+// (con el GANADOR), sin necesitar un caso especial. Guard typeof (mismo
+// patrón que el resto de los puentes de este archivo): si ELIM_TREE no
+// está cargado (tests que aíslan registro.js), se cae de vuelta al
+// emparejamiento secuencial de siempre.
 function _downstreamMigratedSlots(slot){
-  let m;
-  if((m=slot.match(/^r32_(\d+)$/))) return [{slot:`r16_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
-  if((m=slot.match(/^r16_(\d+)$/))) return [{slot:`qf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
-  if((m=slot.match(/^qf_(\d+)$/)))  return [{slot:`sf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
-  if((m=slot.match(/^sf_(\d+)$/)))  return [{slot:'final', usesLoser:false}, {slot:'third', usesLoser:true}];
-  return [];
+  if(typeof ELIM_TREE==='undefined' || typeof SLOT_TO_PID==='undefined'){
+    let m;
+    if((m=slot.match(/^r32_(\d+)$/))) return [{slot:`r16_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+    if((m=slot.match(/^r16_(\d+)$/))) return [{slot:`qf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+    if((m=slot.match(/^qf_(\d+)$/)))  return [{slot:`sf_${Math.ceil(+m[1]/2)}`, usesLoser:false}];
+    if((m=slot.match(/^sf_(\d+)$/)))  return [{slot:'final', usesLoser:false}, {slot:'third', usesLoser:true}];
+    return [];
+  }
+  const pid = SLOT_TO_PID[slot];
+  if(!pid) return [];
+  const out=[];
+  Object.keys(ELIM_TREE).forEach(childPid=>{
+    const node=ELIM_TREE[childPid];
+    const childSlot=PID_TO_SLOT[childPid];
+    if(!childSlot) return;
+    if(node.parentH===pid) out.push({slot:childSlot, usesLoser:node.useLoserH});
+    if(node.parentA===pid) out.push({slot:childSlot, usesLoser:node.useLoserA});
+  });
+  return out;
 }
 
 // Reemplaza, en la ronda siguiente (si también es migrada), al equipo
@@ -702,24 +723,49 @@ function computeBracket(preds){
   // migrado queda igual de fiel a lo que esa persona predijo en su
   // momento, sin inventar ni mezclar cruces. (resolveKoMatch reproduce
   // esto mismo para fases posteriores a la primera activa.)
+  // v6.5 — BUG REPORTADO: acá el cruce siempre fue secuencial (posición
+  // 2i/2i+1), pero el cruce real de FIFA (ELIM_TREE, más arriba en
+  // app-eliminatoria-data.js -- la MISMA fuente que ya usa el motor de
+  // puntaje real, getRealElimTeams() en scoring.js) NO es secuencial:
+  // cruza posiciones a propósito para separar semillas fuertes. Con el
+  // cruce secuencial, "Cuartos 2"/"Cuartos 3" del wizard (y en cascada
+  // sus Semifinales) mostraban un cruce DISTINTO al que en verdad va a
+  // jugarse -- llegó a mostrarle a un participante una Semifinal
+  // "Francia vs Inglaterra" imposible según el cuadro real del Mundial
+  // 2026 (esos 2 quedaron en mitades opuestas). Ahora cada ronda
+  // posterior a la primera activa arma su cruce leyendo
+  // ELIM_TREE[pid].parentH/parentA -- el mismo árbol que ya usa
+  // getRealElimTeams() -- así el cruce que ve el participante en el
+  // wizard siempre es idéntico al cruce real contra el que se lo va a
+  // puntuar.
+  // typeof ELIM_TREE — como el resto de los puentes de este archivo hacia
+  // datos de otros módulos (isFaseActiva/SLOT_TO_PID/getRealElimTeams más
+  // arriba), con guard para poder seguir corriendo en tests que cargan
+  // registro.js aislado (sin app-eliminatoria-data.js): ahí se cae de
+  // vuelta al emparejamiento secuencial de siempre.
+  function parentSlotsOf(pid, prevArr, prevBasePid, seqIdx){
+    const node = (typeof ELIM_TREE!=='undefined') ? ELIM_TREE[pid] : null;
+    if(!node) return [prevArr[2*seqIdx], prevArr[2*seqIdx+1]];
+    return [prevArr[node.parentH-prevBasePid], prevArr[node.parentA-prevBasePid]];
+  }
   const r16 = [];
   for(let i=0;i<8;i++){
     const slot = `r16_${i+1}`;
-    const m1=r32[2*i], m2=r32[2*i+1];
+    const [m1,m2] = parentSlotsOf(89+i, r32, 73, i);
     const r = resolveKoMatch('r16', slot, preds, firstKo, m1.winner, m2.winner);
     r16.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
   }
   const qf = [];
   for(let i=0;i<4;i++){
     const slot = `qf_${i+1}`;
-    const m1=r16[2*i], m2=r16[2*i+1];
+    const [m1,m2] = parentSlotsOf(97+i, r16, 89, i);
     const r = resolveKoMatch('qf', slot, preds, firstKo, m1.winner, m2.winner);
     qf.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
   }
   const sf = [];
   for(let i=0;i<2;i++){
     const slot = `sf_${i+1}`;
-    const m1=qf[2*i], m2=qf[2*i+1];
+    const [m1,m2] = parentSlotsOf(101+i, qf, 97, i);
     const r = resolveKoMatch('sf', slot, preds, firstKo, m1.winner, m2.winner);
     sf.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
   }
@@ -4576,4 +4622,9 @@ window.tryAutoLoginByOwnerUid = tryAutoLoginByOwnerUid;
 // refreshRegistroViewFromStateChange==="function"` da false en silencio
 // y el fix entero queda sin efecto, sin ningún error visible.
 window.refreshRegistroViewFromStateChange = refreshRegistroViewFromStateChange;
+// v3.6.4 — igual que las líneas de arriba: el panel de admin "Cuartos/
+// Semis/Final invalidados por el fix de cruce" (app-bracket-render.js,
+// fuera de esta IIFE) necesita poder recorrer el bracket de cada
+// participante para saber a quién se le invalidó qué.
+window.computeBracket = computeBracket;
 })();

@@ -314,6 +314,80 @@ function applyEspnPlaceholderFixesChecked(){
 }
 
 // ══════════════════════════════════════════════════════════════
+// CRUCE REAL INVALIDADO POR EL FIX DE ELIM_TREE — v3.6.4
+// ══════════════════════════════════════════════════════════════
+// v3.6.4 corrigió que computeBracket() (registro.js) armaba Cuartos/
+// Semis/Final con un cruce SECUENCIAL en vez del cruce real de FIFA
+// (ELIM_TREE) -- ver la nota grande en computeBracket. La "huella" _a/_b
+// que koWinner() ya exige (registro.js) hace que cualquier marcador que
+// un participante haya cargado ANTES del fix, contra el cruce viejo
+// (equivocado), deje de reconocerse solo -- el wizard lo va a mostrar
+// como "sin responder" la próxima vez que esa persona entre, sin puntuar
+// nada mal. Pero es silencioso: si no vuelve a entrar antes de que cierre
+// esa fase, se queda con ese paso en blanco sin darse cuenta. Este panel
+// (solo lectura, no escribe ni corrige nada) recorre a TODOS los
+// participantes y lista a quién se le invalidó qué, para poder avisarle
+// puntualmente -- a propósito NO intenta auto-migrar el pick viejo al
+// cruce nuevo: como el cruce cambió, un pick viejo puede no tener ningún
+// equivalente sensato en el cruce correcto (ver decisión en el chat).
+const CRUCE_INVALIDADO_SLOT_LABELS = {qf_1:"Cuartos 1",qf_2:"Cuartos 2",qf_3:"Cuartos 3",qf_4:"Cuartos 4",sf_1:"Semifinal 1",sf_2:"Semifinal 2",third:"Tercer lugar",final:"Final"};
+
+function scanCruceRealInvalidado(){
+  const rows=[];
+  if(typeof computeBracket!=="function")return {rows};
+  (DB.participants||[]).forEach(p=>{
+    const preds=DB.predictions[p.id];
+    if(!preds)return;
+    const bracket=computeBracket(preds);
+    if(!bracket.ready)return;
+    const bySlot={};
+    [...bracket.qf,...bracket.sf,bracket.third,bracket.final].forEach(m=>{bySlot[m.slot]=m;});
+    Object.keys(CRUCE_INVALIDADO_SLOT_LABELS).forEach(slot=>{
+      const rec=preds[slot];
+      if(!rec||typeof rec!=="object")return;
+      if(rec._migrated)return; // las migradas tienen su propio criterio (ver computeBracket), no aplica acá
+      if(!Number.isInteger(rec.h)||!Number.isInteger(rec.a))return; // no cargó nada en este paso
+      const real=bySlot[slot];
+      if(!real||!real.a||!real.b)return; // el cruce correcto todavía no se puede resolver (ronda previa sin definir)
+      if(rec._a!==real.a||rec._b!==real.b){
+        rows.push({participantId:p.id, participantName:p.name, slot, label:CRUCE_INVALIDADO_SLOT_LABELS[slot], oldA:rec._a, oldB:rec._b, oldScore:`${rec.h}-${rec.a}`, newA:real.a, newB:real.b});
+      }
+    });
+  });
+  return {rows};
+}
+
+let _cruceInvalidadoScan=null;
+function renderCruceInvalidadoPanel(){
+  const el=document.getElementById("cruce-invalidado-panel");
+  if(!el)return;
+  if(!_cruceInvalidadoScan){
+    el.innerHTML=`<button class="btn btn-sm" onclick="runCruceInvalidadoScan()">🔍 Revisar Cuartos/Semis/Final invalidados por el fix de cruce</button>`;
+    return;
+  }
+  const {rows}=_cruceInvalidadoScan;
+  if(!rows.length){
+    el.innerHTML=`<div class="ib" style="border-color:var(--qb-green);color:var(--qb-green)">✓ Nadie tiene un marcador de Cuartos/Semis/Final invalidado por el fix de cruce. <button class="btn btn-sm" style="margin-left:8px" onclick="runCruceInvalidadoScan()">🔄 Revisar de nuevo</button></div>`;
+    return;
+  }
+  const byParticipant={};
+  rows.forEach(r=>{ (byParticipant[r.participantId]=byParticipant[r.participantId]||{name:r.participantName,items:[]}).items.push(r); });
+  const list=Object.values(byParticipant).map(pp=>{
+    const items=pp.items.map(r=>`<div style="font-size:10px;color:var(--qb-muted);padding-left:8px">${esc(r.label)}: tenía "${esc(r.oldA)} vs ${esc(r.oldB)}" (${esc(r.oldScore)}) → el cruce real ahora es "${esc(r.newA)} vs ${esc(r.newB)}"</div>`).join("");
+    return `<div style="padding:4px 0;border-bottom:1px dashed var(--qb-border)"><strong style="font-size:11px">${esc(pp.name)}</strong>${items}</div>`;
+  }).join("");
+  el.innerHTML=`<div class="ib" style="border-color:var(--qb-yellow);color:var(--qb-yellow)">
+      ⚠️ ${Object.keys(byParticipant).length} participante(s) con ${rows.length} predicción(es) de Cuartos/Semis/Final invalidada(s) por el fix de cruce (v3.6.4) -- van a verlas en blanco la próxima vez que entren. Avisales para que las vuelvan a cargar.
+    </div>
+    <div style="max-height:220px;overflow-y:auto;margin:6px 0;padding:6px 8px;background:var(--qb-surface2);border-radius:6px">${list}</div>
+    <button class="btn btn-sm" onclick="runCruceInvalidadoScan()">🔄 Revisar de nuevo</button>`;
+}
+function runCruceInvalidadoScan(){
+  _cruceInvalidadoScan=scanCruceRealInvalidado();
+  renderCruceInvalidadoPanel();
+}
+
+// ══════════════════════════════════════════════════════════════
 // SIMULACIÓN — carga países random para probar
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
