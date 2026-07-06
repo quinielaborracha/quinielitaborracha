@@ -122,6 +122,30 @@ service cloud.firestore {
              && d.predictions is map;
     }
 
+    // ── Helper (v3.8 — Fase de Seguridad) ─────────────────────────────
+    // Mismo motivo que esAltaValidaDeParticipante() de arriba, pero para
+    // el documento HERMANO de registro_privado/{pid}. Hasta v3.7 el
+    // create de ese documento solo pedía que ownerUid coincidiera con
+    // quien escribe -- sin isRegistroAbierto(), sin isMantenimientoActivo()
+    // y sin validar la forma de clave/email/quierePelear. Como
+    // signInAnonymously() se obtiene solo con visitar la página (sin
+    // ninguna acción del visitante), eso dejaba abierto exactamente el
+    // mismo vector de spam/DoS que esAltaValidaDeParticipante() ya tapa
+    // del lado de registro_participants: un script podía crear
+    // documentos en loop, incluso con el registro cerrado, hasta agotar
+    // la cuota diaria de escrituras o el espacio de la base. Los dos
+    // documentos se escriben juntos en el mismo batch en el alta normal
+    // (ver rgPushToFirestore() en participantes.js), pero Firestore
+    // evalúa cada documento del batch por separado -- que uno de los dos
+    // quedara sin gating servía como puerta trasera para saltarse el
+    // gating del otro escribiendo SOLO acá, sin tocar nunca
+    // registro_participants.
+    function esAltaValidaDePrivado(d) {
+      return d.clave is string && d.clave.size() <= 20
+             && d.email is string && d.email.size() <= 200
+             && d.quierePelear is bool;
+    }
+
     // ── RESULTADOS REALES, BONOS, BATALLAS — Solo el admin puede
     // escribir; cualquier PARTICIPANTE puede leer (el Ranking público lo
     // necesita).
@@ -310,9 +334,20 @@ service cloud.firestore {
                        request.auth.token.email == "quinielaborracha@gmail.com"
                      );
 
+      // v3.8 — Fase de Seguridad: antes alcanzaba con declarar el propio
+      // ownerUid, sin isRegistroAbierto()/isMantenimientoActivo()/forma
+      // válida -- ver esAltaValidaDePrivado() más arriba para el porqué.
+      // Mismo patrón exacto que el create de registro_participants: el
+      // camino admin (restaurar desde la papelera) sigue sin estas tres
+      // exigencias.
       allow create: if request.auth != null
                     && (
-                         request.resource.data.ownerUid == request.auth.uid
+                         (
+                           request.resource.data.ownerUid == request.auth.uid
+                           && isRegistroAbierto()
+                           && !isMantenimientoActivo()
+                           && esAltaValidaDePrivado(request.resource.data)
+                         )
                          ||
                          request.auth.token.email == "quinielaborracha@gmail.com"
                        );
@@ -325,6 +360,21 @@ service cloud.firestore {
       // la clave que manda coincide EXACTAMENTE con la que ya estaba
       // guardada -- igual que antes, solo que ahora en este documento
       // más chico en vez de en el público.
+      //
+      // NOTA (auditoría v3.8): este re-claim no tiene límite de intentos
+      // del lado del servidor -- un script podría probar las 10^6
+      // combinaciones de clave contra el pid de cualquiera (público en
+      // registro_participants). Se evaluó y se decidió NO agregar un
+      // contador de intentos fallidos por documento: como Firestore
+      // rechaza la escritura entera si la clave no coincide, ese contador
+      // solo puede vivir en un campo aparte, SIEMPRE escribible sin
+      // conocer la clave real -- lo que abriría una vía para que
+      // cualquiera bloquee el reclamo de OTRO participante (útil para
+      // "joder" a un amigo, no solo para un atacante real). Para un grupo
+      // cerrado de ~27 conocidos, ese riesgo de bloqueo mutuo pesa más
+      // que el de fuerza bruta real. Alternativa considerada para más
+      // adelante si hiciera falta: Firebase App Check (sube el costo de
+      // automatizar el ataque sin este efecto colateral).
       allow update: if request.auth != null
                     && (
                          resource.data.ownerUid == request.auth.uid

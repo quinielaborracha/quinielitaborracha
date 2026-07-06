@@ -337,6 +337,20 @@ function cancel2FALogin(){
   adminLogout();
 }
 
+// NOTA (auditoría v3.8): esta verificación de TOTP protege el flujo de
+// login NORMAL por la página, pero no está anclada en firestore.rules --
+// todas las reglas de admin verifican únicamente
+// request.auth.token.email == "quinielaborracha@gmail.com", sin ningún
+// custom claim que registre "ya pasó el 2FA". Quien obtenga la
+// contraseña real del admin (correo+contraseña, sin este código) podría
+// llamar signInWithEmailAndPassword directo (consola, script, REST API)
+// y Firestore lo trataría como admin pleno desde el primer request, sin
+// pasar nunca por acá. Anclarlo de verdad requeriría un custom claim
+// seteado por una Cloud Function tras validar el TOTP (plan Blaze) --
+// se evaluó y se decidió NO hacerlo por ahora: exigiría salir del plan
+// gratuito para un riesgo que ya requiere primero robar la contraseña
+// real, algo poco probable para 27 amigos. Revisar esta decisión si
+// alguna vez se sospecha que la contraseña del admin pudo filtrarse.
 async function submit2FACode(){
   const fb=window.__fb;
   const codeInput=document.getElementById("login-2fa-code");

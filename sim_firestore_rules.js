@@ -137,6 +137,24 @@ check(
   simAllowCreate({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, { ownerUid: "viejo-uid-de-otro-dispositivo", name: "Restaurado" })
 );
 
+console.log("\n=== CREATE (registro_privado) — v3.8 ===");
+check(
+  "Participante anónimo crea su propio documento privado (ownerUid = su uid) -> permitido",
+  simAllowPrivadoCreate({ uid: "anon-1", isAnonymous: true }, { ownerUid: "anon-1", clave: "123456", email: "juan@example.com" })
+);
+check(
+  "Participante anónimo intenta crear un documento privado con ownerUid de OTRO uid -> rechazado",
+  !simAllowPrivadoCreate({ uid: "anon-1", isAnonymous: true }, { ownerUid: "anon-2", clave: "123456", email: "juan@example.com" })
+);
+check(
+  "Sin sesión (auth null) no puede crear ningún documento privado -> rechazado",
+  !simAllowPrivadoCreate(null, { ownerUid: "anon-1", clave: "123456", email: "juan@example.com" })
+);
+check(
+  "Admin crea un documento privado SIN ownerUid (restaurar desde papelera) -> permitido",
+  simAllowPrivadoCreate({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, { clave: "123456", email: "juan@example.com" })
+);
+
 console.log("\n=== UPDATE (caso normal: el dueño edita su propia quiniela) ===");
 // v6.9 — docDeJuan YA NO tiene clave (vive en registro_privado).
 const docDeJuan = { ownerUid: "anon-1", name: "Juan", emailHash: "abc123", predictions: { m1: { h: 1, a: 0 } } };
