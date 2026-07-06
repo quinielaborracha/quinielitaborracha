@@ -1496,6 +1496,7 @@ let INICIO_DIRTY = false;   // hay tecleo sin confirmar en Crear nueva quiniela 
 let ADMIN_OVERRIDE = false; // el admin entró por el lápiz ✏️: puede editar aunque esté bloqueada
 let PREVIEW_AS_PARTICIPANT = false; // el admin entró por 👁️ "Ver como participante" (vista idéntica, sin privilegios)
 let AUTOSAVE_TIMER = null;
+let _lastAutosaveId = 0; // v3.8.2 — descarta la confirmación de un flushAutosave() viejo si ya hay uno más nuevo en vuelo
 // v1.9 — BUG REPORTADO: la pantalla "parpadeaba" (re-render completo) en
 // CADA autoguardado mientras se escribía en un formulario -- incluso
 // editando como admin. Causa: onParticipantesChange() (más abajo) solo
@@ -1614,9 +1615,28 @@ function flushAutosave(){
   p.lastStep = WIZ_STEP;
   p.fechaActualizacion = Date.now();
   _lastPushedFechaActualizacion = p.fechaActualizacion; // ver nota junto a la declaración, arriba
-  saveData(DB);
+  // v3.8.2 — "Guardado ✓" antes se mostraba apenas terminaba saveData(DB),
+  // que solo garantiza que el guardado LOCAL (localStorage) ya pasó -- el
+  // envío a Firestore es async y podía fallar en silencio (mala señal,
+  // cuota, permisos) sin que el participante se enterara de que su
+  // predicción no había llegado al servidor. Ahora "Guardado ✓" espera la
+  // confirmación real (ver el valor de retorno de rgPushToFirestore,
+  // participantes.js) antes de mostrarse. WIZ_DIRTY sigue poniéndose en
+  // false ACÁ MISMO, sin esperar esa confirmación -- eso es un mecanismo
+  // aparte (evita el parpadeo del wizard con el eco del propio guardado,
+  // ver la nota de _lastPushedFechaActualizacion más arriba) y no debe
+  // tocarse.
+  const saveId = ++_lastAutosaveId;
+  updateSaveIndicator('Guardando…');
+  Promise.resolve(saveData(DB)).then(result=>{
+    if(saveId !== _lastAutosaveId) return; // llegó un autoguardado más nuevo mientras esperábamos: no pisar su indicador
+    if(result && result.ok === false){
+      updateSaveIndicator('⚠️ Sin conexión — guardado solo en este dispositivo');
+    }else{
+      updateSaveIndicator('Guardado ✓');
+    }
+  });
   WIZ_DIRTY = false;
-  updateSaveIndicator('Guardado ✓');
 }
 function updateSaveIndicator(text){
   const el = document.getElementById('wiz_save_indicator');

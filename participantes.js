@@ -343,9 +343,16 @@ function _rgPrivadoJSON(p){
   return JSON.stringify(_rgPrivadoFieldsOf(p));
 }
 
+// v3.8.2 — el valor de retorno (una promesa que resuelve {ok:true} o
+// {ok:false,reason}) lo consume flushAutosave() (registro.js) para recién
+// ahí mostrar "Guardado ✓" -- antes ese indicador se mostraba apenas
+// terminaba el guardado LOCAL, sin esperar la confirmación real del
+// servidor. Nunca rechaza (siempre resuelve): así ningún llamador previo
+// que ya ignoraba el valor de retorno (fire-and-forget) puede terminar
+// con un "Uncaught (in promise)" que antes no existía.
 function saveData(d){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(d)); }catch(e){}
-  rgPushToFirestore(d);
+  return rgPushToFirestore(d);
 }
 
 function rgPushToFirestore(d, _retryCount){
@@ -358,12 +365,13 @@ function rgPushToFirestore(d, _retryCount){
   // confuso que tira doc() cuando su primer argumento no es válido) en
   // vez de reintentar en silencio como ya hacía para el resto de los casos
   // "todavía no está listo".
-  if(!fb || !fb.PARTICIPANTS_COL || !fb.PRIVADO_COL){ return; }
+  if(!fb || !fb.PARTICIPANTS_COL || !fb.PRIVADO_COL){ return Promise.resolve({ok:false,reason:'not-ready'}); }
   if(!fb.auth.currentUser){
     const tries = (_retryCount||0) + 1;
-    if(tries > 30) return;
-    setTimeout(()=> rgPushToFirestore(d, tries), 300);
-    return;
+    if(tries > 30) return Promise.resolve({ok:false,reason:'timeout'});
+    return new Promise(resolve=>{
+      setTimeout(()=> resolve(rgPushToFirestore(d, tries)), 300);
+    });
   }
 
   const batch = fb.writeBatch(fb.db);
@@ -406,9 +414,9 @@ function rgPushToFirestore(d, _retryCount){
     hasWrites = true;
   }
 
-  if(!hasWrites) return;
+  if(!hasWrites) return Promise.resolve({ok:true});
 
-  batch.commit()
+  return batch.commit()
     .then(()=>{
       (d.participants||[]).forEach(p=>{
         _rgLastKnownParticipantsJSON[p.id] = _rgParticipantJSON(p, d.predictions[p.id]||{});
@@ -418,12 +426,14 @@ function rgPushToFirestore(d, _retryCount){
         if(p) _rgLastKnownPrivadoJSON[id] = _rgPrivadoJSON(p);
       });
       _rgLastKnownMetaJSON = metaJSON;
+      return {ok:true};
     })
     .catch(err=>{
       console.error("Error al sincronizar participantes con Firebase:", err);
       if(err && err.code === 'permission-denied'){
         toast('⚠️ No se pudo guardar en el servidor (permiso denegado). Tus cambios quedaron solo en este dispositivo por ahora.', true);
       }
+      return {ok:false,reason:'error',err};
     });
 }
 
