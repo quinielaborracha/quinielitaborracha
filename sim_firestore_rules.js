@@ -38,6 +38,17 @@ function simAllowCreate(auth, newData) {
   return newData.ownerUid === auth.uid || isAdmin;
 }
 
+// v3.8.4 — espeja esEdicionValidaDeParticipante() (firestore.rules): a
+// diferencia de esAltaValidaDeParticipante() (solo 'borrador'), acepta
+// 'enviada' también -- rgSubmitParticipantConfirmed() (participantes.js)
+// hace ese update legítimo al enviar la quiniela.
+function simEsEdicionValidaDeParticipante(d) {
+  return typeof d.name === 'string' && d.name.length > 0 && d.name.length <= 200
+    && typeof d.codigo === 'string' && d.codigo.length <= 50
+    && (d.estadoQuiniela === 'borrador' || d.estadoQuiniela === 'enviada')
+    && typeof d.predictions === 'object' && d.predictions !== null && !Array.isArray(d.predictions);
+}
+
 // ctx.pastDeadline simula isPastDeadline(); ctx.privadoOwnerUid simula
 // get(/registro_privado/{pid}).data.ownerUid -- es decir, lo que YA
 // quedó guardado en el documento hermano al momento de evaluar esta
@@ -49,7 +60,8 @@ function simAllowUpdate(auth, before, after, ctx) {
   if (before.ownerUid === auth.uid) {
     const pastDeadline = !!(ctx && ctx.pastDeadline);
     const mantenimientoActivo = !!(ctx && ctx.mantenimientoActivo);
-    return before.estadoQuiniela !== 'enviada' && !pastDeadline && !mantenimientoActivo;
+    return before.estadoQuiniela !== 'enviada' && !pastDeadline && !mantenimientoActivo
+      && simEsEdicionValidaDeParticipante(after);
   }
   if (isAdmin) return true;
   // v6.9 — el re-claim del documento público ya NO compara una clave
@@ -96,11 +108,15 @@ function simAllowPrivadoDelete(auth, before) {
   return before.ownerUid === auth.uid || isAdmin;
 }
 
+// v3.8.4 — antes, "before === null" (el documento no existe) alcanzaba
+// solo por sí mismo para permitir la escritura a cualquiera. Ahora, igual
+// que en la rama de abajo, solo el admin puede escribir cuando el
+// documento no existe (ver la nota en firestore.rules).
 function simAllowMetaWrite(auth, before, after) {
   if (!auth) return false;
   const isAdmin = auth.email === ADMIN_EMAIL;
   if (isAdmin) return true;
-  if (before === null) return true; // primera escritura del documento (no pasa hoy en producción, pero la regla lo cubre)
+  if (before === null) return false;
   const affected = diffAffectedKeys(before, after);
   return hasOnly(affected, ['nextSeq', 'updatedAt']);
 }
@@ -157,7 +173,11 @@ check(
 
 console.log("\n=== UPDATE (caso normal: el dueño edita su propia quiniela) ===");
 // v6.9 — docDeJuan YA NO tiene clave (vive en registro_privado).
-const docDeJuan = { ownerUid: "anon-1", name: "Juan", emailHash: "abc123", predictions: { m1: { h: 1, a: 0 } } };
+// v3.8.4 — se agrega codigo y estadoQuiniela: 'borrador' explícitos (antes
+// faltaban en el fixture) porque ahora simAllowUpdate() exige la forma
+// completa (simEsEdicionValidaDeParticipante) para la rama del dueño,
+// igual que el documento real siempre trae ambos campos (_rgPublicFieldsOf).
+const docDeJuan = { ownerUid: "anon-1", name: "Juan", codigo: "QLB-2026-0001", estadoQuiniela: "borrador", emailHash: "abc123", predictions: { m1: { h: 1, a: 0 } } };
 const privadoDeJuan = { ownerUid: "anon-1", clave: "123456", email: "juan@example.com" };
 check(
   "El dueño real edita sus predicciones -> permitido",
@@ -174,6 +194,32 @@ check(
 check(
   "El admin puede editar la quiniela de cualquiera (cambiar estado, nota interna) -> permitido",
   simAllowUpdate({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, docDeJuan, { ...docDeJuan, notaAdmin: "x" })
+);
+
+console.log("\n=== UPDATE — forma válida también exigida al editar (v3.8.4) ===");
+check(
+  "El dueño envía su quiniela (estadoQuiniela 'borrador' -> 'enviada') -> permitido (mismo caso que rgSubmitParticipantConfirmed)",
+  simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, estadoQuiniela: "enviada" })
+);
+check(
+  "El dueño intenta guardar estadoQuiniela con un valor fuera de {'borrador','enviada'} -> rechazado",
+  !simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, estadoQuiniela: "ganadora" })
+);
+check(
+  "El dueño intenta guardar codigo copiado de otro participante con formato inválido (no-string) -> rechazado",
+  !simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, codigo: 12345 })
+);
+check(
+  "El dueño intenta vaciar su propio nombre -> rechazado",
+  !simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, name: "" })
+);
+check(
+  "El dueño intenta guardar predictions como algo que no es un mapa -> rechazado",
+  !simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, predictions: "no-es-un-mapa" })
+);
+check(
+  "El admin SIGUE sin estar sujeto a esta validación de forma (puede dejar campos fuera de norma a propósito) -> permitido",
+  simAllowUpdate({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, docDeJuan, { ...docDeJuan, estadoQuiniela: "ganadora" })
 );
 
 console.log("\n=== RE-CLAIM v6.9 — paso 1: registro_privado (acá SÍ se compara la clave) ===");
@@ -281,6 +327,16 @@ check("El admin SÍ puede cambiar configGlobal (ej. mover la fecha de cierre rea
   simAllowMetaWrite({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, metaActual, { ...metaActual, configGlobal: { ...metaActual.configGlobal, fechaCierre: "2026-06-28" } }));
 check("Sin sesión no puede escribir meta -> rechazado",
   !simAllowMetaWrite(null, metaActual, { ...metaActual, nextSeq: 6 }));
+
+console.log("\n=== META — documento borrado/inexistente (v3.8.4) ===");
+check(
+  "El documento no existe (before=null) y quien escribe NO es admin -> rechazado (antes: permitido)",
+  !simAllowMetaWrite({ uid: "anon-1", isAnonymous: true }, null, { nextSeq: 1, configGlobal: { fechaCierre: "2099-01-01", horaCierre: "00:00", registroAbierto: true } })
+);
+check(
+  "El documento no existe (before=null) y quien escribe SÍ es admin -> permitido (puede recrearlo)",
+  simAllowMetaWrite({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }, null, { nextSeq: 1, configGlobal: metaActual.configGlobal })
+);
 
 console.log("\n=== UPDATE — cierre por fecha y por 'enviada' (v6.8) ===");
 check(

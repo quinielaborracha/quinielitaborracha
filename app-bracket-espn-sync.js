@@ -55,12 +55,33 @@ function equiposConocidosElim(pid){
   return getRealElimTeams(pid);
 }
 
+// v3.8.4 — guardia de reentrada: antes, cada tick de startTorneoRealAutoSync()
+// (cada 90s) llamaba a fetchESPNElim() sin fijarse si la corrida anterior
+// seguía en curso -- si ESPN respondía lento, corridas solapadas
+// reseteaban _elimConflictQueue a mitad del procesamiento de la anterior
+// (ver auditoría 2026-07-05). El mismo flag protege también al botón
+// manual "⚡ ESPN Live": si ya hay una sincronización en curso (auto o
+// manual), la nueva llamada se descarta en vez de solaparse.
+let _espnElimSyncInFlight=false;
+
 async function fetchESPNElim(){
+  if(_espnElimSyncInFlight){
+    toast("⏳ Ya hay una sincronización con ESPN en curso — esperá a que termine.");
+    return;
+  }
+  _espnElimSyncInFlight=true;
   const sp=document.getElementById("ei-spin");const tx=document.getElementById("ei-txt");
   if(sp)sp.classList.add("spin");if(tx)tx.textContent="Cargando...";
   setES(`<span style="color:var(--qb-muted);font-size:10px"><span class="spin" style="display:inline-block">↻</span> Consultando ESPN…</span>`);
+  // v3.8.4 — timeout de red: sin esto, un fetch colgado dejaba
+  // _espnElimSyncInFlight en true para siempre (auto-sync trabado hasta
+  // recargar la página). AbortController corta cada pedido a los 15s; el
+  // .catch(()=>null) de cada fetch ya existente convierte ese abort en
+  // "sin datos para esa fecha", igual que cualquier otro error de red.
+  const timeoutCtrl=new AbortController();
+  const timeoutId=setTimeout(()=>timeoutCtrl.abort(),15000);
   try{
-    const results=await Promise.allSettled(ELIM_DATES.map(d=>fetch(`${ESPN_API}?dates=${d}&limit=50`).then(r=>r.ok?r.json():null).catch(()=>null)));
+    const results=await Promise.allSettled(ELIM_DATES.map(d=>fetch(`${ESPN_API}?dates=${d}&limit=50`,{signal:timeoutCtrl.signal}).then(r=>r.ok?r.json():null).catch(()=>null)));
     const evts=[];
     results.forEach(r=>{if(r.status==="fulfilled"&&r.value?.events)r.value.events.forEach(ev=>evts.push(ev));});
 
@@ -186,7 +207,11 @@ async function fetchESPNElim(){
       toast(updated>0||teamsLoaded>0||teamsCorrected>0?`✓ ${updated} resultados · ${teamsLoaded} nuevos · ${teamsCorrected} corregidos`:"Sin datos nuevos");
     }
   }catch(e){setES(`<span class="sbadge err">⚠️ Error: ${e.message}</span>`);toast("Error ESPN",true);}
-  if(sp)sp.classList.remove("spin");if(tx)tx.textContent="ESPN Live";
+  finally{
+    clearTimeout(timeoutId);
+    _espnElimSyncInFlight=false;
+    if(sp)sp.classList.remove("spin");if(tx)tx.textContent="ESPN Live";
+  }
 }
 
 // ══════════════════════════════════════════════════════════════

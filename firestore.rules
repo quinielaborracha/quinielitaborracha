@@ -122,6 +122,23 @@ service cloud.firestore {
              && d.predictions is map;
     }
 
+    // ── Helper (v3.8.4 — Fase de Seguridad) ───────────────────────────
+    // Mismo piso mínimo que esAltaValidaDeParticipante() de arriba, pero
+    // para el `update` del propio dueño (auditoría 2026-07-05: "el
+    // dueño puede reescribir cualquier campo propio con cualquier
+    // tipo/tamaño -- incluido codigo o estadoQuiniela con un valor fuera
+    // de {'borrador','enviada'}"). NO reutiliza esAltaValidaDeParticipante()
+    // tal cual porque esa exige estadoQuiniela=='borrador' siempre --
+    // rgSubmitParticipantConfirmed() (participantes.js) escribe
+    // estadoQuiniela:'enviada' al enviar la quiniela, un update legítimo
+    // del propio dueño que esa regla rechazaría.
+    function esEdicionValidaDeParticipante(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+             && d.codigo is string && d.codigo.size() <= 50
+             && (d.estadoQuiniela == 'borrador' || d.estadoQuiniela == 'enviada')
+             && d.predictions is map;
+    }
+
     // ── Helper (v3.8 — Fase de Seguridad) ─────────────────────────────
     // Mismo motivo que esAltaValidaDeParticipante() de arriba, pero para
     // el documento HERMANO de registro_privado/{pid}. Hasta v3.7 el
@@ -290,6 +307,7 @@ service cloud.firestore {
                            && resource.data.estadoQuiniela != 'enviada'
                            && !isPastDeadline()
                            && !isMantenimientoActivo()
+                           && esEdicionValidaDeParticipante(request.resource.data)
                          )
                          ||
                          request.auth.token.email == "quinielaborracha@gmail.com"
@@ -418,14 +436,27 @@ service cloud.firestore {
       // saca este documento de la lista de cosas legibles con un curl
       // suelto sin ninguna credencial.
       allow read: if request.auth != null;
+      // v3.8.4 — Fase de Seguridad: antes, "resource == null" (el
+      // documento no existe) alcanzaba por sí solo para permitir la
+      // escritura a CUALQUIER sesión anónima, sin ninguna otra condición
+      // (auditoría 2026-07-05). Si este documento llegara a borrarse
+      // alguna vez (reset manual, migración, prueba fallida) antes de
+      // que el admin lo recree a mano, la primera sesión anónima en
+      // cargar la página podía ganarle de mano y escribir un
+      // configGlobal arbitrario (ej. fechaCierre manipulada). En
+      // producción esto no pasa hoy (el documento ya existe desde hace
+      // meses), pero cerramos el hueco igual: ahora, si el documento no
+      // existe, solo el admin puede crearlo -- exactamente el mismo
+      // criterio que ya rige cuando SÍ existe (ver la rama de abajo).
       allow write: if request.auth != null
                    && (
                         request.auth.token.email == "quinielaborracha@gmail.com"
                         ||
-                        resource == null
-                        ||
-                        request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['nextSeq', 'updatedAt'])
+                        (
+                          resource != null
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['nextSeq', 'updatedAt'])
+                        )
                       );
     }
 

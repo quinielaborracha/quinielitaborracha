@@ -32,11 +32,22 @@ const ALL_DATES=["20260611","20260612","20260613","20260614","20260615","2026061
 let mmT=null,mmS=0;
 let _conflictQueue=[],_conflictCurrent=null;
 
+// v3.8.4 — timeout de red compartido por los 2 llamadores (fetchESPN()
+// acá abajo, y loadMM() más adelante en este archivo): sin esto, un
+// fetch colgado a ESPN podía dejar cualquiera de las dos corridas
+// esperando indefinidamente (ver auditoría 2026-07-05, mismo hallazgo que
+// ya se cerró para la eliminatoria en app-bracket-espn-sync.js).
 async function fetchAllDates(dates){
-  const results=await Promise.allSettled(dates.map(d=>fetch(`${ESPN_API}?dates=${d}&limit=50`).then(r=>r.ok?r.json():null).catch(()=>null)));
-  const evts=[];
-  results.forEach(r=>{if(r.status==="fulfilled"&&r.value?.events)r.value.events.forEach(ev=>evts.push(ev));});
-  return evts;
+  const timeoutCtrl=new AbortController();
+  const timeoutId=setTimeout(()=>timeoutCtrl.abort(),15000);
+  try{
+    const results=await Promise.allSettled(dates.map(d=>fetch(`${ESPN_API}?dates=${d}&limit=50`,{signal:timeoutCtrl.signal}).then(r=>r.ok?r.json():null).catch(()=>null)));
+    const evts=[];
+    results.forEach(r=>{if(r.status==="fulfilled"&&r.value?.events)r.value.events.forEach(ev=>evts.push(ev));});
+    return evts;
+  }finally{
+    clearTimeout(timeoutId);
+  }
 }
 
 // Cola de conflictos
@@ -62,7 +73,16 @@ function resolveConflict(choice){
 }
 function closeConflict(){resolveConflict("keep");}
 
+// v3.8.4 — guardia de reentrada: fetchESPN() se dispara cada vez que se
+// abre la sub-pestaña Fixture → Grupos (app-tabs.js); sin esto, entrar y
+// salir rápido de esa sub-pestaña varias veces podía solapar corridas y
+// resetear _conflictQueue a mitad de la anterior (mismo patrón que ya se
+// cerró para fetchESPNElim(), app-bracket-espn-sync.js).
+let _espnGruposFetchInFlight=false;
+
 async function fetchESPN(){
+  if(_espnGruposFetchInFlight)return;
+  _espnGruposFetchInFlight=true;
   const sp=document.getElementById("fi-spin");const tx=document.getElementById("fi-txt");
   if(sp)sp.classList.add("spin");if(tx)tx.textContent="Cargando...";
   setFS(`<span style="color:var(--qb-muted);font-size:10px"><span class="spin" style="display:inline-block">↻</span> Consultando ESPN…</span>`);
@@ -106,7 +126,10 @@ async function fetchESPN(){
       toast(updated>0?`✓ ${updated} resultados`:"Sin resultados nuevos");
     }
   }catch(e){setFS(`<span class="sbadge err">⚠️ Error: ${e.message}</span>`);toast("Error ESPN",true);}
-  if(sp)sp.classList.remove("spin");if(tx)tx.textContent="ESPN Live";
+  finally{
+    _espnGruposFetchInFlight=false;
+    if(sp)sp.classList.remove("spin");if(tx)tx.textContent="ESPN Live";
+  }
 }
 
 // v1.1 — Bug #3 (playbook eliminatoria): parseESPNEvent() solo reconoce
@@ -134,7 +157,15 @@ function parseESPNEventElim(ev){
 function startMMT(){stopMMT();mmS=30;mmT=setInterval(()=>{mmS--;const el=document.getElementById("mm-cd");if(el)el.textContent=`Auto-actualiza en ${mmS}s`;if(mmS<=0){mmS=30;loadMM(false);}},1000);}
 function stopMMT(){if(mmT){clearInterval(mmT);mmT=null;}}
 
+// v3.8.4 — guardia de reentrada: startMMT() llama a loadMM(false) cada
+// 30s mientras la pestaña "En vivo" está abierta, y volver a entrar a esa
+// pestaña llama a loadMM(true) de nuevo -- sin esto, ambos disparadores
+// podían solaparse si ESPN tardaba más de 30s en responder.
+let _mmLoadInFlight=false;
+
 async function loadMM(showSpinner=false){
+  if(_mmLoadInFlight)return;
+  _mmLoadInFlight=true;
   const sp=document.getElementById("mm-spin");const tx=document.getElementById("mm-txt");
   if(showSpinner){if(sp)sp.classList.add("spin");if(tx)tx.textContent="Cargando...";}
   const statusEl=document.getElementById("mm-status");
@@ -151,7 +182,10 @@ async function loadMM(showSpinner=false){
     if(statusEl)statusEl.innerHTML=`<span class="sbadge info">ESPN · ${now}</span>${liveOnes.length?`<span class="sbadge" style="background:rgba(212,0,26,.18);color:#ff8080;border:1px solid rgba(212,0,26,.4)"><span class="ldot" style="width:5px;height:5px;margin-right:2px"></span>${liveOnes.length} en vivo</span>`:""}`;
     renderMM(liveOnes,preOnes);
   }catch(e){if(statusEl)statusEl.innerHTML=`<span class="sbadge err">⚠️ Sin conexión ESPN</span>`;}
-  if(showSpinner){if(sp)sp.classList.remove("spin");if(tx)tx.textContent="Actualizar";}
+  finally{
+    _mmLoadInFlight=false;
+    if(showSpinner){if(sp)sp.classList.remove("spin");if(tx)tx.textContent="Actualizar";}
+  }
 }
 
 function predGroups(mid){const g={};PL.forEach(name=>{const p=MD[mid]?.preds[name];if(!p)return;const k=`${p.h}-${p.a}`;if(!g[k])g[k]=[];g[k].push(sn(name));});return g;}
