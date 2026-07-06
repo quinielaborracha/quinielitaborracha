@@ -76,6 +76,13 @@ function load(){
       S.elimTimes=p.elimTimes||{};
       if(p.bonos)S.bonos=p.bonos;
       if(p.tieBreakers)S.tieBreakers=p.tieBreakers;
+      // v3.8.1 — faltaba acá (sí se restaura en applyRemoteState() y en
+      // applyStatePayload(), y buildStatePayload() sí lo persiste): sin
+      // esta línea, S.hiddenPL volvía al default vacío en cada recarga de
+      // página hasta que llegara el primer snapshot de Firestore, y un
+      // participante marcado como oculto reaparecía un instante en el
+      // ranking público.
+      if(p.hiddenPL){S.hiddenPL=new Set(Object.keys(p.hiddenPL).filter(k=>p.hiddenPL[k]));}
       if(p.autoClose!==undefined)S.autoClose=p.autoClose;
       if(p.snapshots)S.snapshots=p.snapshots;
       S.reality=p.reality||S.reality;
@@ -267,7 +274,18 @@ function pushStateToFirestore(payload){
   const json=JSON.stringify(payload);
   _lastPushedStateJSON=json;
   fb.setDoc(fb.STATE_DOC,{json,updatedAt:fb.serverTimestamp()})
-    .catch(err=>{console.error("Error al sincronizar con Firebase:",err);});
+    .catch(err=>{
+      console.error("Error al sincronizar con Firebase:",err);
+      // v3.8.1 — antes esto quedaba en silencio para el admin: veía su
+      // cambio reflejado local (optimista, save() ya actualizó S antes de
+      // llamar acá) y seguía cargando el próximo resultado sin enterarse
+      // de que ESTA escritura puntual no llegó al servidor (corte de
+      // señal, cuota, etc.) hasta que alguien notara el ranking
+      // desactualizado a ojo.
+      toast(err&&err.code==='permission-denied'
+        ?'⚠️ No se pudo guardar (permiso denegado). Verificá tu sesión de admin.'
+        :'⚠️ No se pudo guardar en el servidor. Revisá tu conexión e intentá de nuevo.',true);
+    });
 }
 
 // ══════════════════════════════════════════════════════════════

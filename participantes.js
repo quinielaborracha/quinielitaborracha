@@ -852,9 +852,13 @@ function rgSavePapelera(papelera){
     .then(()=>{ _rgLastKnownPapeleraJSON = json; })
     .catch(err=>{
       console.error("Error al sincronizar papelera:", err);
-      if(err && err.code === 'permission-denied'){
-        toast('⚠️ No se pudo guardar la papelera en el servidor (permiso denegado).', true);
-      }
+      // v3.8.1 — antes solo avisaba en permission-denied; cualquier otro
+      // error (sin señal, timeout, cuota) quedaba en silencio para el
+      // admin, que veía la papelera actualizada localmente y creía que
+      // ya había sincronizado.
+      toast(err && err.code === 'permission-denied'
+        ? '⚠️ No se pudo guardar la papelera en el servidor (permiso denegado).'
+        : '⚠️ No se pudo guardar la papelera en el servidor. Revisá tu conexión e intentá de nuevo.', true);
     });
 }
 
