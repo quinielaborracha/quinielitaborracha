@@ -126,8 +126,6 @@ function renderAdv(){
     ${specHtml}
   </div>`;
 }
-function setAd(name,key,val){if(!S.adv[name])S.adv[name]={};S.adv[name][key]=val;save();}
-
 // Auto-fill champ/runner/3rd from P103 (3rd place) and P104 (final) results
 function autoFillRealityFromElim(){
   let changed=false;
@@ -240,8 +238,8 @@ async function fetchESPNScorers(){
         </span>
         <span style="font-size:20px;line-height:1;flex-shrink:0">${flagIco}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;color:var(--qb-text)">${a.n}</div>
-          <div style="font-size:10px;color:var(--qb-muted)">${teamName}</div>
+          <div style="font-weight:700;font-size:13px;color:var(--qb-text)">${esc(a.n)}</div>
+          <div style="font-size:10px;color:var(--qb-muted)">${esc(teamName)}</div>
         </div>
         <span style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-blue);min-width:32px;text-align:right">${o.v}</span>
         <span style="font-size:10px;color:var(--qb-muted);margin-left:2px">⚽</span>

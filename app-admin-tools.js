@@ -227,7 +227,7 @@ function renderTorneoConfig(){
       <div>
         <div style="font-weight:700;color:var(--qb-text)">${label}</div>
       </div>
-      <div class="switch ${on?'on':''}" onclick="toggleFaseActiva('${key}')"><div class="switch-knob"></div></div>
+      <div class="switch ${on?'on':''}" role="switch" aria-checked="${on}" tabindex="0" onclick="toggleFaseActiva('${key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleFaseActiva('${key}');}"><div class="switch-knob"></div></div>
     </div>`;
   };
   const R=DB.configGlobal.reglas;
@@ -277,13 +277,13 @@ function reglaSwitchRow(path,on,label,desc){
       <div style="font-weight:700;color:var(--qb-text)">${label}</div>
       ${desc?`<div class="muted" style="font-size:11px;margin-top:2px">${desc}</div>`:""}
     </div>
-    <div class="switch ${on?'on':''}" onclick="toggleReglaSwitch('${path}')"><div class="switch-knob"></div></div>
+    <div class="switch ${on?'on':''}" role="switch" aria-checked="${on}" tabindex="0" onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}"><div class="switch-knob"></div></div>
   </div>`;
 }
 // Switch chico (sin descripción aparte), para usar DENTRO de una fila
 // existente (ej. el switch de "puntos activos" de cada fase).
 function reglaSwitchMini(path,on){
-  return `<div class="switch ${on?'on':''}" onclick="toggleReglaSwitch('${path}')" style="flex-shrink:0"><div class="switch-knob"></div></div>`;
+  return `<div class="switch ${on?'on':''}" role="switch" aria-checked="${on}" tabindex="0" onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}" style="flex-shrink:0"><div class="switch-knob"></div></div>`;
 }
 function buildReglasHtml(R){
   const activeAll=getActivePhases();

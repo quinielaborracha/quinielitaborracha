@@ -269,7 +269,11 @@ function loadData(){
 
 let DB = loadData();
 
-function uid(){ return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); }
+function uid(){
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return 'p_' + Date.now().toString(36) + '_' + buf[0].toString(36).padStart(6,'0');
+}
 
 function nextCode(){
   const seq = DB.nextSeq || 1;
@@ -278,7 +282,9 @@ function nextCode(){
 }
 
 function genClave(){
-  return String(Math.floor(100000 + Math.random()*900000));
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return String(100000 + (buf[0] % 900000));
 }
 
 // ── v6.9, Fase de Privacidad — separación público/privado ───────────

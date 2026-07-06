@@ -36,7 +36,13 @@
 //      Worker -- el navegador los maneja directo, como siempre.
 // ══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = "quinielitaborracha-v1";
+// Bumpear este nombre de tanto en tanto (no en cada release) para forzar
+// una purga completa del caché acumulado -- cada ?v= viejo que ya nadie
+// pide queda guardado para siempre dentro del mismo CACHE_NAME si nunca
+// cambia (ver auditoría 2026-07-05). No hace falta bumpear en cada
+// deploy: haría perder la ventaja de cache-first para archivos que no
+// cambiaron, que es el motivo por el que existe esta estrategia.
+const CACHE_NAME = "quinielitaborracha-v2";
 
 self.addEventListener("install", (event) => {
   // No precargamos nada a propósito: los nombres de los .js/.css
