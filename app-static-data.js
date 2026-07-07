@@ -131,11 +131,11 @@ const FLAGS2={"España":"🇪🇸","Paises Bajos":"🇳🇱","Países Bajos":"�
 const ABBR={"España":"ES","Paises Bajos":"NL","Países Bajos":"NL","Francia":"FR","Portugal":"PT","Inglaterra":"EN","Argentina":"AR","Brasil":"BR"};
 const BGCOL={"España":"#c60b1e","Paises Bajos":"#ae1c28","Países Bajos":"#ae1c28","Francia":"#002395","Portugal":"#006600","Inglaterra":"#cf111b","Argentina":"#74acdf","Brasil":"#009c3b"};
 
-// ── Avatares de campeón (v1.8) ──
+// ── Avatares de campeón (v1.8; v3.10 — varias opciones por país) ──
 // Carpeta avatars/ (raíz del repo, servida tal cual por GitHub Pages) con
-// una ilustración por país -- todavía no hay una para cada uno de los 48
-// equipos del torneo, así que AVATAR_MAP solo tiene entrada para los que
-// ya existen como archivo. Mismo criterio de clave que ALL_FLAGS/
+// una o más ilustraciones por país -- todavía no hay una para cada uno de
+// los 48 equipos del torneo, así que AVATAR_MAP solo tiene entrada para
+// los que ya existen como archivo. Mismo criterio de clave que ALL_FLAGS/
 // TEAM_NAMES (nombre completo en español, con tilde): es el mismo string
 // que guarda preds.special.campeon / S.adv[name].champ, así que
 // avatarOfChampion() (app-core-data.js) puede buscar por esa clave
@@ -143,21 +143,49 @@ const BGCOL={"España":"#c60b1e","Paises Bajos":"#ae1c28","Países Bajos":"#ae1c
 // avatarOfChampion() devuelve "" y quien lo consume no muestra nada
 // (a propósito: mejor vacío que un avatar genérico que no representa a
 // nadie).
+//
+// v3.10 — BUG REPORTADO: cada país solo tenía UN archivo asignado acá
+// aunque ya existieran 2-3 ilustraciones distintas en avatars/ para varios
+// (Brasil, México, Argentina...) -- todos los que compartían campeón
+// quedaban con el mismo avatar, sin variedad. Además, Países Bajos tenía
+// 3 archivos en la carpeta (Cruiff/Davids/Gullit) pero NINGUNA entrada
+// acá -- avatarOfChampion() devolvía "" siempre para quien predijera ese
+// campeón, sin ningún error visible que lo delatara (mismo patrón de bug
+// silencioso que el de los íconos de ranking hardcodeados). Cada valor
+// ahora es un ARRAY con todas las variantes disponibles; avatarOfChampion()
+// elige una determinística (no al azar en cada render, para que el mismo
+// participante no cambie de cara cada vez que se repinta la pantalla).
 const AVATAR_DIR = "avatars/";
 const AVATAR_MAP = {
-  "Portugal":"Cristiano_Portugal.webp",
-  "Inglaterra":"David_Inglaterra.webp",
-  "Canadá":"Davies_Canada.webp",
-  "Brasil":"Dinho_Brasil.webp",
-  "Argentina":"LMessi_Argentina.webp",
-  "Estados Unidos":"Lalas_USA.webp",
-  "Bélgica":"Lukaku_Belgica.webp",
-  "México":"Memo2_Mexico.webp",
-  "Colombia":"Pibe_Colombia.webp",
-  "Egipto":"Salah_Egipto.webp",
-  "España":"Sergio_Spain.webp",
-  "Francia":"Zindane2_Francia.webp",
-  "Noruega":"haalnad_Noruega.webp",
+  "México":["Campos_Mexico_2.webp","Memo2_Mexico.webp"],
+  "Sudáfrica":["Tau_Sudafrica.webp"],
+  "Corea del Sur":["Son_Corea_del_Sur.webp"],
+  "Canadá":["Davies_Canada.webp"],
+  "Brasil":["Dinho_Brasil.webp","Neymar_Brasil_3.webp","Ronaldo_Brasil_2.webp"],
+  "Marruecos":["Hakimi_Marruecos.webp"],
+  "Estados Unidos":["Lalas_USA.webp"],
+  "Paraguay":["Almiron_Paraguay.webp"],
+  "Australia":["Ryan_Australia.webp"],
+  "Alemania":["Klinsmann_Alemania_2.webp","Klose_Alemania.webp"],
+  "Costa de Marfil":["Haller_Costa_De_Marfil.webp"],
+  "Ecuador":["Caicedo_Ecuador.webp"],
+  "Países Bajos":["Cruiff_Paises_Bajos_3.webp","Davids_Paises_Bajos.webp","Gullit_Paises_Bajos_2.webp"],
+  "Japón":["Kubo_Japon.webp"],
+  "Arabia Saudita":["Salem_Arabia_Saudita.webp"],
+  "Uruguay":["Valverde_Uruguay.webp"],
+  "España":["Raul_Spain_2.webp","Sergio_Spain.webp"],
+  "Cabo Verde":["Ryan_Mendes_Cabo_Verde.webp"],
+  "Bélgica":["Lukaku_Belgica.webp"],
+  "Egipto":["Salah_Egipto.webp"],
+  "Francia":["Platini_Francia_2.webp","Thuran_Francia_3.webp","Zindane2_Francia.webp"],
+  "Noruega":["Solskjaer_Noruega_2.webp","haalnad_Noruega.webp"],
+  "Argentina":["LMessi_Argentina.webp","Maradona2_Argentina_2.webp"],
+  "Inglaterra":["David_Inglaterra.webp"],
+  "Croacia":["Modric_Croacia.webp","Suker_Croacia_2.webp"],
+  "Ghana":["Mane_Ghana.webp"],
+  "Panamá":["Panama.webp"],
+  "Portugal":["Cristiano_Portugal.webp","Figo_Portugal_2.webp"],
+  "Colombia":["Higuita_Colombia_2.webp","Pibe_Colombia.webp"],
 };
 
 // v1.7 — BRULES/ELIMRULES/LASTRULES (reglas básicas/eliminatoria/último

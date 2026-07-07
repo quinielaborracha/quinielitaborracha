@@ -109,6 +109,25 @@ function flagEmoji(emoji,s=20){return`<span style="font-size:${s}px;line-height:
 // representa a nadie (mismo criterio que avatarOfChampion()). A propósito
 // NO se usa en el Ranking (rd. app-bracket-view.js) -- ahí solo va la
 // bandera, como siempre.
+// v3.10 — helper compartido: país de campeón -> nombre de archivo,
+// eligiendo una variante ESTABLE por participante entre las disponibles
+// en AVATAR_MAP (ver la nota completa en app-static-data.js, donde cada
+// país pasó de tener un solo archivo a un array de variantes). Antes de
+// esto, 3 lugares distintos (avatarOfChampion() en app-core-data.js, y 2
+// portadas de "Mi Quiniela"/PDF en registro.js) leían AVATAR_MAP[champ]
+// cada uno por su cuenta asumiendo un string suelto -- con el cambio a
+// array, todos tienen que pasar por el MISMO criterio de selección, o un
+// mismo participante terminaría viendo un avatar distinto según la
+// pantalla. crc32(name), no Math.random(): el mismo participante ve
+// siempre el mismo avatar en cada render/recarga.
+function pickAvatarFile(champ,name){
+  if(!champ||typeof AVATAR_MAP==='undefined'||!AVATAR_MAP[champ])return'';
+  const opts=AVATAR_MAP[champ];
+  if(!Array.isArray(opts))return opts||''; // por compatibilidad si algo quedara como string suelto
+  if(!opts.length)return'';
+  return opts[parseInt(crc32(String(name||'')),16)%opts.length];
+}
+
 function avatarImg(file,s=40){
   if(!file)return"";
   return`<img class="qb-avatar" src="${AVATAR_DIR}${encodeURIComponent(file)}" width="${s}" height="${s}" alt="" loading="lazy" style="width:${s}px;height:${s}px">`;

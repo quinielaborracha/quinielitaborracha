@@ -171,7 +171,7 @@ function renderStatCards(){
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--ff-display);font-size:36px;font-weight:900;color:var(--qb-gold)">#${pos}</div>
-        <div style="font-size:10px;color:var(--qb-muted)">de 27</div>
+        <div style="font-size:10px;color:var(--qb-muted)">de ${ranked.length}</div>
       </div>
     </div>
     <!-- Stats grid -->

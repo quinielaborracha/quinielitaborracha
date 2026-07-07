@@ -99,11 +99,17 @@ function flagOfChampion(name, residenceCountry){
 // corresponde. Mismo try/catch que flagOfChampion() y mismo motivo: esta
 // función se llama desde rebuildDynamicData() en su invocación top-level,
 // antes de que getDynamicSpec()/AVATAR_MAP terminen de existir.
+// v3.10 — AVATAR_MAP[champ] ahora es un array de variantes (antes un solo
+// archivo por país -- ver la nota completa en app-static-data.js). La
+// selección determinística (crc32(name), no Math.random()) vive en
+// pickAvatarFile() (utils.js) -- mismo helper que usan las otras 2
+// pantallas que necesitan esto (registro.js), para que un mismo
+// participante vea siempre el mismo avatar en toda la app.
 function avatarOfChampion(name){
   try{
     const spec = (typeof getDynamicSpec==='function') ? getDynamicSpec(name) : null;
     const champ = spec && spec.champ ? spec.champ : '';
-    return (champ && typeof AVATAR_MAP!=='undefined' && AVATAR_MAP[champ]) || '';
+    return pickAvatarFile(champ,name);
   }catch(e){
     return '';
   }

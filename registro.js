@@ -2325,7 +2325,7 @@ function renderParticipantDashboard(pid){
   // Firestore. Sin avatar todavía para ese país, queda solo el nombre (sin
   // placeholder genérico), mismo criterio que en el resto de la app.
   const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
-  const champAvatarFileDash = (champValDash && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champValDash]||'') : '';
+  const champAvatarFileDash = pickAvatarFile(champValDash,p.name);
   const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
          ${avatarImg(champAvatarFileDash, 62)}
          <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
@@ -4567,7 +4567,7 @@ function generarPDF(p){
   // uno, champAvatarFile queda "" y no se imprime nada (mismo criterio que
   // en el resto de la app: mejor vacío que un avatar que no corresponde).
   const champVal = computeAutoSpecial(bracket).campeon;
-  const champAvatarFile = (champVal && typeof AVATAR_MAP!=='undefined') ? (AVATAR_MAP[champVal]||'') : '';
+  const champAvatarFile = pickAvatarFile(champVal,p.name);
   const posterAvatarHtml = champAvatarFile
     ? `<img class="pp-avatar" src="${AVATAR_DIR}${encodeURIComponent(champAvatarFile)}" alt="" crossorigin="anonymous">`
     : '';
