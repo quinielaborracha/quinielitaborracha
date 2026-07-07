@@ -115,7 +115,7 @@ function buildStatePayload(){
   const hiddenPLobj={};
   if(S.hiddenPL instanceof Set)S.hiddenPL.forEach(n=>{hiddenPLobj[n]=true;});
   else Object.assign(hiddenPLobj,S.hiddenPL||{});
-  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory,changeLog:S.changeLog,integrityChecks:S.integrityChecks};
+  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory,changeLog:S.changeLog,integrityChecks:S.integrityChecks,realElim:S.realElim};
 }
 
 // v1.5.1 — Contraparte de buildStatePayload(): aplica un payload completo
@@ -148,6 +148,7 @@ function applyStatePayload(p){
   S.battleHistory=p.battleHistory||[];
   S.changeLog=p.changeLog||[];
   S.integrityChecks=p.integrityChecks||[];
+  S.realElim=p.realElim||{};
   // v3.4 — un backup restaurado reemplaza el estado entero: la línea de
   // base contra la que se compara el próximo save() (ver más abajo) queda
   // obsoleta, así que se resetea para que se re-establezca sola contra ESTE
@@ -369,6 +370,7 @@ function applyRemoteState(p){
   if(p.battleHistory)S.battleHistory=p.battleHistory;
   if(p.changeLog)S.changeLog=p.changeLog;
   if(p.integrityChecks)S.integrityChecks=p.integrityChecks;
+  S.realElim=p.realElim||{};
   // v3.4 — este snapshot es la verdad confirmada por el servidor (llega
   // acá solo en la primera carga o ante un cambio remoto genuino de
   // otra sesión, ver el filtro de eco en wireFirestoreSync()) -- se

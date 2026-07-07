@@ -24,6 +24,19 @@
    ════════════════════════════════════════════════════════════ */
 
 let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{},elimTimes:{},
+  // v3.9.4 — "Torneo Real" (Estadísticas → Torneo Real) mostraba equipos vía
+  // getRealElimTeams()/S.elimTeams -- el MISMO dato que usa el motor de
+  // predicciones/puntaje. Si ese dato quedaba mal (ej. una llave generada
+  // automáticamente con un resultado de grupos incompleto en ese momento,
+  // BUG REPORTADO: Sudáfrica vs Bosnia cuando en la realidad jugó contra
+  // Canadá), "Torneo Real" heredaba el mismo error aunque no tuviera nada
+  // que ver con predicciones de nadie. realElim es una copia INDEPENDIENTE,
+  // que fetchESPNElim() (app-bracket-espn-sync.js) llena siempre con lo
+  // último que diga ESPN para ese gameId, sin pasar por ninguna protección
+  // de "no pisar una predicción ya hecha" (acá no hay ninguna prediccion
+  // que proteger, es un visor de hechos) -- {[pid]:{h,a,hs,as,state,ts}}.
+  realElim:{},
+
   bonos:{lastPlace:{},classified:{},llaves:{},closed:{}},
   tieBreakers:{},  // {pid: "h"|"a"} — quién avanzó en caso de empate
   autoClose:false,

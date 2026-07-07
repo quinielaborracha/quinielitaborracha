@@ -235,6 +235,26 @@ function renderStatCards(){
 //   2) TODOS los que están mirando esta pestaña reciben ese cambio al
 //      instante vía el mismo onSnapshot que ya sincroniza todo lo demás
 //      (applyRemoteState, app-live-sync.js) -- sin recargar la página.
+// v3.9.4 — BUG REPORTADO: "Torneo Real" mostraba un equipo (Sudáfrica vs
+// Bosnia-Herzegovina) que la vida real ya había desmentido hace más de
+// una semana (el partido real, según ESPN, era Sudáfrica vs Canadá, ya
+// finalizado). Causa raíz: esta pantalla leía getRealElimTeams(pid) +
+// S.elimScores/S.elimTimes -- el MISMO estado que usa el motor de
+// predicciones/puntaje para armar el bracket de cada participante. Ese
+// estado se arma una vez con "⚡ Generar llaves de Dieciseisavos" a
+// partir de la tabla de posiciones de grupos EN ESE MOMENTO, y no se
+// recalcula solo después -- si esa foto se tomó con datos de grupo
+// todavía incompletos, queda mal para siempre hasta que alguien la
+// corrija a mano en el editor de llaves, y "Torneo Real" heredaba el
+// mismo error aunque no tiene nada que ver con la predicción de nadie.
+//
+// Ahora esta pantalla es una sección independiente de ese sistema: lee
+// exclusivamente S.realElim (app-state.js), que fetchESPNElim()
+// (app-bracket-espn-sync.js) llena SIEMPRE con lo último que diga ESPN
+// para el gameId real de cada uno de los 32 cruces -- sin pasar por
+// ninguna lógica de "no pisar una predicción ya hecha". Así, aunque el
+// bracket de predicciones quede mal armado, esta pantalla sigue
+// mostrando exactamente lo que pasó en la vida real.
 function renderTorneoReal(){
   const el=document.getElementById("stat-popular");if(!el)return;
   const rounds=(typeof ELIM_ROUNDS!=="undefined")?ELIM_ROUNDS:[];
@@ -248,30 +268,28 @@ function renderTorneoReal(){
   };
 
   const cardFor=(pid)=>{
-    const teams=getRealElimTeams(pid);
-    const score=(S.elimScores&&(S.elimScores[pid]||S.elimScores[String(pid)]))||null;
-    const time=S.elimTimes&&S.elimTimes[pid];
-    if(!teams){
+    const real=(S.realElim&&S.realElim[pid])||null;
+    if(!real||!real.h||!real.a){
       return`<div class="live-card" style="opacity:.5">
         <div class="live-hdr"><span style="font-size:10px;color:var(--qb-muted)">P${pid} · por definir</span></div>
       </div>`;
     }
-    const hF=getFlag(null,teams.h),aF=getFlag(null,teams.a);
-    const live=!!(score&&score.live);
-    const played=!!score&&!live;
+    const hF=getFlag(null,real.h),aF=getFlag(null,real.a);
+    const live=real.state==="in";
+    const played=real.state==="post";
     if(live){
       return`<div class="live-card is-live">
         <div class="live-hdr"><div style="display:flex;align-items:center;gap:6px"><span class="ldot"></span><span style="font-family:var(--ff-display);font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--qb-red);text-transform:uppercase">EN VIVO</span></div><span style="font-size:10px;color:var(--qb-muted)">P${pid}</span></div>
-        <div class="scoreboard"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(teams.h)}</span></div><div class="live-score red">${score.h} – ${score.a}</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(teams.a)}</span></div></div>
+        <div class="scoreboard"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(real.h)}</span></div><div class="live-score red">${real.hs} – ${real.as}</div><div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(real.a)}</span></div></div>
       </div>`;
     }
     const scoreHtml=played
-      ?`<div class="live-score" style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-text)">${score.h} – ${score.a}</div>`
+      ?`<div class="live-score" style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-text)">${real.hs} – ${real.as}</div>`
       :`<div class="live-score" style="font-family:var(--ff-display);font-size:18px;font-weight:900;color:var(--qb-muted)">VS</div>`;
-    const timeHtml=(!played&&time)?`<span style="font-size:10px;color:var(--qb-muted)">⏱ ${fmtDT(time)}</span>`:"";
+    const timeHtml=(!played&&real.ts)?`<span style="font-size:10px;color:var(--qb-muted)">⏱ ${fmtDT(real.ts)}</span>`:"";
     return`<div class="live-card">
       <div class="live-hdr"><span style="font-size:10px;color:var(--qb-muted)">P${pid}${played?" · finalizado":""}</span>${timeHtml}</div>
-      <div class="scoreboard" style="padding:10px 14px"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(teams.h)}</span></div>${scoreHtml}<div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(teams.a)}</span></div></div>
+      <div class="scoreboard" style="padding:10px 14px"><div class="live-team"><span class="live-team-flag">${hF}</span><span class="live-team-name">${esc(real.h)}</span></div>${scoreHtml}<div class="live-team"><span class="live-team-flag">${aF}</span><span class="live-team-name">${esc(real.a)}</span></div></div>
     </div>`;
   };
 

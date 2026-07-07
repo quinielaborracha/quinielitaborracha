@@ -135,6 +135,21 @@ async function fetchESPNElim(){
         S.elimTimes[pid]=ev.date;
       }
 
+      // v3.9.4 — "Torneo Real" (renderTorneoReal(), app-estadisticas.js)
+      // vive de ESTE dato, NO de S.elimTeams/S.elimScores -- ver la nota
+      // completa en app-state.js. Se escribe siempre con lo último que
+      // diga ESPN para este gameId (sin pasar por sameTeams/orientable/
+      // cola de conflicto, que existen para proteger predicciones ya
+      // hechas -- acá no hay ninguna que proteger). Cubre las 32 llaves
+      // por igual, incluidas las de fases posteriores a la manual, que
+      // hoy dependen de una resolución recursiva vía ELIM_TREE
+      // (getRealElimTeams) -- esto le da a Torneo Real una fuente directa
+      // que no depende de esa cadena ni de ningún bracket calculado.
+      if(homeES&&awayES){
+        const hsReal=parseInt(home.score)||0,asReal=parseInt(away.score)||0;
+        S.realElim[pid]={h:homeES,a:awayES,hs:hsReal,as:asReal,state,ts:ev.date||null};
+      }
+
       // ── Cruce real (solo aplica a los pids de la fase que recibe
       //    equipos a mano HOY, manualPids — las rondas posteriores se
       //    resuelven solas a partir de los resultados previos vía

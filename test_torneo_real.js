@@ -1,9 +1,17 @@
 // Test funcional de v2.8: la sub-pestaña de Estadísticas antes llamada
 // "🗳 Predicciones" (consenso de los 27 sobre partidos de grupos) pasa a
 // llamarse "🏆 Torneo real" y muestra el bracket de ELIMINATORIA REAL del
-// Mundial (P73-P104), sacado 100% de S.elimScores/getRealElimTeams (la
-// misma fuente de verdad que ya usa el resto de la app) -- nada de
-// predicciones de participantes.
+// Mundial (P73-P104) -- nada de predicciones de participantes.
+//
+// v3.9.4 — ACTUALIZADO: esta pestaña dejó de leer S.elimScores/
+// getRealElimTeams (el bracket de predicciones/puntaje) y ahora lee
+// S.realElim, una copia independiente que fetchESPNElim() llena directo
+// de ESPN. Motivo: el bracket de predicciones se arma una vez con
+// "Generar llaves" a partir de standings de grupo de ESE momento y no se
+// recalcula solo -- si esa foto quedaba mal, "Torneo Real" heredaba el
+// mismo error aunque no tiene nada que ver con ninguna predicción (BUG
+// REPORTADO: Sudáfrica vs Bosnia-Herzegovina cuando la vida real, según
+// ESPN, dice Sudáfrica vs Canadá).
 //
 // También cubre que se "actualiza sola, en vivo":
 //   1) Cualquier visitante que la esté mirando la ve refrescarse SOLA en
@@ -120,11 +128,15 @@ check("Indica que se actualiza sola, sin recargar", panelHtml().includes("Se act
    marcador final, SIN mezclarse con ninguna predicción de participante
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── Partido real finalizado ──");
-T.getS().elimTeams[73] = { h: "Argentina", a: "Brasil" };
-T.getS().elimScores[73] = { h: 2, a: 1, live: false };
-T.getS().elimTimes[73] = new Date("2026-06-28T19:00:00Z").getTime();
-T.getS().elimTeams[74] = { h: "Uruguay", a: "Alemania" };
-T.getS().elimScores[74] = { h: 1, a: 1, live: true };
+// v3.9.4 — "Torneo Real" ya NO lee S.elimTeams/S.elimScores/S.elimTimes
+// (el bracket de predicciones) -- lee S.realElim, una copia independiente
+// que llena fetchESPNElim() directo de ESPN (ver la nota completa en
+// app-state.js/app-bracket-espn-sync.js: el bug reportado fue justo que
+// el bracket de predicciones podía quedar con el rival equivocado -- ej.
+// una llave generada con datos de grupo incompletos -- y "Torneo Real"
+// heredaba ese error aunque no tiene nada que ver con predicciones).
+T.getS().realElim[73] = { h: "Argentina", a: "Brasil", hs: 2, as: 1, state: "post", ts: new Date("2026-06-28T19:00:00Z").getTime() };
+T.getS().realElim[74] = { h: "Uruguay", a: "Alemania", hs: 1, as: 1, state: "in", ts: new Date("2026-06-29T19:00:00Z").getTime() };
 
 // Un participante con un nombre bien distintivo -- si apareciera en esta
 // vista sería la prueba de que se coló algo de predicciones, cuando esto
@@ -152,7 +164,7 @@ check("El nombre del participante NO aparece en esta vista (es 100% resultado re
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── Se actualiza sola ante un cambio remoto (mientras está visible) ──");
 const payload = T.buildStatePayload();
-payload.elimScores = { ...payload.elimScores, 74: { h: 3, a: 1, live: false } }; // el partido en vivo terminó 3-1
+payload.realElim = { ...payload.realElim, 74: { ...payload.realElim[74], hs: 3, as: 1, state: "post" } }; // el partido en vivo terminó 3-1
 T.applyRemoteState(payload);
 check("Tras un cambio remoto con la pestaña visible, se repintó sola con el resultado nuevo (3 – 1, ya no 1 – 1 en vivo)",
   /3\s*–\s*1/.test(panelHtml()) && !panelHtml().includes("EN VIVO"));
@@ -162,7 +174,7 @@ W.tab("rank"); // nos vamos de Estadísticas
 let threw = false;
 try {
   const payload2 = T.buildStatePayload();
-  payload2.elimScores = { ...payload2.elimScores, 74: { h: 9, a: 9, live: false } };
+  payload2.realElim = { ...payload2.realElim, 74: { ...payload2.realElim[74], hs: 9, as: 9, state: "post" } };
   T.applyRemoteState(payload2);
 } catch (e) { threw = true; }
 check("applyRemoteState() no explota aunque la pestaña de Torneo real no esté visible", !threw);
