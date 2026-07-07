@@ -126,7 +126,13 @@ check("El residuo calculado (total - suma de jornadas) es exactamente 6 -- el bo
 );
 
 const cardHtml = T.buildEvolucionJornadaCardHtml("Ana", days, stats.total);
-check("La tarjeta muestra el resumen con la cuenta completa (30 + 6 = 36)", /30 pts.*6 pts.*36 pts/s.test(cardHtml));
+check("La tarjeta muestra la barra de composición con jornadas=30, bonos=6 y total=36",
+  /36<span[^>]*>pts<\/span>/.test(cardHtml) &&
+  /title="Jornadas jugadas: 30 pts"/.test(cardHtml) &&
+  /title="Avanzado\/bonos: 6 pts"/.test(cardHtml) &&
+  /Jornadas jugadas <b[^>]*>30<\/b>/.test(cardHtml) &&
+  /Avanzado\/bonos <b[^>]*>6<\/b>/.test(cardHtml)
+);
 check("La barra de la Jornada 1 SIGUE mostrando 15 -- el residuo no se le pega a ninguna barra", />15<\/text>/.test(cardHtml));
 check("La barra de la Jornada 2 TAMBIÉN sigue mostrando 15 (no 21) -- ya no se infla ninguna barra con el residuo",
   cardHtml.match(/>15<\/text>/g)?.length === 2 && !cardHtml.includes(">21<")

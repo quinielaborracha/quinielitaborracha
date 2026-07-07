@@ -2693,15 +2693,46 @@ function buildEvolucionJornadaCardHtml(name,days,total){
   }));
   const sumDias = points.reduce((s,p)=>s+p.value,0);
   const extra = (total||0)-sumDias;
-  const resumenHtml = extra>0
-    ? `<div class="ib" style="margin-bottom:.625rem">🧮 <b>${sumDias} pts</b> de jornadas jugadas + <b>${extra} pts</b> de Avanzado/bonos (campeón, goleador, racha, último lugar, batallas...) que no tienen un partido puntual al que asignarse = <b>${total} pts</b>, igual a tu puntaje del Ranking.</div>`
-    : '';
+  // calcBonos() (scoring.js) suma batalla/rumble junto con lastPlace/racha/mvp
+  // en un solo número -- para poder pintarlas de un color aparte hay que
+  // volver a sacarlas de ahí con las mismas funciones que las calculan.
+  const battlePts = calcBattleWinBonos(name)+calcRumbleWinBonos(name);
+  const restoBonos = extra-battlePts;
+  const resumenHtml = extra>0 ? buildCompositionBarHtml([
+    {label:'Jornadas jugadas', value:sumDias,    color:'var(--qb-gold)'},
+    {label:'Avanzado/bonos',   value:restoBonos, color:'var(--qb-blue)'},
+    {label:'Batallas',         value:battlePts,  color:'var(--qb-red)'}
+  ],total) : '';
   return `
     <div class="card">
       <div class="card-title">🎖️ Puntos por Jornada</div>
       <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuánto sumaste cada fecha del Mundial.</div>
       ${resumenHtml}
       ${buildSvgBarChart(points)}
+    </div>`;
+}
+
+// v3.11 — reemplaza el resumen de texto ("11 pts de jornadas + 27 pts de
+// bonos = 38 pts") por una barra de composición (parte-del-todo): dos
+// segmentos proporcionales a su peso real + leyenda con puntito de color,
+// en vez de forzar al usuario a leer y sumar una oración. Solo se llama
+// con partes > 0 (el caller filtra `extra>0` antes de invocar esto).
+function buildCompositionBarHtml(parts,total){
+  const segs = parts.filter(p=>p.value>0);
+  const barHtml = segs.map(p=>
+    `<div style="flex:${p.value} 0 0;min-width:8px;background:${p.color}" title="${esc(p.label)}: ${p.value} pts"></div>`
+  ).join('');
+  const legendHtml = segs.map(p=>
+    `<span style="display:inline-flex;align-items:center;gap:5px">`+
+    `<span style="width:8px;height:8px;border-radius:50%;background:${p.color};flex:none"></span>`+
+    `${esc(p.label)} <b style="color:var(--qb-text)">${p.value}</b></span>`
+  ).join('');
+  return `
+    <div style="margin-bottom:.75rem">
+      <div style="text-align:center;font-size:22px;font-weight:800;letter-spacing:-.01em">${total}<span style="font-size:12px;font-weight:600;color:var(--qb-muted);margin-left:3px">pts</span></div>
+      <div style="height:16px;border-radius:8px;background:var(--qb-surface2);display:flex;gap:2px;overflow:hidden;margin:.5rem 0">${barHtml}</div>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-size:12px;color:var(--qb-muted2)">${legendHtml}</div>
+      <div class="muted" style="text-align:center;font-size:10.5px;margin-top:.35rem">Avanzado/bonos: campeón, goleador, racha, último lugar... (sin partido puntual)</div>
     </div>`;
 }
 
