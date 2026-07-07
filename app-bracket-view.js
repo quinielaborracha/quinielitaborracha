@@ -33,8 +33,19 @@ function renderBracket(){
   const name=PL[pidx];if(!name){document.getElementById("bracket-body").innerHTML="";return;}
 
   // Resumen de puntos y llaves
+  // v3.9 — BUG REPORTADO: este resumen (y el listado de rondas más abajo)
+  // recorría TODOS los pids/rondas de eliminatoria sin fijarse en
+  // isFaseActiva() -- si el admin desactivaba una fase (ej. Cuartos) desde
+  // "Configuración del torneo", esta pestaña (📝 Predicciones → 🎯
+  // Eliminatoria, la única que ve el admin) igual mostraba esa fase
+  // entera como "⏳ Por resolver". buildDashElimHtml() (registro.js), el
+  // dashboard que ve cada participante, ya filtraba esto correctamente
+  // desde v1.2 -- acá quedó sin el mismo filtro por accidente. Mismo
+  // criterio ahora: phaseForPid()+isFaseActiva() para saltear pids de
+  // fases apagadas, y el denominador de "jugados" ya no es un /32 fijo.
   let llaveOk=0,llaveTot=0,totalPts=0,partJugados=0,cruceOk=0;
   for(let pid=73;pid<=104;pid++){
+    const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
     const sc=S.elimScores[pid];if(!sc)continue;
     partJugados++;llaveTot++;
     if(isLlaveCorrecta(name,pid))llaveOk++;
@@ -46,13 +57,14 @@ function renderBracket(){
 
   // Classified pts for this participant
   let classifiedTotal=0;
-  BONUS_PHASES.forEach(ph=>{if(ph.elimPhase)classifiedTotal+=calcClassifiedPtsForPhase(name,ph);});
+  getActivePhases().forEach(ph=>{if(ph.elimPhase)classifiedTotal+=calcClassifiedPtsForPhase(name,ph);});
+  const activeElimMidsTotal=getActivePhases().filter(ph=>ph.elimPhase).reduce((s,ph)=>s+ph.mids.length,0);
   let html=`<div class="brkt-summary">
     <div class="bsum-item"><div class="bsum-val">${totalPts}</div><div class="bsum-lbl">pts resultado</div></div>
     <div class="bsum-item"><div class="bsum-val" style="color:#6ab8f7">${llavePtsTotal}</div><div class="bsum-lbl">pts llaves</div></div>
     <div class="bsum-item"><div class="bsum-val" style="color:#4dde8c">${classifiedTotal}</div><div class="bsum-lbl">pts clasif.</div></div>
     <div class="bsum-item"><div class="bsum-val">${llaveOk}/${llaveTot}${cruceOk?` <span style="color:#6ab8f7;font-size:10px">(+${cruceOk} 🔀)</span>`:""}</div><div class="bsum-lbl">llaves ✓</div></div>
-    <div class="bsum-item"><div class="bsum-val">${partJugados}/32</div><div class="bsum-lbl">jugados</div></div>
+    <div class="bsum-item"><div class="bsum-val">${partJugados}/${activeElimMidsTotal}</div><div class="bsum-lbl">jugados</div></div>
   </div>`;
 
   // Leyenda
@@ -64,7 +76,7 @@ function renderBracket(){
     <span>⭐ = puntos de clasificado (en vivo, al cerrar la fase previa)</span>
   </div>`;
 
-  ELIM_ROUNDS.forEach(round=>{
+  getActiveElimRounds().forEach(round=>{
     html+=`<div class="brkt-round"><div class="brkt-round-title">${round.lbl}</div>`;
     round.ids.forEach(pid=>{
       // PREDICCIÓN del participante — siempre lo que ÉL puso

@@ -2658,7 +2658,18 @@ function buildEvolucionTendenciaCardHtml(t){
     </div>`;
 }
 
-function buildEvolucionJornadaCardHtml(name,days){
+// v3.9 — BUG REPORTADO: la suma de las barras no coincidía con el total
+// real del Ranking (confundía "¿cuáles puntos está contando?"). Motivo:
+// groupSnapshotsByJornada() (scoring.js) solo agrupaba puntos de
+// partido (Básicos/Eliminatoria) + el bono de MVP (el único bono con
+// fecha exacta, ver la nota allá) -- Avanzado (campeón/goleador/etc.,
+// solo se sabe al cerrar el torneo) y el resto de los bonos (Último
+// lugar/Racha/Batallas, sin una fecha limpia de partido) nunca entraban.
+// Ahora se recibe el total real (`total`, calcPts+calcAdv+calcElimPts+
+// calcBonos -- ver getDashStatsInfo()) y se muestra la diferencia como
+// una línea aparte, así la tarjeta SIEMPRE suma exactamente lo mismo que
+// el Ranking, sin inventarle una jornada falsa a un bono que no la tiene.
+function buildEvolucionJornadaCardHtml(name,days,total){
   if(!days.length){
     return `
       <div class="card">
@@ -2670,11 +2681,17 @@ function buildEvolucionJornadaCardHtml(name,days){
     label:`J${i+1}`, title:fmtShortDay(d.ts),
     value: (d.endCum[name]||0)-(d.startCum[name]||0)
   }));
+  const sumDias = points.reduce((s,p)=>s+p.value,0);
+  const extra = (total||0)-sumDias;
+  const extraHtml = extra>0
+    ? `<div class="muted" style="font-size:11.5px;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--qb-border)">+ ${extra} pts de Avanzado/bonos que no se asignan a una jornada puntual (campeón, goleador, racha, último lugar, batallas...)</div>`
+    : '';
   return `
     <div class="card">
       <div class="card-title">🎖️ Puntos por Jornada</div>
       <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuánto sumaste cada fecha del Mundial.</div>
       ${buildSvgBarChart(points)}
+      ${extraHtml}
     </div>`;
 }
 
@@ -2733,7 +2750,7 @@ function buildDashEvolucionHtml(p){
     </div>
     ${buildEvolucionRankingCardHtml(name,days,rankNow,outOf)}
     ${buildEvolucionTendenciaCardHtml(tendencia)}
-    ${buildEvolucionJornadaCardHtml(name,days)}
+    ${buildEvolucionJornadaCardHtml(name,days,stats.total)}
     ${buildEvolucionLogrosCardHtml(logros)}
   `;
 }

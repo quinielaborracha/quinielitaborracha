@@ -911,18 +911,49 @@ function buildHistoricalSnapshots(events){
 // Para cada jornada guarda la posición de cierre del día (ranks del
 // último partido de ese día) y el puntaje acumulado al empezar y al
 // terminar el día (para poder calcular "cuánto sumó ESE día" restando).
+//
+// v3.9 — BUG REPORTADO: "Puntos por Jornada" (registro.js) no sumaba lo
+// mismo que el total real del Ranking -- solo entraban acá los puntos de
+// partido (Básicos/Eliminatoria), nunca los bonos (calcBonos). De los 5
+// bonos, el de MVP (calcMvpBonos/computeMvpAwardsByDay) es el ÚNICO que
+// SÍ tiene una fecha exacta y sin ambigüedad: se otorga a quien sacó más
+// puntos ESE día calendario puntual -- los otros 4 no (Último lugar se
+// define al cerrar una fase entera, Batallas/Rumble llevan la fecha en
+// que el admin cerró el duelo -- no necesariamente la de los partidos que
+// lo decidieron, y Racha no registra en qué partido se alcanzó cada
+// hito). Por eso, y solo por eso, el bono de MVP se suma acá, día por
+// día, con el MISMO criterio exacto que ya usa computeMvpAwardsByDay()
+// (mismo PL completo, mismo reparto si hay empate, mismo umbral
+// bestPts>0) -- así el total que se ve sumando todas las jornadas
+// coincide con calcMvpBonos(name), y buildEvolucionJornadaCardHtml()
+// (registro.js) puede mostrar aparte, como residuo, lo que todavía no
+// tiene una jornada a la que atribuirse.
 function groupSnapshotsByJornada(snapshots){
   const order=[];const byDay={};
   snapshots.forEach(s=>{
     if(!byDay[s.dayKey]){byDay[s.dayKey]=[];order.push(s.dayKey);}
     byDay[s.dayKey].push(s);
   });
-  const days=[];let prevCum=null;
+  const mvpCfg=DB.configGlobal?.reglas?.mvp;
+  const mvpPts=(mvpCfg&&mvpCfg.activo)?(Number(mvpCfg.pts)||0):0;
+
+  const days=[];let prevCum=null;const mvpAcum={};
   order.forEach(dayKey=>{
     const list=byDay[dayKey];
     const last=list[list.length-1];
-    days.push({ts:last.ts,ranks:last.ranks,startCum:prevCum||{},endCum:last.cum});
-    prevCum=last.cum;
+    if(mvpPts>0){
+      let bestPts=-Infinity,best=[];
+      PL.forEach(p=>{
+        const pts=calcPtsForDay(p,dayKey);
+        if(pts>bestPts){bestPts=pts;best=[p];}
+        else if(pts===bestPts)best.push(p);
+      });
+      if(bestPts>0)best.forEach(p=>{mvpAcum[p]=(mvpAcum[p]||0)+mvpPts;});
+    }
+    const endCum={...last.cum};
+    Object.keys(mvpAcum).forEach(p=>{endCum[p]=(endCum[p]||0)+mvpAcum[p];});
+    days.push({ts:last.ts,ranks:last.ranks,startCum:prevCum||{},endCum});
+    prevCum=endCum;
   });
   return days;
 }
