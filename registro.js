@@ -2706,9 +2706,9 @@ function buildEvolucionJornadaCardHtml(name,days,total){
   return `
     <div class="card">
       <div class="card-title">🎖️ Puntos por Jornada</div>
-      <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuánto sumaste cada fecha del Mundial.</div>
-      ${resumenHtml}
+      <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuántos puntos básicos sumaste en cada fecha.</div>
       ${buildSvgBarChart(points)}
+      ${resumenHtml}
     </div>`;
 }
 
@@ -2728,8 +2728,11 @@ function buildCompositionBarHtml(parts,total){
     `${esc(p.label)} <b style="color:var(--qb-text)">${p.value}</b></span>`
   ).join('');
   return `
-    <div style="margin-bottom:.75rem">
-      <div style="text-align:center;font-size:22px;font-weight:800;letter-spacing:-.01em">${total}<span style="font-size:12px;font-weight:600;color:var(--qb-muted);margin-left:3px">pts</span></div>
+    <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--qb-border)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:12.5px;color:var(--qb-muted2);font-weight:600">Puntos totales</span>
+        <span style="font-size:22px;font-weight:800;letter-spacing:-.01em">${total}<span style="font-size:12px;font-weight:600;color:var(--qb-muted);margin-left:3px">pts</span></span>
+      </div>
       <div style="height:16px;border-radius:8px;background:var(--qb-surface2);display:flex;gap:2px;overflow:hidden;margin:.5rem 0">${barHtml}</div>
       <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-size:12px;color:var(--qb-muted2)">${legendHtml}</div>
       <div class="muted" style="text-align:center;font-size:10.5px;margin-top:.35rem">Avanzado/bonos: campeón, goleador, racha, último lugar... (sin partido puntual)</div>
