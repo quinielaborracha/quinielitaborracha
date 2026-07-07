@@ -111,6 +111,17 @@ check("País campeón y país de residencia IGUALES -> no se duplica (pool = sol
 check("País de residencia sin ninguna entrada en AVATAR_MAP (ej. Suiza) -> esa parte del pool queda vacía, sin romper",
   JSON.stringify(W.unlockedAvatarPool("Brasil","Suiza",9)) === JSON.stringify(brasil));
 
+// v4.0.1 — BUG REPORTADO: el automático podía repetirse como premio
+// (ej. Josué tenía el mismo Ronaldinho 2 veces para elegir). El 4to
+// parámetro (autoFile) lo excluye del pool ANTES de recortar por
+// victorias.
+check("Con autoFile = brasil[0] -> el pool salta ese y arranca en brasil[1] (nunca lo repite)",
+  JSON.stringify(W.unlockedAvatarPool("Brasil","Argentina",2,brasil[0])) === JSON.stringify([brasil[1],brasil[2]]));
+check("Con autoFile en el MEDIO del array (brasil[1]) -> el pool lo salta, no dos brasil[0]",
+  JSON.stringify(W.unlockedAvatarPool("Brasil","Argentina",2,brasil[1])) === JSON.stringify([brasil[0],brasil[2]]));
+check("autoFile nunca aparece en el pool sea cual sea la cantidad de victorias",
+  !W.unlockedAvatarPool("Brasil","Argentina",9,brasil[1]).includes(brasil[1]));
+
 /* ════════════════════════════════════════════════════════════════
    PARTE 2 — effectiveAvatarFile(): prioridad a la elección propia SI
    sigue siendo válida contra el pool actual; si no, automático.
@@ -209,23 +220,35 @@ W.rebuildDynamicData();
 T.renderParticipantDashboard("pE");
 const grid = W.document.getElementById("avatar-picker-grid");
 check("Con 2 victorias, aparece la grilla del selector", !!grid);
-check("La grilla tiene 3 opciones: 'Automático' + las 2 primeras variantes de Brasil desbloqueadas",
+
+// v4.0.1 — el automático de Elena (crc32("Elena") % 3) puede ser
+// CUALQUIERA de las 3 variantes de Brasil -- el pool tiene que EXCLUIRLO,
+// así que el resultado esperado se calcula, no se asume un índice fijo.
+const autoElena = W.pickAvatarFile("Brasil","Elena");
+const poolEsperado = brasil.filter(f=>f!==autoElena).slice(0,2);
+check("Fixture: con 2 victorias entran exactamente 2 avatares (de los 2 restantes tras excluir el automático)",
+  poolEsperado.length === 2);
+check("La grilla tiene 3 opciones: 'Automático' + los 2 avatares del pool esperado",
   grid.querySelectorAll("[data-avatar-file]").length === 3);
 check("La opción 'Automático' tiene data-avatar-file vacío",
   grid.querySelector('[data-avatar-file=""]') !== null);
-check("La 2da variante de Brasil (desbloqueada con 2 victorias) está entre las opciones",
-  !!grid.querySelector(`[data-avatar-file="${brasil[1]}"]`));
-check("La 3ra variante de Brasil (todavía NO desbloqueada, hacen falta 3 victorias) NO está entre las opciones",
-  !grid.querySelector(`[data-avatar-file="${brasil[2]}"]`));
+check("v4.0.1: el automático de Elena NO aparece una 2da vez como premio destrabado (bug reportado: Ronaldinho x2)",
+  !grid.querySelector(`[data-avatar-file="${autoElena}"]`));
+check("Los 2 avatares del pool esperado SÍ están entre las opciones",
+  poolEsperado.every(f=>!!grid.querySelector(`[data-avatar-file="${f}"]`)));
+const noDesbloqueadoTodavia = brasil.find(f=>f!==autoElena && !poolEsperado.includes(f));
+check("La variante restante (todavía no desbloqueada, hace falta 1 victoria más) NO está entre las opciones",
+  !noDesbloqueadoTodavia || !grid.querySelector(`[data-avatar-file="${noDesbloqueadoTodavia}"]`));
 
-grid.querySelector(`[data-avatar-file="${brasil[1]}"]`).click();
+const elegido = poolEsperado[0];
+grid.querySelector(`[data-avatar-file="${elegido}"]`).click();
 const elenaTrasClick = T.DB.participants.find(p=>p.name==="Elena");
-check("Click en la 2da variante -> avatarElegido queda guardado en el participante",
-  elenaTrasClick.avatarElegido === brasil[1]);
+check("Click en un avatar del pool -> avatarElegido queda guardado en el participante",
+  elenaTrasClick.avatarElegido === elegido);
 
 const gridTrasClick = W.document.getElementById("avatar-picker-grid");
 check("Tras el click, avatarOfChampion('Elena') ya refleja la elección nueva",
-  W.avatarOfChampion("Elena") === brasil[1]);
+  W.avatarOfChampion("Elena") === elegido);
 
 gridTrasClick.querySelector('[data-avatar-file=""]').click();
 check("Click en 'Automático' -> vuelve a avatarElegido:'' (no queda ninguna elección propia)",

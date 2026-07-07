@@ -91,6 +91,9 @@ function load(){
       if(p.battleHistory)S.battleHistory=p.battleHistory;
       if(p.changeLog)S.changeLog=p.changeLog;
       if(p.integrityChecks)S.integrityChecks=p.integrityChecks;
+      // v4.0.1 — ver la nota grande junto a buildStatePayload(): faltaban acá.
+      if(p.rumble!==undefined)S.rumble=p.rumble;
+      if(p.rumbleHistory)S.rumbleHistory=p.rumbleHistory;
       let corrupted=0;
       Object.keys(S.scores).forEach(mid=>{
         const sc=S.scores[mid];
@@ -110,12 +113,22 @@ function load(){
   }catch(e){console.error("Error al cargar:",e);}
 }
 
+// v4.0.1 — BUG REPORTADO: el Royal Rumble activo desaparecía cada vez
+// que alguien recargaba la página (típicamente después de un deploy,
+// que es cuando la gente recarga). Causa real: S.rumble/S.rumbleHistory
+// (Fase 4, app-batallas.js) nunca se agregaron a esta lista cuando se
+// escribió esta función -- vivían SOLO en memoria, nunca viajaban a
+// localStorage ni a Firestore, así que cualquier recarga (no solo un
+// deploy) los perdía. Mismo patrón que ya sufrió S.hiddenPL en v3.8.1
+// (ver la nota en load(), más abajo en este archivo): un campo nuevo que
+// se olvidó de sumar a este allowlist explícito.
+//
 // Construye el payload serializable del estado completo (usado para localStorage y Firestore)
 function buildStatePayload(){
   const hiddenPLobj={};
   if(S.hiddenPL instanceof Set)S.hiddenPL.forEach(n=>{hiddenPLobj[n]=true;});
   else Object.assign(hiddenPLobj,S.hiddenPL||{});
-  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory,changeLog:S.changeLog,integrityChecks:S.integrityChecks,realElim:S.realElim};
+  return{scores:S.scores,checksums:S.checksums,elimScores:S.elimScores,elimTeams:S.elimTeams,scorers:S.scorers,matchTimes:S.matchTimes,elimTimes:S.elimTimes,bonos:S.bonos,tieBreakers:S.tieBreakers,autoClose:S.autoClose,hiddenPL:hiddenPLobj,snapshots:S.snapshots,reality:S.reality,adv:S.adv,battles:S.battles,battleHistory:S.battleHistory,changeLog:S.changeLog,integrityChecks:S.integrityChecks,realElim:S.realElim,rumble:S.rumble,rumbleHistory:S.rumbleHistory};
 }
 
 // v1.5.1 — Contraparte de buildStatePayload(): aplica un payload completo
@@ -149,6 +162,9 @@ function applyStatePayload(p){
   S.changeLog=p.changeLog||[];
   S.integrityChecks=p.integrityChecks||[];
   S.realElim=p.realElim||{};
+  // v4.0.1 — ver la nota grande junto a buildStatePayload(): faltaban acá.
+  S.rumble=p.rumble!==undefined?p.rumble:null;
+  S.rumbleHistory=p.rumbleHistory||[];
   // v3.4 — un backup restaurado reemplaza el estado entero: la línea de
   // base contra la que se compara el próximo save() (ver más abajo) queda
   // obsoleta, así que se resetea para que se re-establezca sola contra ESTE
@@ -371,6 +387,13 @@ function applyRemoteState(p){
   if(p.changeLog)S.changeLog=p.changeLog;
   if(p.integrityChecks)S.integrityChecks=p.integrityChecks;
   S.realElim=p.realElim||{};
+  // v4.0.1 — ver la nota grande junto a buildStatePayload(): faltaban acá.
+  // rumble usa !==undefined (no truthy) porque `null` es un valor válido
+  // y significativo (ningún Rumble activo) que sí tiene que propagarse --
+  // con un chequeo truthy, un resetRumble() remoto nunca limpiaría el
+  // Rumble activo que otra sesión todavía tuviera en pantalla.
+  if(p.rumble!==undefined)S.rumble=p.rumble;
+  if(p.rumbleHistory)S.rumbleHistory=p.rumbleHistory;
   // v3.4 — este snapshot es la verdad confirmada por el servidor (llega
   // acá solo en la primera carga o ante un cambio remoto genuino de
   // otra sesión, ver el filtro de eco en wireFirestoreSync()) -- se

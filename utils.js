@@ -144,11 +144,20 @@ function avatarImg(file,s=54){
 // las que caben en el pool no destraba nada más por ahora (v1 simple,
 // acordada con el usuario -- una versión futura podría seguir hacia el
 // resto de la galería).
-function unlockedAvatarPool(champ,country,wins){
+//
+// v4.0.1 — BUG REPORTADO: el automático (pickAvatarFile, elegido por
+// crc32(nombre) -- no necesariamente el primero del array) podía volver
+// a aparecer COMO PREMIO, mostrando el mismo avatar 2 veces en la grilla
+// (ej. Josué tenía Ronaldinho como automático Y como 1er premio
+// destrabado). autoFile se excluye del pool ANTES de recortar por
+// victorias, para que ganar una batalla siempre destrabe algo
+// REALMENTE nuevo, nunca una repetición de lo que ya tenía por default.
+function unlockedAvatarPool(champ,country,wins,autoFile){
   if(typeof AVATAR_MAP==='undefined')return[];
   const champOpts=(champ&&AVATAR_MAP[champ])||[];
   const countryOpts=(country&&country!==champ&&AVATAR_MAP[country])||[];
-  return[...champOpts,...countryOpts].slice(0,Math.max(0,wins|0));
+  const pool=[...champOpts,...countryOpts].filter(f=>f&&f!==autoFile);
+  return pool.slice(0,Math.max(0,wins|0));
 }
 
 // Avatar EFECTIVO a mostrar: si el participante eligió uno de los ya
@@ -160,9 +169,10 @@ function unlockedAvatarPool(champ,country,wins){
 // una elección que ya no le entra en el pool se cae sola en el próximo
 // render, sin ninguna lógica de "revocar" aparte.
 function effectiveAvatarFile(champ,p,wins){
+  const auto=pickAvatarFile(champ,p&&p.name);
   const elegido=p&&p.avatarElegido;
-  if(elegido&&unlockedAvatarPool(champ,p.country,wins).includes(elegido))return elegido;
-  return pickAvatarFile(champ,p&&p.name);
+  if(elegido&&unlockedAvatarPool(champ,p&&p.country,wins,auto).includes(elegido))return elegido;
+  return auto;
 }
 
 // v1.1 — Ciudad + país combinados para mostrar bajo el nombre del

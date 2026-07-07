@@ -2424,7 +2424,7 @@ function renderParticipantDashboard(pid){
     renderParticipantDashboard(pid);
   });
   // v4.0 — Vitrina de Avatares: evento delegado (no uno por miniatura) --
-  // ver buildAvatarPickerCardHtml() arriba. "" = volver al automático.
+  // ver buildAvatarPickerInnerHtml() arriba. "" = volver al automático.
   document.getElementById('avatar-picker-grid')?.addEventListener('click', e=>{
     const b = e.target.closest('[data-avatar-file]'); if(!b) return;
     p.avatarElegido = b.dataset.avatarFile || '';
@@ -2487,15 +2487,35 @@ function getMoraleTier(pos, outOf){
   const topCut = Math.max(1, Math.round(outOf*0.25));
   return pos<=topCut ? 'bien' : 'regular';
 }
-function buildMoraleCardHtml(pos, outOf){
+function buildMoraleInnerHtml(pos, outOf){
   const tier = getMoraleTier(pos, outOf);
   if(!tier) return '';
   const opts = MORALE_COPYS[tier];
   const pick = opts[Math.floor(Math.random()*opts.length)];
   return `
-    <div class="card center" style="padding:1rem 1rem .9rem">
-      <div style="font-size:26px;margin-bottom:.3rem">${pick.emoji}</div>
-      <div style="font-size:13px;color:var(--qb-muted2);line-height:1.55;font-weight:600">${pick.html}</div>
+    <div style="font-size:26px;margin-bottom:.3rem">${pick.emoji}</div>
+    <div style="font-size:13px;color:var(--qb-muted2);line-height:1.55;font-weight:600">${pick.html}</div>`;
+}
+
+// v4.0.1 — El mensaje de bienvenida ("Tu bola de cristal...") y la
+// Vitrina de Avatares ahora comparten UNA sola card, en 2 columnas
+// (contenido de cada una alineado a la izquierda, no centrado como
+// antes) -- pedido explícito del usuario para darle más protagonismo a
+// la Vitrina sin agregar una card más a la lista. Si todavía no hay
+// mensaje de bienvenida (getMoraleTier() da null -- ranking sin
+// suficientes datos aún), se muestra solo la Vitrina, a una columna: la
+// Vitrina SIEMPRE tiene contenido (aunque sea el teaser de "todavía no
+// ganaste nada"), el mensaje no.
+function buildMoraleAvatarCardHtml(p, pos, outOf){
+  const moraleHtml = buildMoraleInnerHtml(pos, outOf);
+  const avatarHtml = buildAvatarPickerInnerHtml(p);
+  if(!moraleHtml) return `<div class="card">${avatarHtml}</div>`;
+  return `
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start;text-align:left">
+        <div>${moraleHtml}</div>
+        <div>${avatarHtml}</div>
+      </div>
     </div>`;
 }
 
@@ -2507,7 +2527,7 @@ function buildDashPerfilHtml(p){
 
   const stats = getDashStatsInfo(p);
   const posTxt = stats.pos ? `#${stats.pos} de ${stats.outOf}` : '—';
-  const moraleHtml = buildMoraleCardHtml(stats.pos, stats.outOf);
+  const moraleAvatarHtml = buildMoraleAvatarCardHtml(p, stats.pos, stats.outOf);
 
   const next = getNextPendingMatchInfo(p);
   const nextBody = next
@@ -2516,7 +2536,7 @@ function buildDashPerfilHtml(p){
     : `<div class="muted" style="padding:.5rem 0">No quedan más partidos pendientes en el calendario.</div>`;
 
   return `
-    ${moraleHtml}
+    ${moraleAvatarHtml}
     <div class="card">
       <div class="card-title">🏅 Tu quiniela <span class="badge badge-green">${stats.total} pts</span></div>
       <div class="status-row"><span>Posición en el ranking</span><span class="ro-text">${esc(posTxt)}</span></div>
@@ -2540,8 +2560,6 @@ function buildDashPerfilHtml(p){
         : ''}
     </div>
 
-    ${buildAvatarPickerCardHtml(p)}
-
     <div class="rg-btn-row" style="margin-top:.75rem">
       <button class="rg-btn rg-btn-gold" id="dash_pdf_btn">📄 Descargar mi quiniela (PDF)</button>
     </div>
@@ -2563,28 +2581,26 @@ function buildDashPerfilHtml(p){
 // coincidir con lo que el participante termina viendo en todos lados.
 // Wiring del click en renderParticipantDashboard() (evento delegado
 // sobre #avatar-picker-grid, mismo patrón que el resto de los botones
-// del dashboard).
-function buildAvatarPickerCardHtml(p){
+// del dashboard). v4.0.1 — ya NO trae su propio wrapper <div class="card">:
+// ahora comparte card con el mensaje de bienvenida (ver
+// buildMoraleAvatarCardHtml() más arriba), que decide el wrapper.
+function buildAvatarPickerInnerHtml(p){
   const spec = (typeof getDynamicSpec==='function') ? getDynamicSpec(p.name) : null;
   const champVal = spec && spec.champ ? spec.champ : '';
   const wins = totalBattleWins(p.name);
   if(!wins){
     return `
-    <div class="card">
       <div class="card-title">🎭 Vitrina de Avatares</div>
-      <div class="muted" style="font-size:12.5px">Ganá tu primera Batalla (1v1 o Royal Rumble) para destrabar avatares alternativos -- con prioridad a tu país campeón y a tu país. Cada victoria te da uno más.</div>
-    </div>`;
+      <div class="muted" style="font-size:12.5px">Ganá tu primera Batalla (1v1 o Royal Rumble) para destrabar avatares alternativos -- con prioridad a tu país campeón y a tu país. Cada victoria te da uno más.</div>`;
   }
-  const pool = unlockedAvatarPool(champVal,p.country,wins);
+  const autoFile = pickAvatarFile(champVal,p.name);
+  const pool = unlockedAvatarPool(champVal,p.country,wins,autoFile);
   const winsTxt = `${wins} victoria${wins===1?'':'s'}`;
   if(!pool.length){
     return `
-    <div class="card">
       <div class="card-title">🎭 Vitrina de Avatares <span class="badge badge-green">${winsTxt}</span></div>
-      <div class="muted" style="font-size:12.5px">Todavía no hay avatares cargados para tu país campeón ni para tu país -- seguí ganando, se van sumando solos apenas haya.</div>
-    </div>`;
+      <div class="muted" style="font-size:12.5px">Todavía no hay más avatares para destrabar de tu país campeón ni de tu país -- seguí ganando, se van sumando solos apenas haya alguno nuevo.</div>`;
   }
-  const autoFile = pickAvatarFile(champVal,p.name);
   const actual = p.avatarElegido && pool.includes(p.avatarElegido) ? p.avatarElegido : '';
   const opt = (file,title)=>{
     const on = actual===file;
@@ -2592,11 +2608,9 @@ function buildAvatarPickerCardHtml(p){
   };
   const itemsHtml = [opt('','Automático (tu país campeón)'), ...pool.map(f=>opt(f,'Elegir este avatar'))].join('');
   return `
-    <div class="card">
       <div class="card-title">🎭 Vitrina de Avatares <span class="badge badge-green">${winsTxt}</span></div>
       <div class="muted" style="font-size:12.5px;margin-bottom:.5rem">Elegí cuál mostrar en vez del automático.</div>
-      <div id="avatar-picker-grid" style="display:flex;flex-wrap:wrap;gap:10px">${itemsHtml}</div>
-    </div>`;
+      <div id="avatar-picker-grid" style="display:flex;flex-wrap:wrap;gap:10px">${itemsHtml}</div>`;
 }
 
 function buildDashComingSoonHtml(label){

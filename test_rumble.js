@@ -59,6 +59,7 @@ bridge.textContent = `
     DB, S, rebuildDynamicData, calcBattlePts, calcAdv, calcRumblePts,
     startRumble, resetRumble, renderRumblePanel, getVentanaRumble,
     getParticipantesSeleccionadosRumble, getLigaDe,
+    buildStatePayload, load, applyRemoteState, applyStatePayload, save,
   };
 `;
 window.document.body.appendChild(bridge);
@@ -202,6 +203,53 @@ T.startRumble();
 T.resetRumble();
 check("Con 2 participantes empatados en puntos, el ganador guardado es 'Empate'",
   T.S.rumbleHistory[0].winner === "Empate");
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 5 (v4.0.1) — BUG REPORTADO: el Royal Rumble activo se perdía en
+   cada recarga de página. Causa real: S.rumble/S.rumbleHistory nunca se
+   agregaron a buildStatePayload()/load()/applyRemoteState()/
+   applyStatePayload() (app-live-sync.js) -- vivían SOLO en memoria, así
+   que cualquier recarga (no hacía falta que fuera un deploy, cualquier
+   F5 alcanzaba) los perdía. Verifica el round-trip completo.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── v4.0.1: persistencia del Royal Rumble (bug reportado) ──");
+
+const payloadKeys = Object.keys(T.buildStatePayload());
+check("buildStatePayload() incluye rumble y rumbleHistory",
+  payloadKeys.includes("rumble") && payloadKeys.includes("rumbleHistory"));
+
+T.S.rumble = {participantes:["Ana","Beto"], name:"Test", ventanaModo:"dias", ventanaValor:1, groupMids:[], elimMids:[], startedAt:Date.now()};
+T.S.rumbleHistory = [{name:"viejo", winner:"Ana", puntos:{Ana:5,Beto:2}, date:"d"}];
+T.save();
+
+// Simula una recarga real de página: S vuelve a sus defaults (sin
+// rumble, como declara app-state.js), y load() tiene que traerlo de
+// vuelta desde localStorage -- lo mismo que pasaría en el navegador.
+T.S.rumble = undefined;
+T.S.rumbleHistory = undefined;
+T.load();
+check("Tras 'recargar' (load() desde localStorage), S.rumble volvió con sus 2 participantes",
+  !!T.S.rumble && T.S.rumble.participantes.length === 2 && T.S.rumble.name === "Test");
+check("S.rumbleHistory también se restauró", T.S.rumbleHistory.length === 1 && T.S.rumbleHistory[0].winner === "Ana");
+
+// applyRemoteState(): sincronización en vivo desde otra sesión.
+T.S.rumble = null; T.S.rumbleHistory = [];
+T.applyRemoteState({rumble:{participantes:["Carla"],name:"Remoto",ventanaModo:"dias",ventanaValor:1,groupMids:[],elimMids:[],startedAt:Date.now()}, rumbleHistory:[{name:"r",winner:"Carla",puntos:{Carla:1},date:"d"}]});
+check("applyRemoteState() también propaga un Rumble activo iniciado en OTRA sesión",
+  !!T.S.rumble && T.S.rumble.name === "Remoto");
+
+T.applyRemoteState({rumble:null, rumbleHistory:T.S.rumbleHistory});
+check("applyRemoteState() con rumble:null limpia el Rumble activo (ej. otro admin lo cerró) -- usa !==undefined, no un chequeo truthy que lo ignoraría",
+  T.S.rumble === null);
+
+// applyStatePayload(): restaurar un backup íntegro (reemplazo total).
+T.applyStatePayload({rumble:{participantes:["Diego"],name:"Backup",ventanaModo:"dias",ventanaValor:1,groupMids:[],elimMids:[],startedAt:1}, rumbleHistory:[]});
+check("applyStatePayload() (restaurar backup) también trae de vuelta un Rumble activo",
+  !!T.S.rumble && T.S.rumble.name === "Backup");
+
+T.applyStatePayload({});
+check("Un backup SIN rumble (formato viejo, de antes de este fix) resetea a null/[] en vez de romper",
+  T.S.rumble === null && Array.isArray(T.S.rumbleHistory) && T.S.rumbleHistory.length === 0);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);
