@@ -954,7 +954,7 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 /* Póster de PDF — global a propósito (#pdfPoster vive fuera de #t-registro) */
 #pdfPoster{position:fixed;left:-9999px;top:0;width:1650px;min-height:1275px;background:#FFFFFF;color:#0F1120;font-family:var(--ff-body);padding:0}
 .pp-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;background:linear-gradient(135deg,#8a0010 0%,#b0001a 50%,#c8001a 100%);color:#fff;padding:20px 30px}
-.pp-avatar{width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid #FFD700;background:#fff}
+.pp-avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid #FFD700;background:#fff}
 .pp-title{font-family:var(--ff-display);font-weight:900;font-size:25px;letter-spacing:.03em;text-transform:uppercase}
 .pp-subtitle{font-family:var(--ff-display);font-weight:700;font-size:17px;color:#FFD700;text-transform:uppercase;margin-top:3px}
 .pp-meta-grid{display:grid;grid-template-columns:repeat(3,auto);gap:5px 26px;flex-shrink:0}

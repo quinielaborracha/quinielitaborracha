@@ -164,7 +164,7 @@ function renderStatCards(){
   <div style="border:1px solid var(--qb-border);border-radius:14px;overflow:hidden;background:var(--qb-surface)">
     <!-- Header card -->
     <div style="background:linear-gradient(135deg,var(--qb-surface2),var(--qb-surface3));padding:1rem;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--qb-border)">
-      <div style="font-size:36px">${m.champAvatar?avatarImg(m.champAvatar,67):flagEmoji(m.champFlag,36)}</div>
+      <div style="font-size:48px">${m.champAvatar?avatarImg(m.champAvatar,90):flagEmoji(m.champFlag,48)}</div>
       <div style="flex:1">
         <div style="font-family:var(--ff-display);font-size:18px;font-weight:900;color:var(--qb-text);text-transform:uppercase;letter-spacing:.03em">${esc(name)}</div>
         <div style="font-size:11px;color:var(--qb-muted);margin-top:2px">${esc(cityCountry(m))}</div>

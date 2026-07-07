@@ -128,7 +128,7 @@ function pickAvatarFile(champ,name){
   return opts[parseInt(crc32(String(name||'')),16)%opts.length];
 }
 
-function avatarImg(file,s=40){
+function avatarImg(file,s=54){
   if(!file)return"";
   return`<img class="qb-avatar" src="${AVATAR_DIR}${encodeURIComponent(file)}" width="${s}" height="${s}" alt="" loading="lazy" style="width:${s}px;height:${s}px">`;
 }

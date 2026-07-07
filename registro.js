@@ -2327,7 +2327,7 @@ function renderParticipantDashboard(pid){
   const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
   const champAvatarFileDash = pickAvatarFile(champValDash,p.name);
   const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-         ${avatarImg(champAvatarFileDash, 62)}
+         ${avatarImg(champAvatarFileDash, 84)}
          <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
          ${postularBtn}
          ${buildWhatsappBtnHtml()}
