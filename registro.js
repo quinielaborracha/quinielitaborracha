@@ -2666,21 +2666,19 @@ function buildEvolucionTendenciaCardHtml(t){
 // solo se sabe al cerrar el torneo) y el resto de los bonos (Último
 // lugar/Racha/Batallas, sin una fecha limpia de partido) nunca entraban.
 //
-// v3.9.1 — a pedido del usuario, en vez de mostrar ese residuo en una
-// línea aparte (dejaba el gráfico "incompleto" a la vista), se sale de
-// una vez: el residuo se ACUMULA en la barra de la jornada MÁS RECIENTE
-// (no en una jornada vieja al azar) y se marca con un asterisco + un
-// disclaimer corto. A propósito NO se reparte en la jornada "correcta"
-// de cada bono (ej. Racha en el partido exacto que completó el hito):
-// Goleador/País/Batallas pueden corregirse más adelante en el torneo (el
-// admin actualiza el goleador, cierra una batalla días después de
-// jugada, etc.) -- si les fijáramos una fecha ya jugada, esa barra VIEJA
-// cambiaría de valor sola cada vez que se corrija algo, lo cual es más
-// confuso que el residuo. Poniéndolo siempre en la jornada más reciente,
-// lo único que se mueve con el tiempo es la barra de "hoy" (que de
-// cualquier forma todavía no es definitiva), nunca una barra de semanas
-// atrás -- mismo criterio de estabilidad que ya acepta el gráfico
-// hermano de Evolución en el Ranking (ver su nota en scoring.js).
+// v3.9.1 — BUG REPORTADO (auto-detectado apenas se probó en la app real):
+// la primera versión de este fix metía el residuo entero DENTRO de la
+// barra de la jornada más reciente. Con Avanzado activo (campeón +
+// subcampeón + tercer lugar + goleador + país, hasta ~70pts juntos) esa
+// barra se disparaba muy por encima de cualquier jornada real -- y como
+// buildSvgBarChart() escala la altura de TODAS las barras en proporción
+// a la más alta (maxVal), una sola barra gigante aplastaba a todas las
+// demás, dejando el gráfico entero ilegible ("una locura" -- reporte
+// textual del usuario). v3.9.2 revierte eso: las barras vuelven a
+// mostrar SOLO lo que de verdad pasó ese día (escala sana), y el residuo
+// se muestra aparte, en un resumen bien visible (no un footnote chico)
+// arriba del gráfico que deja la cuenta completa a la vista: suma de
+// jornadas + bonos sin fecha = total del Ranking.
 function buildEvolucionJornadaCardHtml(name,days,total){
   if(!days.length){
     return `
@@ -2695,20 +2693,15 @@ function buildEvolucionJornadaCardHtml(name,days,total){
   }));
   const sumDias = points.reduce((s,p)=>s+p.value,0);
   const extra = (total||0)-sumDias;
-  let disclaimer = '';
-  if(extra>0){
-    const last = points[points.length-1];
-    last.value += extra;
-    last.label += '*';
-    last.title += ` (incluye ${extra} pts de Avanzado/bonos sin fecha propia)`;
-    disclaimer = `<div class="muted" style="font-size:11px;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--qb-border)">* La jornada más reciente incluye ${extra} pts de Avanzado/bonos (campeón, goleador, racha, último lugar, batallas...) que no tienen un partido puntual al que asignarse — se suman ahí para que el total siempre coincida con tu puntaje del Ranking. Si el admin corrige alguno de esos datos más adelante, esta barra puede ajustarse; las jornadas anteriores ya jugadas no cambian.</div>`;
-  }
+  const resumenHtml = extra>0
+    ? `<div class="ib" style="margin-bottom:.625rem">🧮 <b>${sumDias} pts</b> de jornadas jugadas + <b>${extra} pts</b> de Avanzado/bonos (campeón, goleador, racha, último lugar, batallas...) que no tienen un partido puntual al que asignarse = <b>${total} pts</b>, igual a tu puntaje del Ranking.</div>`
+    : '';
   return `
     <div class="card">
       <div class="card-title">🎖️ Puntos por Jornada</div>
       <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuánto sumaste cada fecha del Mundial.</div>
+      ${resumenHtml}
       ${buildSvgBarChart(points)}
-      ${disclaimer}
     </div>`;
 }
 

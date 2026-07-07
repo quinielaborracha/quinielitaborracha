@@ -126,11 +126,12 @@ check("El residuo calculado (total - suma de jornadas) es exactamente 6 -- el bo
 );
 
 const cardHtml = T.buildEvolucionJornadaCardHtml("Ana", days, stats.total);
-check("La tarjeta muestra el disclaimer con el monto correcto (6 pts) en la jornada más reciente", /incluye 6 pts de Avanzado/.test(cardHtml));
-check("El disclaimer aclara que las jornadas anteriores YA jugadas no cambian", /anteriores ya jugadas no cambian/.test(cardHtml));
-check("La barra de la Jornada 1 (vieja) SIGUE mostrando 15 -- el residuo NO se le pegó a ella", />15<\/text>/.test(cardHtml));
-check("La barra de la Jornada 2 (la más reciente) ahora muestra 21 (15 + los 6 pts de residuo)", />21<\/text>/.test(cardHtml));
-check("La etiqueta de la última jornada lleva el asterisco (J2*)", cardHtml.includes(">J2*<"));
+check("La tarjeta muestra el resumen con la cuenta completa (30 + 6 = 36)", /30 pts.*6 pts.*36 pts/s.test(cardHtml));
+check("La barra de la Jornada 1 SIGUE mostrando 15 -- el residuo no se le pega a ninguna barra", />15<\/text>/.test(cardHtml));
+check("La barra de la Jornada 2 TAMBIÉN sigue mostrando 15 (no 21) -- ya no se infla ninguna barra con el residuo",
+  cardHtml.match(/>15<\/text>/g)?.length === 2 && !cardHtml.includes(">21<")
+);
+check("Ninguna etiqueta de jornada lleva asterisco (ya no se marca ninguna barra)", !cardHtml.includes("*<"));
 
 /* ── Sin bonos activos (caso más común hoy): el residuo debe ser 0 y la
    línea de residuo no debe aparecer -- mismo comportamiento que antes
@@ -151,8 +152,7 @@ const days2 = W.groupSnapshotsByJornada(W.buildHistoricalSnapshots(events2));
 const sum2 = days2.reduce((s, d) => s + ((d.endCum["Ana"] || 0) - (d.startCum["Ana"] || 0)), 0);
 check("Sin bonos activos, la suma de jornadas YA coincide sola con el total (residuo 0)", sum2 === stats2.total);
 const cardHtml2 = T.buildEvolucionJornadaCardHtml("Ana", days2, stats2.total);
-check("Sin residuo, la tarjeta NO muestra ningún disclaimer de 'pts de Avanzado/bonos'", !cardHtml2.includes("pts de Avanzado"));
-check("Sin residuo, ninguna etiqueta de jornada lleva el asterisco", !cardHtml2.includes("*<"));
+check("Sin residuo, la tarjeta NO muestra ningún resumen de 'pts de Avanzado/bonos'", !cardHtml2.includes("pts de Avanzado"));
 
 console.log("\n=== RESULTADO FINAL:", allOk ? "TODOS LOS CASOS PASAN ✅" : "HAY FALLOS ❌", "===");
 process.exit(allOk ? 0 : 1);
