@@ -107,17 +107,26 @@ check("calcRumblePts() = calcBattlePts() (ya no se duplica Avanzado)",
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── startRumble() ──");
 
+// v3.14 — el sistema de Ligas dinámico necesita al menos 20 participantes
+// para que existan 2 ligas (ver ligaSizes() en app-batallas.js); con solo
+// 4 personas todas caerían en la única liga posible. Se agregan 16
+// "Filler" sin ninguna batalla jugada para completar el piso -- Campeon1
+// (única victoria real) queda en la liga de arriba, y NuevoA/NuevoB (sin
+// pelear nunca, insertados AL FINAL del grupo empatado en 0/0/0) caen en
+// la de abajo junto a la mayoría de los Filler.
+const FILLERS = Array.from({length:16}, (_,i)=>`Filler${i+1}`);
 T.DB.participants = [
-  {id:"g0", name:"Campeon1", city:"C", country:"P"}, // va a terminar en Champions
+  {id:"g0", name:"Campeon1", city:"C", country:"P"}, // va a terminar en la liga de arriba
+  ...FILLERS.map((n,i)=>({id:"f"+i, name:n, city:"C", country:"P"})),
+  {id:"n0", name:"NuevoA",   city:"C", country:"P"}, // nunca peleó -> liga de abajo
+  {id:"n1", name:"NuevoB",   city:"C", country:"P"}, // nunca peleó -> liga de abajo
   {id:"g1", name:"Rival1",   city:"C", country:"P"},
-  {id:"n0", name:"NuevoA",   city:"C", country:"P"}, // nunca peleó -> Premier
-  {id:"n1", name:"NuevoB",   city:"C", country:"P"}, // nunca peleó -> Premier
 ];
-T.DB.predictions = {g0:{}, g1:{}, n0:{}, n1:{}};
+T.DB.predictions = {}; T.DB.participants.forEach(p=>{ T.DB.predictions[p.id] = {}; });
 T.S.battleHistory = [{name:"h1", p1:"Campeon1", p2:"Rival1", winner:"Campeon1", date:"d"}];
 T.rebuildDynamicData();
 
-check("Campeon1 y NuevoA quedan en ligas DISTINTAS (champions vs premier) -- setup previo a probar que el Rumble las ignora",
+check("Campeon1 y NuevoA quedan en ligas DISTINTAS -- setup previo a probar que el Rumble las ignora",
   T.getLigaDe("Campeon1") !== T.getLigaDe("NuevoA"));
 
 let avisoPocos = false;

@@ -46,18 +46,70 @@ const BATTLE_AUTO_NAMES=["Batalla del día","Duelo de titanes","Choque de gigant
 let _editingHistIdx=null; // índice del registro de historial de batallas en edición (null = ninguno)
 
 // ══════════════════════════════════════════════════════════════
-// LIGAS DE BATALLAS (Fase 3, sistema estilo suizo) — v2.0
+// LIGAS DE BATALLAS (Fase 3, sistema estilo suizo) — v2.0; v3.14 tamaño
+// dinámico en vez de 3 ligas fijas
 // ══════════════════════════════════════════════════════════════
-// 3 grupos dinámicos (Champions/Premier/Serie B), recalculados en cada
-// render a partir de S.battleHistory -- no se persiste a qué liga
-// pertenece cada quien, se recalcula siempre desde cero (la misma idea
-// que ya usa getRank() con el ranking general: una sola fuente de verdad,
-// nunca puede desincronizarse).
-const LIGAS=[
+// Grupos dinámicos (cantidad y tamaño calculados de nuevo en cada
+// render), recalculados a partir de S.battleHistory + DB.participants --
+// no se persiste a qué liga pertenece cada quien, se recalcula siempre
+// desde cero (la misma idea que ya usa getRank() con el ranking general:
+// una sola fuente de verdad, nunca puede desincronizarse).
+//
+// v3.14 — Regla acordada con el usuario (reemplaza el viejo "Champions
+// tope 10 / Premier mitad del resto / Serie B el resto"): cada liga tiene
+// un PISO de 10 y un TECHO de 20 participantes.
+//   - Menos de 10 participantes en total → 1 sola liga (no da para
+//     repartir manteniendo el piso de 10).
+//   - 10 o más → K = floor(N/10) ligas -- el máximo K que mantiene el
+//     piso de 10 (con eso el techo de 20 nunca se pisa solo, ver la
+//     cuenta en el comentario de ligaSizes()). Los N participantes se
+//     reparten lo más parejo posible entre las K ligas (base =
+//     floor(N/K)); si sobra resto (N%K), ese resto se reparte de a 1
+//     arrancando por la liga MÁS BAJA (peor ranking), como pidió el
+//     usuario -- ej. 23 participantes/2 ligas = 11 arriba + 12 abajo.
+//   Ejemplos: 22 -> 2 ligas de 11. 23 -> 11 y 12. 29 -> siguen siendo 2
+//   ligas (14/15); recién con 30 aparece una 3ra liga (10/10/10).
+//
+// v3.14 — a propósito YA NO existe la excepción vieja de "quien nunca
+// peleó ninguna batalla arranca siempre en Premier": con ligas de tamaño
+// variable esa excepción no tiene un lugar fijo adonde apuntar. Ahora
+// quien nunca peleó entra al mismo orden general (0 wins/0 draws/0
+// losses, desempatado por su puntaje total de la quiniela, igual que
+// cualquier otro) y cae en la liga que le toque según ese orden -- en la
+// práctica, casi siempre hacia el fondo de la tabla, junto a los demás
+// que tampoco pelearon todavía.
+function ligaSizes(n){
+  if(n<=0)return[];
+  if(n<10)return[n];
+  const k=Math.floor(n/10);
+  const base=Math.floor(n/k);
+  const resto=n%k;
+  const sizes=Array(k).fill(base);
+  for(let i=0;i<resto;i++)sizes[k-1-i]++; // el resto va a las ligas más bajas primero
+  return sizes;
+}
+
+// Nombres "de fantasía" para las primeras 3 ligas (igual que siempre);
+// más allá de la 3ra (hacen falta 40+ participantes) usa un nombre
+// genérico -- no hay más nombres definidos y no vale la pena inventar
+// más para un caso que hoy no ocurre con el tamaño real del grupo (~27).
+const LIGA_NOMBRES_FANTASIA=[
   {key:"champions",label:"🏆 Champions League"},
   {key:"premier",label:"⚽ Premier League"},
   {key:"serieb",label:"🥉 Serie B"},
 ];
+function ligaMeta(k){
+  const out=[];
+  for(let i=0;i<k;i++)out.push(LIGA_NOMBRES_FANTASIA[i]||{key:`liga${i+1}`,label:`🎖️ Liga ${i+1}`});
+  return out;
+}
+// Metadata (key+label) de las ligas ACTUALES, en el mismo orden/cantidad
+// que arma getLigaGroups() -- separado de getLigaGroups() para que quien
+// solo necesita nombres (renderLigasPanel, los mensajes de error de
+// startBattle) no tenga que recalcular standings si no le hacen falta.
+function getLigasMeta(){
+  return ligaMeta(ligaSizes(getLigaStandings().length).length);
+}
 
 // Recuento de victorias/derrotas/EMPATES/partidos jugados por
 // participante, leído de S.battleHistory (el mismo array que ya llena
@@ -110,34 +162,27 @@ function getLigaStandings(){
   return rows;
 }
 
-// Reparte los standings en las 3 ligas. Criterio (default acordado, ver
-// brief de la Fase 3):
-//   - Tamaños: Champions = top 10 por victorias (de quienes YA jugaron al
-//     menos una batalla); Premier = la mitad de los restantes; Serie B =
-//     el resto.
-//   - Quien todavía NO jugó ninguna batalla (jugadas===0, ni ganó, ni
-//     perdió, ni empató nunca) arranca SIEMPRE en Premier League, sin
-//     importar el tamaño que eso le sume -- no compite por los tamaños de
-//     arriba hasta jugar su primera batalla.
+// Reparte los standings (YA ordenados, mejor primero) en las ligas que
+// toquen según ligaSizes() -- ver el comentario grande arriba para la
+// regla completa de tamaños/cantidad.
 function getLigaGroups(){
   const standings=getLigaStandings();
-  const jugaron=standings.filter(p=>p.jugadas>0);
-  const nuncaJugaron=standings.filter(p=>p.jugadas===0);
-  const n=jugaron.length;
-  const champSize=Math.min(10,n);
-  const restoSize=n-champSize;
-  const premSize=Math.ceil(restoSize/2);
-  const champions=jugaron.slice(0,champSize);
-  const premier=jugaron.slice(champSize,champSize+premSize).concat(nuncaJugaron);
-  const serieb=jugaron.slice(champSize+premSize);
-  return{champions,premier,serieb};
+  const sizes=ligaSizes(standings.length);
+  const metas=ligaMeta(sizes.length);
+  const groups={};
+  let idx=0;
+  metas.forEach(({key},i)=>{
+    groups[key]=standings.slice(idx,idx+sizes[i]);
+    idx+=sizes[i];
+  });
+  return groups;
 }
 
 // A qué liga pertenece un participante puntual -- usado para la
 // restricción de "solo misma liga" al armar una batalla 1v1.
 function getLigaDe(name){
   const groups=getLigaGroups();
-  for(const {key} of LIGAS){
+  for(const key of Object.keys(groups)){
     if(groups[key].some(p=>p.name===name))return key;
   }
   return null;
@@ -196,8 +241,9 @@ function startBattle(slot){
   // esta restricción, cruza libremente).
   const liga1=getLigaDe(p1),liga2=getLigaDe(p2);
   if(liga1&&liga2&&liga1!==liga2){
-    const lbl1=LIGAS.find(l=>l.key===liga1)?.label||liga1;
-    const lbl2=LIGAS.find(l=>l.key===liga2)?.label||liga2;
+    const metas=getLigasMeta();
+    const lbl1=metas.find(l=>l.key===liga1)?.label||liga1;
+    const lbl2=metas.find(l=>l.key===liga2)?.label||liga2;
     toast(`${p1} (${lbl1}) y ${p2} (${lbl2}) están en ligas distintas -- en 1v1 solo pueden pelear entre sí`,true);
     return;
   }
@@ -779,7 +825,7 @@ function renderLigasPanel(){
   const wrap=document.getElementById("battles-ligas-wrap");
   if(!wrap)return;
   const groups=getLigaGroups();
-  wrap.innerHTML=LIGAS.map(({key,label})=>`
+  wrap.innerHTML=getLigasMeta().map(({key,label})=>`
     <div style="margin-bottom:1rem">
       <div style="font-family:var(--ff-display);font-size:12px;font-weight:800;color:var(--qb-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem">${label}</div>
       ${renderLigaTable(groups[key])}

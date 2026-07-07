@@ -52,7 +52,7 @@ const bridge = window.document.createElement("script");
 bridge.textContent = `
   window.__test = {
     DB, S, rebuildDynamicData, _battleBuilderPending, ensureBattleBuilderState,
-    computeBattleRecord, getLigaStandings, getLigaGroups, getLigaDe, LIGAS,
+    computeBattleRecord, getLigaStandings, getLigaGroups, getLigaDe, getLigasMeta, ligaSizes,
     startBattle, sugerirRival, renderLigasPanel,
   };
 `;
@@ -164,57 +164,104 @@ check("v2.7.5: el valor '2' (empates de Golf) aparece en la fila de Golf",
   /Golf[\s\S]{0,120}?<td[^>]*>\s*3\s*<\/td>[\s\S]{0,80}?<td[^>]*>\s*2\s*<\/td>/.test(ligasHtml));
 
 /* ════════════════════════════════════════════════════════════════
-   PARTE 3 — getLigaGroups(): tamaños (Champions=top10, Premier=mitad del
-   resto, Serie B=el resto) + quien nunca jugó arranca SIEMPRE en Premier
+   PARTE 3 (v3.14) — ligaSizes(): piso 10 / techo 20 por liga, K =
+   floor(N/10), resto repartido de a 1 en las ligas más BAJAS
    ════════════════════════════════════════════════════════════════ */
-console.log("\n── getLigaGroups(): tamaños y default de 'nunca jugó' ──");
+console.log("\n── ligaSizes(): piso/techo y reparto del resto ──");
 
-const GANADORES = ["G1","G2","G3","G4","G5","G6"];
-const PERDEDORES = ["P1","P2","P3","P4","P5","P6"];
-const NUNCA_JUGARON = ["Nuevo1","Nuevo2"];
+check("Menos de 10 -> 1 sola liga con todos (5)", JSON.stringify(T.ligaSizes(5)) === JSON.stringify([5]));
+check("9 participantes -> 1 sola liga (no da para el piso de 10 x2)", JSON.stringify(T.ligaSizes(9)) === JSON.stringify([9]));
+check("22 participantes -> 2 ligas de 11 (ejemplo del usuario)", JSON.stringify(T.ligaSizes(22)) === JSON.stringify([11,11]));
+check("23 participantes -> 11 arriba y 12 abajo, el resto en la liga inferior (ejemplo del usuario)",
+  JSON.stringify(T.ligaSizes(23)) === JSON.stringify([11,12]));
+check("29 participantes -> siguen siendo 2 ligas (14/15), todavía no alcanza para una 3ra",
+  JSON.stringify(T.ligaSizes(29)) === JSON.stringify([14,15]));
+check("30 participantes -> recién ahí 3 ligas de 10 (mínimo para la 3ra, según lo pedido)",
+  JSON.stringify(T.ligaSizes(30)) === JSON.stringify([10,10,10]));
 
+/* ════════════════════════════════════════════════════════════════
+   PARTE 3b — getLigaGroups() de punta a punta con 23 participantes:
+   confirma que el reparto real (no solo la función pura) respeta
+   ligaSizes(), que el mejor ranking cae en la liga de arriba, que el
+   resto (el 12vo) cae en la de abajo, Y que la vieja excepción de
+   "nunca jugó -> siempre Premier" YA NO EXISTE (v3.14): quien nunca
+   peleó entra al mismo orden general que cualquiera con 0 wins/0
+   draws/0 losses, y cae donde le toque -- acá, al fondo de la tabla
+   (Array.sort es estable, así que entre empatados en todo mantiene el
+   orden de DB.participants).
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── getLigaGroups(): 23 participantes reales, de punta a punta ──");
+
+const RESTO_23 = Array.from({length:22}, (_,i)=>`P${String(i+2).padStart(2,"0")}`); // P02..P23
 T.DB.participants = [
-  ...GANADORES.map((n,i)=>({id:"g"+i, name:n, city:"C", country:"P"})),
-  ...PERDEDORES.map((n,i)=>({id:"p"+i, name:n, city:"C", country:"P"})),
-  ...NUNCA_JUGARON.map((n,i)=>({id:"n"+i, name:n, city:"C", country:"P"})),
+  {id:"camp", name:"Campeon", city:"C", country:"P"}, // único con una victoria real
+  ...RESTO_23.map((n,i)=>({id:"r"+i, name:n, city:"C", country:"P"})), // ninguno peleó nunca
 ];
 T.DB.predictions = {};
 T.DB.participants.forEach(p=>{ T.DB.predictions[p.id] = {}; });
-T.S.battleHistory = GANADORES.map((g,i)=>({name:"b"+i, p1:g, p2:PERDEDORES[i], winner:g, date:"d"}));
+T.S.battleHistory = [{name:"b0", p1:"Campeon", p2:"Ghost", winner:"Campeon", date:"d"}]; // "Ghost" no es participante -- no cuenta para el reparto
 T.rebuildDynamicData();
 
-const groups = T.getLigaGroups();
-check("Champions tiene exactamente 10 (min(10, 12 que ya jugaron))", groups.champions.length === 10);
-check("Los 6 ganadores están TODOS en Champions (0 derrotas, máxima prioridad)",
-  GANADORES.every(g => groups.champions.some(p=>p.name===g)));
-check("Premier + Serie B sí suman 2 (los perdedores que no entraron en Champions) + los 2 nuevos en Premier",
-  groups.premier.length + groups.serieb.length === 4);
-check("Los 2 que NUNCA jugaron ninguna batalla están en Premier (default, no en Champions ni Serie B)",
-  NUNCA_JUGARON.every(n => groups.premier.some(p=>p.name===n)) &&
-  !NUNCA_JUGARON.some(n => groups.champions.some(p=>p.name===n) || groups.serieb.some(p=>p.name===n)));
-check("Serie B tiene exactamente 1 (el resto tras Champions=10 y Premier)", groups.serieb.length === 1);
+const groups23 = T.getLigaGroups();
+check("Con 23 participantes hay exactamente 2 ligas (no aparece 'serieb')",
+  Object.keys(groups23).length === 2 && !groups23.serieb);
+check("La liga de arriba tiene 11 y la de abajo 12 (mismo reparto que ligaSizes(23))",
+  groups23.champions.length === 11 && groups23.premier.length === 12);
+check("Campeon (única victoria real) queda en la liga de ARRIBA",
+  groups23.champions.some(p=>p.name==="Campeon"));
+check("v3.14: P23 (nunca peleó, último en el orden de empate) cae en la liga de ABAJO -- ya no hay ningún forzado a 'Premier'",
+  groups23.premier.some(p=>p.name==="P23") && !groups23.champions.some(p=>p.name==="P23"));
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 3c — menos de 10 participantes: 1 sola liga con todos adentro
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── getLigaGroups(): menos de 10 participantes -> 1 sola liga ──");
+
+T.DB.participants = ["Uno","Dos","Tres","Cuatro","Cinco"].map((n,i)=>({id:"u"+i, name:n, city:"C", country:"P"}));
+T.DB.predictions = {};
+T.DB.participants.forEach(p=>{ T.DB.predictions[p.id] = {}; });
+T.S.battleHistory = [];
+T.rebuildDynamicData();
+
+const groupsChicos = T.getLigaGroups();
+check("Con 5 participantes hay UNA sola liga (key 'champions', el primer nombre de fantasía)",
+  Object.keys(groupsChicos).length === 1 && groupsChicos.champions.length === 5);
+check("Todos (incluido el propio 'Campeon' de antes, ya no en el roster) quedan en la misma liga entre sí",
+  ["Uno","Dos","Tres","Cuatro","Cinco"].every(n=>T.getLigaDe(n)==="champions"));
 
 /* ════════════════════════════════════════════════════════════════
    PARTE 4 — getLigaDe() + restricción de Liga en startBattle()
+   (reusa el roster de 23 participantes de la PARTE 3b -- hace falta
+   volver a cargarlo porque la PARTE 3c lo pisó con uno de 5)
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── Restricción de Liga en startBattle() ──");
 
-check("getLigaDe() de un ganador (Champions) da 'champions'", T.getLigaDe("G1") === "champions");
-check("getLigaDe() de alguien que nunca jugó da 'premier'", T.getLigaDe("Nuevo1") === "premier");
+T.DB.participants = [
+  {id:"camp", name:"Campeon", city:"C", country:"P"},
+  ...RESTO_23.map((n,i)=>({id:"r"+i, name:n, city:"C", country:"P"})),
+];
+T.DB.predictions = {};
+T.DB.participants.forEach(p=>{ T.DB.predictions[p.id] = {}; });
+T.S.battleHistory = [{name:"b0", p1:"Campeon", p2:"Ghost", winner:"Campeon", date:"d"}];
+T.rebuildDynamicData();
+
+check("getLigaDe() de Campeon (liga de arriba) da 'champions'", T.getLigaDe("Campeon") === "champions");
+check("getLigaDe() de P23 (liga de abajo) da 'premier'", T.getLigaDe("P23") === "premier");
 
 T.ensureBattleBuilderState();
-T._battleBuilderPending[1].p1 = "G1"; // Champions
-T._battleBuilderPending[1].p2 = "Nuevo1"; // Premier
+T._battleBuilderPending[1].p1 = "Campeon"; // liga de arriba
+T._battleBuilderPending[1].p2 = "P23"; // liga de abajo
 
 let avisoLigaDistinta = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoLigaDistinta = true; };
 T.startBattle(1);
-check("startBattle() rechaza el duelo entre ligas distintas (Champions vs Premier)", avisoLigaDistinta === true);
+check("startBattle() rechaza el duelo entre ligas distintas (arriba vs abajo)", avisoLigaDistinta === true);
 check("No se creó ninguna batalla en la ranura 1", !T.S.battles[1]);
 
-// Ahora 2 participantes de la MISMA liga (Premier, los 2 nuevos) sí deben poder pelear.
-T._battleBuilderPending[1].p1 = "Nuevo1";
-T._battleBuilderPending[1].p2 = "Nuevo2";
+// Ahora 2 participantes de la MISMA liga (P12 y P13, ambos en la liga de
+// abajo junto con P23) sí deben poder pelear.
+T._battleBuilderPending[1].p1 = "P12";
+T._battleBuilderPending[1].p2 = "P13";
 // Ancla a "hoy al mediodía" en vez de "ahora + 1h": getMatchIdsInWindow(1)
 // solo mira el DÍA calendario (medianoche a medianoche), no si el partido
 // es futuro o pasado -- pero "ahora + 1h" cruza a mañana si el test corre
@@ -225,7 +272,7 @@ T.S.matchTimes[1] = hoyMediodia1.getTime(); // partido "de hoy" para que la vent
 let avisoLigaOk = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoLigaOk = true; };
 T.startBattle(1);
-check("startBattle() SÍ permite el duelo dentro de la misma liga (Premier vs Premier), sin avisos de error",
+check("startBattle() SÍ permite el duelo dentro de la misma liga (P12 vs P13, ambos abajo), sin avisos de error",
   !!T.S.battles[1] && avisoLigaOk === false);
 delete T.S.battles[1];
 
