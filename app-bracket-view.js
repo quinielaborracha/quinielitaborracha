@@ -272,8 +272,17 @@ function renderRank(){
     if(span)prevTotals[tr.dataset.rkey]=parseInt(span.textContent)||0;
   });
 
+  // v3.9.3 — BUG REPORTADO: el 🚑 (penúltimo) y el 👸 (último, "Cenicienta")
+  // estaban hardcodeados a i===25/i===26 -- asumían SIEMPRE 27
+  // participantes exactos. Apenas el grupo tuvo menos (hoy 23), ninguno
+  // de los dos índices existía en `ranked` y los dos íconos
+  // desaparecieron sin que nada más se rompiera (por eso costaba notarlo).
+  // Ahora se calculan sobre el largo REAL de la lista, así siempre caen
+  // en el penúltimo y último puesto de verdad, sea cual sea el número de
+  // participantes.
+  const penultimo=ranked.length-2, ultimo=ranked.length-1;
   tbody.innerHTML=ranked.map((p,i)=>{
-    const rk=i<3?`<span style="font-size:20px">${rki[i]}</span>`:i===9?`<span style="font-size:20px">⚽</span>`:i===25?`<span style="font-size:20px">🚑</span>`:i===26?`<span style="font-size:20px">👸</span>`:`<span class="rk">${i+1}</span>`;
+    const rk=i<3?`<span style="font-size:20px">${rki[i]}</span>`:i===9?`<span style="font-size:20px">⚽</span>`:i===penultimo?`<span style="font-size:20px">🚑</span>`:i===ultimo?`<span style="font-size:20px">👸</span>`:`<span class="rk">${i+1}</span>`;
     // v1.5.3 — Fase 0 de seguridad: p.link también es texto libre (aunque
     // hoy nada lo escribe todavía) — se escapa igual que el resto, y se
     // restringe a http(s) para que no se pueda colar un "javascript:" en
