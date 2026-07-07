@@ -105,11 +105,20 @@ function flagOfChampion(name, residenceCountry){
 // pickAvatarFile() (utils.js) -- mismo helper que usan las otras 2
 // pantallas que necesitan esto (registro.js), para que un mismo
 // participante vea siempre el mismo avatar en toda la app.
+// v4.0 — Premio de Batallas: antes de caer al automático (pickAvatarFile),
+// se fija si el participante tiene una elección propia (p.avatarElegido)
+// que TODAVÍA es válida según sus victorias actuales -- ver
+// effectiveAvatarFile()/unlockedAvatarPool() (utils.js) y
+// totalBattleWins() (app-batallas.js, carga DESPUÉS de este archivo).
+// Mismo try/catch y mismo motivo que ya tenía esta función: puede
+// llamarse antes de que app-batallas.js exista todavía.
 function avatarOfChampion(name){
   try{
     const spec = (typeof getDynamicSpec==='function') ? getDynamicSpec(name) : null;
     const champ = spec && spec.champ ? spec.champ : '';
-    return pickAvatarFile(champ,name);
+    const p = (DB.participants||[]).find(x=>x.name===name);
+    const wins = (typeof totalBattleWins==='function') ? totalBattleWins(name) : 0;
+    return effectiveAvatarFile(champ,p,wins);
   }catch(e){
     return '';
   }

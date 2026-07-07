@@ -133,6 +133,38 @@ function avatarImg(file,s=54){
   return`<img class="qb-avatar" src="${AVATAR_DIR}${encodeURIComponent(file)}" width="${s}" height="${s}" alt="" loading="lazy" style="width:${s}px;height:${s}px">`;
 }
 
+// v4.0 — Premio de Batallas: pool de avatares ALTERNATIVOS que un
+// participante puede elegir mostrar en vez del automático, a medida que
+// gana batallas (1v1 + Royal Rumble, ver totalBattleWins() en
+// app-batallas.js). Prioridad fija: primero TODAS las variantes de su
+// país CAMPEÓN predicho (AVATAR_MAP[champ]), después TODAS las de su
+// país de RESIDENCIA (AVATAR_MAP[country], sin repetir si es el mismo
+// país que el campeón) -- en ese orden, la victoria #1 destraba el
+// primer elemento del pool, la #2 el segundo, etc. Ganar más batallas de
+// las que caben en el pool no destraba nada más por ahora (v1 simple,
+// acordada con el usuario -- una versión futura podría seguir hacia el
+// resto de la galería).
+function unlockedAvatarPool(champ,country,wins){
+  if(typeof AVATAR_MAP==='undefined')return[];
+  const champOpts=(champ&&AVATAR_MAP[champ])||[];
+  const countryOpts=(country&&country!==champ&&AVATAR_MAP[country])||[];
+  return[...champOpts,...countryOpts].slice(0,Math.max(0,wins|0));
+}
+
+// Avatar EFECTIVO a mostrar: si el participante eligió uno de los ya
+// destrabados (p.avatarElegido) Y esa elección SIGUE siendo válida ahora
+// (se re-valida contra el pool actual en cada llamada, nunca se confía
+// en lo guardado a ciegas), se usa esa. Si no, cae al automático de
+// siempre (pickAvatarFile, determinístico por país campeón) -- así, si
+// el admin corrige un resultado y el participante pierde una victoria,
+// una elección que ya no le entra en el pool se cae sola en el próximo
+// render, sin ninguna lógica de "revocar" aparte.
+function effectiveAvatarFile(champ,p,wins){
+  const elegido=p&&p.avatarElegido;
+  if(elegido&&unlockedAvatarPool(champ,p.country,wins).includes(elegido))return elegido;
+  return pickAvatarFile(champ,p&&p.name);
+}
+
 // v1.1 — Ciudad + país combinados para mostrar bajo el nombre del
 // participante (ranking, export de imagen, perfil): "Maracaibo, Venezuela".
 // Si falta alguno de los dos, devuelve solo el que haya (o "" si no hay nada).

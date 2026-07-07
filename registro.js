@@ -2325,7 +2325,7 @@ function renderParticipantDashboard(pid){
   // Firestore. Sin avatar todavía para ese país, queda solo el nombre (sin
   // placeholder genérico), mismo criterio que en el resto de la app.
   const champValDash = computeAutoSpecial(computeBracket(DB.predictions[p.id]||{})).campeon;
-  const champAvatarFileDash = pickAvatarFile(champValDash,p.name);
+  const champAvatarFileDash = effectiveAvatarFile(champValDash,p,totalBattleWins(p.name));
   const dashIdentityHtml = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
          ${avatarImg(champAvatarFileDash, 84)}
          <span style="font-family:var(--ff-display);font-weight:800;font-size:16px;color:var(--qb-text)">${esc(p.name)}</span>
@@ -2421,6 +2421,16 @@ function renderParticipantDashboard(pid){
     p.fechaActualizacion = Date.now();
     saveData(DB);
     toast(p.quierePelear ? '🥊 Te anotaste para Batallas — el admin ya te puede elegir' : 'Te bajaste de la lista de postulados');
+    renderParticipantDashboard(pid);
+  });
+  // v4.0 — Vitrina de Avatares: evento delegado (no uno por miniatura) --
+  // ver buildAvatarPickerCardHtml() arriba. "" = volver al automático.
+  document.getElementById('avatar-picker-grid')?.addEventListener('click', e=>{
+    const b = e.target.closest('[data-avatar-file]'); if(!b) return;
+    p.avatarElegido = b.dataset.avatarFile || '';
+    p.fechaActualizacion = Date.now();
+    saveData(DB);
+    toast(p.avatarElegido ? '🎭 Avatar actualizado' : '🔄 Volviste al avatar automático');
     renderParticipantDashboard(pid);
   });
 }
@@ -2530,10 +2540,63 @@ function buildDashPerfilHtml(p){
         : ''}
     </div>
 
+    ${buildAvatarPickerCardHtml(p)}
+
     <div class="rg-btn-row" style="margin-top:.75rem">
       <button class="rg-btn rg-btn-gold" id="dash_pdf_btn">📄 Descargar mi quiniela (PDF)</button>
     </div>
   `;
+}
+
+// v4.0 — Premio de Batallas: "Vitrina de Avatares". Ganar batallas (1v1
+// o Royal Rumble) destraba avatares ALTERNATIVOS al automático de
+// siempre (país campeón predicho) -- con prioridad a las variantes del
+// país campeón y del país de residencia (unlockedAvatarPool(), utils.js).
+// El país campeón se lee con el MISMO criterio que avatarOfChampion()
+// (app-core-data.js, vía getDynamicSpec/special.campeon) -- A PROPÓSITO
+// no el bracket-computed que usa dashIdentityHtml/generarPDF() más
+// arriba/abajo en este archivo: esos dos leen del bracket por un motivo
+// puntual de timing con Firestore (ver su propio comentario), pero
+// avatarOfChampion() es el que de verdad decide qué avatar se ve en el
+// resto de la app (Ranking, Batallas, Predicciones...) -- si acá se
+// usara una fuente distinta, el pool/preview de este selector podría no
+// coincidir con lo que el participante termina viendo en todos lados.
+// Wiring del click en renderParticipantDashboard() (evento delegado
+// sobre #avatar-picker-grid, mismo patrón que el resto de los botones
+// del dashboard).
+function buildAvatarPickerCardHtml(p){
+  const spec = (typeof getDynamicSpec==='function') ? getDynamicSpec(p.name) : null;
+  const champVal = spec && spec.champ ? spec.champ : '';
+  const wins = totalBattleWins(p.name);
+  if(!wins){
+    return `
+    <div class="card">
+      <div class="card-title">🎭 Vitrina de Avatares</div>
+      <div class="muted" style="font-size:12.5px">Ganá tu primera Batalla (1v1 o Royal Rumble) para destrabar avatares alternativos -- con prioridad a tu país campeón y a tu país. Cada victoria te da uno más.</div>
+    </div>`;
+  }
+  const pool = unlockedAvatarPool(champVal,p.country,wins);
+  const winsTxt = `${wins} victoria${wins===1?'':'s'}`;
+  if(!pool.length){
+    return `
+    <div class="card">
+      <div class="card-title">🎭 Vitrina de Avatares <span class="badge badge-green">${winsTxt}</span></div>
+      <div class="muted" style="font-size:12.5px">Todavía no hay avatares cargados para tu país campeón ni para tu país -- seguí ganando, se van sumando solos apenas haya.</div>
+    </div>`;
+  }
+  const autoFile = pickAvatarFile(champVal,p.name);
+  const actual = p.avatarElegido && pool.includes(p.avatarElegido) ? p.avatarElegido : '';
+  const opt = (file,title)=>{
+    const on = actual===file;
+    return `<button type="button" data-avatar-file="${esc(file)}" title="${esc(title)}" style="border:2px solid ${on?'var(--qb-gold)':'transparent'};border-radius:50%;padding:2px;background:none;cursor:pointer;line-height:0">${avatarImg(file||autoFile,54)}</button>`;
+  };
+  const itemsHtml = [opt('','Automático (tu país campeón)'), ...pool.map(f=>opt(f,'Elegir este avatar'))].join('');
+  return `
+    <div class="card">
+      <div class="card-title">🎭 Vitrina de Avatares <span class="badge badge-green">${winsTxt}</span></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:.5rem">Elegí cuál mostrar en vez del automático.</div>
+      <div id="avatar-picker-grid" style="display:flex;flex-wrap:wrap;gap:10px">${itemsHtml}</div>
+    </div>`;
 }
 
 function buildDashComingSoonHtml(label){
@@ -4601,7 +4664,7 @@ function generarPDF(p){
   // uno, champAvatarFile queda "" y no se imprime nada (mismo criterio que
   // en el resto de la app: mejor vacío que un avatar que no corresponde).
   const champVal = computeAutoSpecial(bracket).campeon;
-  const champAvatarFile = pickAvatarFile(champVal,p.name);
+  const champAvatarFile = effectiveAvatarFile(champVal,p,totalBattleWins(p.name));
   const posterAvatarHtml = champAvatarFile
     ? `<img class="pp-avatar" src="${AVATAR_DIR}${encodeURIComponent(champAvatarFile)}" alt="" crossorigin="anonymous">`
     : '';

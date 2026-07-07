@@ -138,6 +138,20 @@ function computeBattleRecord(){
   return rec;
 }
 
+// v4.0 — Premio de Batallas: cantidad TOTAL de victorias de un
+// participante, sumando 1v1 (computeBattleRecord, arriba) y Royal Rumble
+// (S.rumbleHistory -- estructura propia, no pasa por battleHistory). Es
+// lo que usa unlockedAvatarPool()/effectiveAvatarFile() (utils.js) para
+// saber cuántos avatares alternativos tiene destrabados; separado de los
+// PUNTOS de esas victorias (calcBattleWinBonos/calcRumbleWinBonos,
+// scoring.js) porque acá interesa la cantidad de veces que ganó, no
+// cuánto valía cada una.
+function totalBattleWins(name){
+  const duelWins=(computeBattleRecord()[name]||{}).wins||0;
+  const rumbleWins=(S.rumbleHistory||[]).filter(h=>h&&h.winner===name).length;
+  return duelWins+rumbleWins;
+}
+
 // Standings de TODOS los participantes activos, ordenados por el criterio
 // de la Liga: más victorias primero; empate en victorias, más EMPATES
 // (v2.7.5 — no suman puntos, pero sí definen el orden: entre 2
