@@ -2665,10 +2665,22 @@ function buildEvolucionTendenciaCardHtml(t){
 // fecha exacta, ver la nota allá) -- Avanzado (campeón/goleador/etc.,
 // solo se sabe al cerrar el torneo) y el resto de los bonos (Último
 // lugar/Racha/Batallas, sin una fecha limpia de partido) nunca entraban.
-// Ahora se recibe el total real (`total`, calcPts+calcAdv+calcElimPts+
-// calcBonos -- ver getDashStatsInfo()) y se muestra la diferencia como
-// una línea aparte, así la tarjeta SIEMPRE suma exactamente lo mismo que
-// el Ranking, sin inventarle una jornada falsa a un bono que no la tiene.
+//
+// v3.9.1 — a pedido del usuario, en vez de mostrar ese residuo en una
+// línea aparte (dejaba el gráfico "incompleto" a la vista), se sale de
+// una vez: el residuo se ACUMULA en la barra de la jornada MÁS RECIENTE
+// (no en una jornada vieja al azar) y se marca con un asterisco + un
+// disclaimer corto. A propósito NO se reparte en la jornada "correcta"
+// de cada bono (ej. Racha en el partido exacto que completó el hito):
+// Goleador/País/Batallas pueden corregirse más adelante en el torneo (el
+// admin actualiza el goleador, cierra una batalla días después de
+// jugada, etc.) -- si les fijáramos una fecha ya jugada, esa barra VIEJA
+// cambiaría de valor sola cada vez que se corrija algo, lo cual es más
+// confuso que el residuo. Poniéndolo siempre en la jornada más reciente,
+// lo único que se mueve con el tiempo es la barra de "hoy" (que de
+// cualquier forma todavía no es definitiva), nunca una barra de semanas
+// atrás -- mismo criterio de estabilidad que ya acepta el gráfico
+// hermano de Evolución en el Ranking (ver su nota en scoring.js).
 function buildEvolucionJornadaCardHtml(name,days,total){
   if(!days.length){
     return `
@@ -2683,15 +2695,20 @@ function buildEvolucionJornadaCardHtml(name,days,total){
   }));
   const sumDias = points.reduce((s,p)=>s+p.value,0);
   const extra = (total||0)-sumDias;
-  const extraHtml = extra>0
-    ? `<div class="muted" style="font-size:11.5px;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--qb-border)">+ ${extra} pts de Avanzado/bonos que no se asignan a una jornada puntual (campeón, goleador, racha, último lugar, batallas...)</div>`
-    : '';
+  let disclaimer = '';
+  if(extra>0){
+    const last = points[points.length-1];
+    last.value += extra;
+    last.label += '*';
+    last.title += ` (incluye ${extra} pts de Avanzado/bonos sin fecha propia)`;
+    disclaimer = `<div class="muted" style="font-size:11px;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--qb-border)">* La jornada más reciente incluye ${extra} pts de Avanzado/bonos (campeón, goleador, racha, último lugar, batallas...) que no tienen un partido puntual al que asignarse — se suman ahí para que el total siempre coincida con tu puntaje del Ranking. Si el admin corrige alguno de esos datos más adelante, esta barra puede ajustarse; las jornadas anteriores ya jugadas no cambian.</div>`;
+  }
   return `
     <div class="card">
       <div class="card-title">🎖️ Puntos por Jornada</div>
       <div class="muted" style="font-size:12px;margin-bottom:.5rem">Cuánto sumaste cada fecha del Mundial.</div>
       ${buildSvgBarChart(points)}
-      ${extraHtml}
+      ${disclaimer}
     </div>`;
 }
 
