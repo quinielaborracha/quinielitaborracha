@@ -244,6 +244,55 @@ function descripVentana(modo,valor){
   return modo==="partidos" ? `${valor} partido${valor===1?"":"s"}` : `${valor} día${valor===1?"":"s"}`;
 }
 
+// v3.15 — BUG REPORTADO: "Sugerir" recomendaba siempre por mayor diferencia
+// de predicción a secas, sin mirar CUÁNTOS duelos 1v1 ya jugó cada quien --
+// el reparto terminaba desparejo (alguien con 3 duelos mientras otro seguía
+// en 0). Cuenta duelos 1v1 (no Royal Rumble, que no tiene esta restricción
+// -- ver la sección ROYAL RUMBLE más arriba) ya CERRADOS (jugadas de
+// computeBattleRecord, vía S.battleHistory) MÁS los duelos ACTIVOS ahora
+// mismo (S.battles): un duelo recién iniciado ya "cuenta" para el reparto
+// parejo aunque todavía no cerró y pasó a battleHistory -- si no, el admin
+// podría armar 3 duelos seguidos para el mismo participante sin que el
+// balance lo note hasta que el primero cierre.
+function battleCountFor(name){
+  const jugadas=(computeBattleRecord()[name]||{}).jugadas||0;
+  let activos=0;
+  BATTLE_SLOTS.forEach(slot=>{
+    const b=S.battles[slot];
+    if(b&&(b.p1===name||b.p2===name))activos++;
+  });
+  return jugadas+activos;
+}
+
+// v3.15 — Regla acordada con el usuario: la diferencia entre el
+// participante con MÁS duelos jugados y el que tiene MENOS no puede
+// superar 2 (ej. no puede haber alguien con 3 duelos mientras otro sigue
+// en 0 -- pero 3 y 1 sí está bien; para que alguien llegue a un 3er duelo
+// hace falta que ya no quede nadie en 0). Se evalúa sobre TODOS los
+// participantes, no solo p1/p2: iniciar un duelo para quien ya va ganando
+// no debe poder alejarlo más del que se quedó atrás.
+const MAX_BATTLE_SPREAD=2;
+function wouldBreakBattleBalance(p1,p2){
+  const counts=PL.map(name=>{
+    let c=battleCountFor(name);
+    if(name===p1||name===p2)c++;
+    return c;
+  });
+  if(!counts.length)return false;
+  return (Math.max(...counts)-Math.min(...counts))>MAX_BATTLE_SPREAD;
+}
+
+// Mensaje de aviso compartido entre startBattle() y sugerirRival(): quién
+// tiene menos duelos jugados ahora mismo, para que el admin sepa a quién
+// priorizar en vez de solo saber que "algo" está desbalanceado.
+function battleBalanceMsg(){
+  const counts=PL.map(name=>({name,c:battleCountFor(name)}));
+  if(!counts.length)return"";
+  const minC=Math.min(...counts.map(c=>c.c));
+  const necesitan=counts.filter(c=>c.c===minC).map(c=>c.name);
+  return `priorizá a quien tiene menos duelos jugados (${minC}): ${necesitan.slice(0,3).join(", ")}${necesitan.length>3?"…":""}`;
+}
+
 function startBattle(slot){
   if(!isAdmin())return;
   ensureBattlesState();ensureBattleBuilderState();
@@ -259,6 +308,12 @@ function startBattle(slot){
     const lbl1=metas.find(l=>l.key===liga1)?.label||liga1;
     const lbl2=metas.find(l=>l.key===liga2)?.label||liga2;
     toast(`${p1} (${lbl1}) y ${p2} (${lbl2}) están en ligas distintas -- en 1v1 solo pueden pelear entre sí`,true);
+    return;
+  }
+  // v3.15 — restricción de balance: no arrancar un duelo que deje la
+  // diferencia de duelos jugados por encima de MAX_BATTLE_SPREAD.
+  if(wouldBreakBattleBalance(p1,p2)){
+    toast(`No se puede iniciar: dejaría la diferencia de duelos jugados por encima de ${MAX_BATTLE_SPREAD} -- ${battleBalanceMsg()}`,true);
     return;
   }
   const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
@@ -649,11 +704,20 @@ function calcularDiffPrediccion(nameA,nameB,groupMids,elimMids){
   return diff;
 }
 
-// v2.7 — Ahora busca entre TODOS los disponibles (getDisponiblesParaBatalla,
-// ya no solo postulados -- ver nota junto a esa función), el par con mayor
-// diferencia de predicciones para la ventana de N días de este duelo, y lo
-// carga directo en el duelo en construcción. Requiere el duelo vacío
+// v2.7 — Busca entre TODOS los disponibles (getDisponiblesParaBatalla, ya
+// no solo postulados -- ver nota junto a esa función) y carga el par
+// elegido directo en el duelo en construcción. Requiere el duelo vacío
 // primero (no pisa una selección ya hecha a mano).
+// v3.15 — BUG REPORTADO: antes elegía a secas por mayor diferencia de
+// predicciones, así que terminaba re-sugiriendo a quien ya tenía 2 duelos
+// jugados en vez de a quien nunca peleó ninguno. Ahora el criterio de
+// selección tiene 2 niveles: (1) prioridad, el par cuyo integrante con MÁS
+// duelos jugados tenga el menor valor posible -- así siempre arranca por
+// quienes menos jugaron -- y (2) desempate, la diferencia de predicciones
+// de siempre. Además descarta directamente cualquier par que rompería
+// wouldBreakBattleBalance() (la misma restricción que ya aplica
+// startBattle(), ver ahí), para que jamás sugiera algo que el creador
+// después rechazaría.
 function sugerirRival(slot){
   if(!isAdmin())return;
   ensureBattleBuilderState();
@@ -662,17 +726,23 @@ function sugerirRival(slot){
   const candidatos=getDisponiblesParaBatalla().map(d=>d.name);
   if(candidatos.length<2){toast("Hacen falta al menos 2 participantes disponibles para sugerir un duelo",true);return;}
   const{modo,valor,groupMids,elimMids}=getVentanaRanura(slot);
-  let mejor=null,mejorDiff=-1;
+  let mejor=null,mejorMaxCount=Infinity,mejorDiff=-1;
   for(let i=0;i<candidatos.length;i++){
     for(let j=i+1;j<candidatos.length;j++){
+      const a=candidatos[i],b=candidatos[j];
       // Fase 3 — restricción de Liga: no sugerir un par que 1v1 no podría
       // pelear igual (misma restricción que ya aplica startBattle()).
-      if(getLigaDe(candidatos[i])!==getLigaDe(candidatos[j]))continue;
-      const d=calcularDiffPrediccion(candidatos[i],candidatos[j],groupMids,elimMids);
-      if(d>mejorDiff){mejorDiff=d;mejor=[candidatos[i],candidatos[j]];}
+      if(getLigaDe(a)!==getLigaDe(b))continue;
+      // v3.15 — no sugerir un par que rompería el balance de duelos jugados.
+      if(wouldBreakBattleBalance(a,b))continue;
+      const maxCount=Math.max(battleCountFor(a),battleCountFor(b));
+      const d=calcularDiffPrediccion(a,b,groupMids,elimMids);
+      if(maxCount<mejorMaxCount||(maxCount===mejorMaxCount&&d>mejorDiff)){
+        mejor=[a,b];mejorMaxCount=maxCount;mejorDiff=d;
+      }
     }
   }
-  if(!mejor){toast("No se pudo sugerir ningún par (¿todos los disponibles están en ligas distintas?)",true);return;}
+  if(!mejor){toast("No se pudo sugerir ningún par sin romper la restricción de ligas o el balance de duelos jugados",true);return;}
   pend.p1=mejor[0];pend.p2=mejor[1];
   renderBattleBuilder();
   toast(`🎯 Sugerido: ${mejor[0]} vs ${mejor[1]} (diferencia ${mejorDiff.toFixed(1)} en ${groupMids.length+elimMids.length} partido(s), ventana de ${descripVentana(modo,valor)})`);
