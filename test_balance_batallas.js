@@ -95,52 +95,56 @@ check("Con el mismo duelo activo, Carla también pasa a contar 2", T.battleCount
 delete T.S.battles[1];
 
 /* ════════════════════════════════════════════════════════════════
-   PARTE 2 — wouldBreakBattleBalance(): diferencia máxima permitida = 2
+   PARTE 2 — wouldBreakBattleBalance(): compara SOLO el nuevo conteo de
+   p1/p2 contra el "piso" (mínimo del roster ANTES del duelo), no el
+   spread de TODO el roster después -- ver la nota grande junto a la
+   función (app-batallas.js) sobre por qué la primera versión trababa el
+   sistema por completo apenas había más de 1 rezagado en 0.
    ════════════════════════════════════════════════════════════════ */
 console.log("\n── wouldBreakBattleBalance() ──");
 
-// Ana: 2, Beto: 1, Carla: 1 (setup de la Parte 1, ya sin duelo activo)
-check("Ana(2) vs Beto(1): pasarían a 3 y 2 -- spread 3-1(Carla)=2, OK, no rompe",
-  T.wouldBreakBattleBalance("Ana","Beto") === false);
-
-T.S.battleHistory.push({name:"h3", p1:"Beto", p2:"Carla", winner:"Empate", date:"d"});
-T.rebuildDynamicData();
-// Ahora Beto=2, Carla=2, Ana=2 -- todos iguales
-check("Con los 3 empatados en 2 duelos cada uno, cualquier par nuevo (3 y 3, spread 3-2=1) no rompe",
+// Ana: 2, Beto: 1, Carla: 1 (setup de la Parte 1, ya sin duelo activo) -- piso=1
+check("Ana(2) vs Beto(1): pasarían a 3 y 2, piso=1 (Carla) -- 3-1=2, OK, no rompe",
   T.wouldBreakBattleBalance("Ana","Beto") === false);
 
 T.DB.participants.push({id:"p3", name:"Diego", city:"C", country:"P"});
 T.DB.predictions.p3 = {};
 T.rebuildDynamicData();
-// Diego nunca peleó (0). Ana ya tiene 2 -- armar Ana vs Diego los dejaría en 3 y 1,
-// pero Beto/Carla siguen en 2 -- el mínimo real sigue siendo Diego en 0->1, ok listo.
-check("Ana(2) vs Diego(0): pasarían a 3 y 1 -- ya no queda nadie en 0, spread 3-1=2, OK",
-  T.wouldBreakBattleBalance("Ana","Diego") === false);
+// Diego nunca peleó (0) -- piso ahora es 0. Ana(2) ya no puede jugar de nuevo
+// (pasaría a 3, y el piso sigue en 0 hasta que Diego consiga su propio duelo).
+check("Con Diego en 0 (piso=0), Ana(2) NO puede volver a jugar contra nadie -- pasaría a 3, 3-0=3>2, rompe",
+  T.wouldBreakBattleBalance("Ana","Beto") === true);
+check("Diego(0) vs Beto(1): pasarían a 1 y 2, piso=0 -- 2-0=2, OK, no rompe (los rezagados sí pueden avanzar)",
+  T.wouldBreakBattleBalance("Diego","Beto") === false);
 
 T.DB.participants.push({id:"p4", name:"Elena", city:"C", country:"P"});
 T.DB.predictions.p4 = {};
 T.rebuildDynamicData();
-// Elena también en 0. Si Ana(2) pelea contra Diego(0), Diego sube a 1 pero Elena
-// se queda en 0 -- spread pasaría a 3-0=3, ROMPE.
-check("Con Elena todavía en 0, Ana(2) vs Diego(0) SÍ rompe (Elena quedaría en 0 contra un 3)",
-  T.wouldBreakBattleBalance("Ana","Diego") === true);
-check("Diego(0) vs Elena(0) no rompe -- ambos suben a 1, sigue dentro del margen",
-  T.wouldBreakBattleBalance("Diego","Elena") === false);
+// Con Elena TAMBIÉN en 0, Diego(0) sigue pudiendo emparejarse (su propio
+// avance no depende de que Elena también avance en la MISMA jugada) --
+// esta es la clave que resuelve el bloqueo total reportado: cada rezagado
+// puede subir su propio conteo sin esperar a que todos suban juntos.
+check("Con Elena TAMBIÉN en 0, Diego(0) vs Beto(1) SIGUE sin romper (el avance de Diego no depende de Elena)",
+  T.wouldBreakBattleBalance("Diego","Beto") === false);
+check("Elena(0) vs Diego(0) tampoco rompe -- ambos suben parejo a 1", T.wouldBreakBattleBalance("Elena","Diego") === false);
+check("Ana(2) sigue bloqueada mientras el piso siga en 0 (Elena y Diego sin jugar todavía)",
+  T.wouldBreakBattleBalance("Ana","Beto") === true);
 
 /* ════════════════════════════════════════════════════════════════
-   PARTE 3 — startBattle() rechaza un duelo que rompería el balance
+   PARTE 3 — startBattle() rechaza un duelo que rompería el balance,
+   pero SIGUE permitiendo que los rezagados avancen (no hay traba total)
    ════════════════════════════════════════════════════════════════ */
-console.log("\n── startBattle() respeta el balance ──");
+console.log("\n── startBattle() respeta el balance sin trabar el sistema ──");
 
 T.ensureBattleBuilderState();
 T._battleBuilderPending[1].p1 = "Ana";
-T._battleBuilderPending[1].p2 = "Diego";
+T._battleBuilderPending[1].p2 = "Beto";
 T.S.matchTimes = T.S.matchTimes || {};
 T.S.matchTimes[1] = Date.now();
 let avisoBalance = false;
 W.toast = (m,isErr)=>{ if(isErr) avisoBalance = true; };
 T.startBattle(1);
-check("startBattle() rechaza Ana(2) vs Diego(0) mientras Elena sigue en 0 (rompería el balance)",
+check("startBattle() rechaza Ana(2) vs Beto(1) mientras Diego/Elena sigan en 0 (Ana pasaría a 3)",
   avisoBalance === true);
 check("No se creó ninguna batalla en la ranura 1", !T.S.battles[1]);
 
@@ -188,6 +192,65 @@ const sp1 = T._battleBuilderPending[1].p1, sp2 = T._battleBuilderPending[1].p2;
 check("sugerirRival() eligió el par Novato1-Novato2 (ambos en 0), NO a Veterana pese a tener mayor diff de predicción",
   (sp1==="Novato1"&&sp2==="Novato2") || (sp1==="Novato2"&&sp2==="Novato1"));
 check("sugerirRival() NO metió a Veterana en la sugerencia", sp1!=="Veterana" && sp2!=="Veterana");
+
+/* ════════════════════════════════════════════════════════════════
+   PARTE 5 — REGRESIÓN DEL BLOQUEO TOTAL REPORTADO: roster grande (25
+   participantes) con UN líder que ya jugó 3 duelos y 24 rezagados en 0 --
+   el estado real que el usuario describió. Antes del fix v3.15.1, la
+   versión que exigía spread<=2 sobre TODO el roster no podía arreglar 24
+   rezagados en una sola jugada, así que NINGÚN par pasaba el filtro y
+   sugerirRival()/startBattle() quedaban trabados para siempre. Con el fix,
+   los rezagados deben poder emparejarse entre sí sin problema.
+   ════════════════════════════════════════════════════════════════ */
+console.log("\n── Regresión: roster grande con 1 líder y muchos rezagados NO queda trabado ──");
+
+const REZAGADOS = Array.from({length:24}, (_,i)=>`R${String(i+1).padStart(2,"0")}`);
+T.DB.participants = [
+  {id:"lead", name:"Lider", city:"C", country:"P"},
+  ...REZAGADOS.map((n,i)=>({id:"z"+i, name:n, city:"C", country:"P"})),
+];
+T.DB.predictions = {};
+T.DB.participants.forEach(p=>{ T.DB.predictions[p.id] = {}; });
+T.S.battleHistory = [
+  {name:"g1", p1:"Lider", p2:"Ghost1", winner:"Lider", date:"d"},
+  {name:"g2", p1:"Lider", p2:"Ghost2", winner:"Lider", date:"d"},
+  {name:"g3", p1:"Lider", p2:"Ghost3", winner:"Lider", date:"d"},
+];
+T.rebuildDynamicData();
+
+check("Setup: Lider ya tiene 3 duelos jugados", T.battleCountFor("Lider") === 3);
+check("Setup: los 24 rezagados están en 0", REZAGADOS.every(n=>T.battleCountFor(n)===0));
+
+T.ensureBattleBuilderState();
+T._battleBuilderPending[1] = {p1:null,p2:null,name:""};
+T._battleBuilderPending[2] = {p1:null,p2:null,name:""};
+T._battleBuilderPending[3] = {p1:null,p2:null,name:""};
+T._battleBuilderPending[4] = {p1:null,p2:null,name:""};
+let avisoSugerir = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoSugerir = true; };
+T.sugerirRival(1);
+check("sugerirRival() SÍ encuentra un par válido pese a 24 rezagados en 0 (no queda trabado)",
+  avisoSugerir === false && !!T._battleBuilderPending[1].p1 && !!T._battleBuilderPending[1].p2);
+check("El par sugerido NO incluye a Lider (ya está 3 arriba del piso en 0)",
+  T._battleBuilderPending[1].p1!=="Lider" && T._battleBuilderPending[1].p2!=="Lider");
+
+// startBattle() entre 2 rezagados cualquiera debe andar sin drama.
+T._battleBuilderPending[2].p1 = "R01";
+T._battleBuilderPending[2].p2 = "R02";
+let avisoRezagados = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoRezagados = true; };
+T.startBattle(2);
+check("startBattle() permite emparejar 2 rezagados (R01 vs R02) sin ningún aviso de error",
+  !!T.S.battles[2] && avisoRezagados === false);
+
+// Lider sigue sin poder jugar: quedan 22 rezagados todavía en 0.
+T._battleBuilderPending[3].p1 = "Lider";
+T._battleBuilderPending[3].p2 = "R03";
+let avisoLider = false;
+W.toast = (m,isErr)=>{ if(isErr) avisoLider = true; };
+T.startBattle(3);
+check("Lider SIGUE bloqueado (pasaría a 4 duelos mientras 22 rezagados siguen en 0)",
+  avisoLider === true && !T.S.battles[3]);
 
 console.log(`\n${ok ? "TODO OK ✅" : "HAY FALLOS ❌"}`);
 process.exit(ok ? 0 : 1);

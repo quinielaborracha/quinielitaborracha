@@ -264,22 +264,36 @@ function battleCountFor(name){
   return jugadas+activos;
 }
 
-// v3.15 — Regla acordada con el usuario: la diferencia entre el
-// participante con MÁS duelos jugados y el que tiene MENOS no puede
-// superar 2 (ej. no puede haber alguien con 3 duelos mientras otro sigue
-// en 0 -- pero 3 y 1 sí está bien; para que alguien llegue a un 3er duelo
-// hace falta que ya no quede nadie en 0). Se evalúa sobre TODOS los
-// participantes, no solo p1/p2: iniciar un duelo para quien ya va ganando
-// no debe poder alejarlo más del que se quedó atrás.
+// v3.15.1 — BUG REPORTADO: la primera versión de esta regla recalculaba el
+// spread MÁXIMO-MÍNIMO de TODO el roster después de cada duelo propuesto.
+// Con ~27 participantes, un solo duelo solo puede subirle el contador a 2
+// personas -- así que apenas hay MÁS de un rezagado en 0 mientras alguien
+// ya jugó de más (exactamente el estado roto que reportó el usuario), esa
+// cuenta global JAMÁS puede bajar de spread>2 en una sola movida, sin
+// importar a quién se empareje. Resultado: "Sugerir" no encontraba ningún
+// par válido y el creador rechazaba cualquier duelo -- todo quedaba
+// trabado para siempre, porque exigía arreglar a TODO el roster de un
+// saque en vez de dejar avanzar de a poco.
+//
+// v3.15.1 — Regla corregida, misma intención pero evaluada solo sobre
+// p1/p2 (no sobre el roster entero): a nadie se le puede dar un duelo que
+// lo deje a MÁS de 2 del "piso" actual (el mínimo de duelos jugados entre
+// TODOS los participantes, antes de este duelo). Así:
+//   - 2 rezagados emparejándose entre sí siempre pueden (su nuevo conteo
+//     queda pegado al piso), lo que le da al admin una salida SIEMPRE
+//     disponible para ir subiendo a los que se quedaron en 0 -- nunca hay
+//     traba total.
+//   - Quien ya va ganando (ej. con 2) quedará bloqueado de un 3er duelo
+//     mientras el piso siga en 0 -- recién puede cuando el piso sube a 1
+//     (ejemplo del usuario: "3 y 1 sí está bien", "3 y 0 no").
 const MAX_BATTLE_SPREAD=2;
 function wouldBreakBattleBalance(p1,p2){
-  const counts=PL.map(name=>{
-    let c=battleCountFor(name);
-    if(name===p1||name===p2)c++;
-    return c;
-  });
+  const counts=PL.map(battleCountFor);
   if(!counts.length)return false;
-  return (Math.max(...counts)-Math.min(...counts))>MAX_BATTLE_SPREAD;
+  const piso=Math.min(...counts);
+  const nuevoP1=battleCountFor(p1)+1;
+  const nuevoP2=battleCountFor(p2)+1;
+  return (nuevoP1-piso>MAX_BATTLE_SPREAD)||(nuevoP2-piso>MAX_BATTLE_SPREAD);
 }
 
 // Mensaje de aviso compartido entre startBattle() y sugerirRival(): quién
