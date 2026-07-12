@@ -132,6 +132,54 @@ function renderStatCards(){
     if(mp>bestMatchPts){bestMatchPts=mp;bestMatchLbl=MD[mid]?.lbl||`P${mid}`;}
   });
 
+  // v3.15.2 — BUG REPORTADO: las tarjetas de estadísticas (Ganadores ✓,
+  // Empates ✓, Marcador exacto, % de aciertos, Partidos jugados, Mejor
+  // racha, Mejor partido) solo recorrían MIDS (grupos, P1-P72) -- una vez
+  // arrancada la eliminatoria, ningún partido de Dieciseisavos en adelante
+  // (P73-P104) sumaba a estos contadores, aunque "Pts eliminatoria" (arriba,
+  // rankRow.elim) sí los incluye vía getRank()/calcElimPts(). Mismo criterio
+  // de acierto que ya usa calcElimMatchBreakdown()/buildChronologicalResults
+  // (scoring.js): llave exacta o cruce válido (isLlaveCorrecta/
+  // findCruceValido) para poder comparar H/A/D contra el resultado real; sin
+  // eso, el partido igual cuenta como "jugado" (participó) pero no como
+  // acierto. No se suma a ptsByGroup (eso es un concepto de Fase de Grupos:
+  // "Mejor grupo" no debe mezclarse con eliminatoria) pero sí a
+  // bestMatchPts/bestMatchLbl ("Mejor partido" es el mejor partido de
+  // cualquier fase).
+  for(let pid=73;pid<=104;pid++){
+    const phase=(typeof phaseForPid==="function")?phaseForPid(pid):null;
+    if(phase&&!isFaseActiva(phase.key))continue;
+    const s2=S.elimScores[pid]||S.elimScores[String(pid)];if(!s2||s2.live)continue;
+    const pred=elimPred(name,pid);if(!pred)continue;
+    played++;
+    let rR=null,pR=null,exactMatch=false;
+    if(isLlaveCorrecta(name,pid)){
+      rR=s2.h>s2.a?"H":s2.h<s2.a?"A":"D";
+      pR=pred.h>pred.a?"H":pred.h<pred.a?"A":"D";
+      exactMatch=(pred.h===s2.h&&pred.a===s2.a);
+    }else{
+      const cruce=findCruceValido(name,pid);
+      if(cruce){
+        const realH=cruce.swapped?cruce.real.a:cruce.real.h;
+        const realA=cruce.swapped?cruce.real.h:cruce.real.a;
+        rR=realH>realA?"H":realH<realA?"A":"D";
+        pR=pred.h>pred.a?"H":pred.h<pred.a?"A":"D";
+        exactMatch=(pred.h===realH&&pred.a===realA);
+      }
+    }
+    if(rR!==null&&rR===pR){
+      if(rR==="D")draws++;else wins++;
+      curStreak++;
+      if(curStreak>bestStreak)bestStreak=curStreak;
+      if(exactMatch)exact++;
+    }else{
+      curStreak=0;
+    }
+    const mp=calcElimMatchPts(name,pid);
+    totalPts+=mp;
+    if(mp>bestMatchPts){bestMatchPts=mp;bestMatchLbl=phase?`${phase.label} P${pid}`:`P${pid}`;}
+  }
+
   const pct=played>0?Math.round((wins+draws+exact>0?wins+draws:0)/played*100):0;
   const hitPct=played>0?Math.round((wins+draws)/played*100):0;
   const exactPct=played>0?Math.round(exact/played*100):0;

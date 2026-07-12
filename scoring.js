@@ -156,7 +156,27 @@ function elimPred(name,pid){
   const slot=PID_TO_SLOT[pid];if(!slot)return null;
   const rec=(DB.predictions[person.id]||{})[slot];
   if(!rec)return null;
-  return{h:rec.h,a:rec.a};
+  return{h:rec.h,a:rec.a,pick:rec.pick};
+}
+
+// v3.15.2 — BUG REAL: en un cruce que el participante predijo EMPATADO
+// (rec.h===rec.a), koWinner() (registro.js, lo que decide qué muestra el
+// wizard/"Predicciones") SÍ respeta rec.pick (a quién marcó como que avanza
+// por penales) -- pero getPredWinner()/calcClassifiedPtsForPid()/
+// getClassifiedBadgeForPid() de acá abajo, en vez de mirar ese mismo pick,
+// asumían SIEMPRE que el local (teams.h) avanzaba. Si el participante
+// eligió al visitante (teams.a, el que aparece a la derecha en la fila),
+// el wizard mostraba correctamente "pasa <visitante>" pero el motor de
+// puntos seguía comparando contra el local -- 0pts de "Clasificado" para un
+// pick que en realidad era correcto. Esta función centraliza el mismo
+// criterio que koWinner(): en empate, sin pick definido no hay ganador
+// predicho (no se puede inventar un default).
+function predictedWinnerFromPred(pred,teams){
+  if(!pred||!teams)return null;
+  if(pred.h>pred.a)return teams.h;
+  if(pred.a>pred.h)return teams.a;
+  if(pred.pick===teams.h||pred.pick===teams.a)return pred.pick;
+  return null;
 }
 
 function getElimTeams(name,pid){
@@ -201,11 +221,9 @@ function getElimTeams(name,pid){
 function getPredWinner(name,pid,wantLoser=false){
   const teams=getElimTeams(name,pid);if(!teams)return null;
   const pred=elimPred(name,pid);if(!pred)return null;
-  let winner,loser;
-  if(pred.h>pred.a){winner=teams.h;loser=teams.a;}
-  else if(pred.a>pred.h){winner=teams.a;loser=teams.h;}
-  else{winner=teams.h;loser=teams.a;} // empate → locales avanzan por defecto (penales)
-  return wantLoser?loser:winner;
+  const winner=predictedWinnerFromPred(pred,teams);
+  if(!winner)return null;
+  return wantLoser?(winner===teams.h?teams.a:teams.h):winner;
 }
 
 // v1.9 — NUEVO: "¿Quién avanza?" (pestaña ⚡ En vivo). A diferencia de
@@ -502,10 +520,7 @@ function calcClassifiedPtsForPid(name,pid){
   if(!isPrevPhaseClosed(phase))return 0;
   const predTeams=getElimTeams(name,pid);if(!predTeams)return 0;
   const pred=elimPred(name,pid);if(!pred)return 0;
-  let predWinner;
-  if(pred.h>pred.a)predWinner=predTeams.h;
-  else if(pred.a>pred.h)predWinner=predTeams.a;
-  else predWinner=predTeams.h;
+  const predWinner=predictedWinnerFromPred(pred,predTeams);
   if(!predWinner)return 0;
   // Check if predWinner is in real advancers (team, not llave)
   return getRealAdvancers(phase).has(n(predWinner))?classifiedPts:0;
@@ -1360,11 +1375,7 @@ function getClassifiedBadgeForPid(playerName, pid){
   const pred=elimPred(playerName,pid);
   if(!predTeams||!pred)return null;
 
-  let predWinner;
-  if(pred.h>pred.a)predWinner=predTeams.h;
-  else if(pred.a>pred.h)predWinner=predTeams.a;
-  else predWinner=predTeams.h; // draw → home
-
+  const predWinner=predictedWinnerFromPred(pred,predTeams);
   if(!predWinner)return null;
 
   // Did this predicted winner actually advance from this phase?
