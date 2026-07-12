@@ -1107,7 +1107,22 @@ function importarInfoParticipantes(file){
 
       if(text[0] === '{' || text[0] === '['){
         const raw = JSON.parse(text);
-        if(raw && raw.tipo === 'quinielaborracha_info_participantes' && Array.isArray(raw.participantes)){
+        if(raw && raw.tipo === 'quinielaborracha_fix_ubicacion' && Array.isArray(raw.participantes)){
+          // v4.1 — Formato chico, hermano del CSV de Ciudad/País agregado
+          // arriba: mismo caso de uso (parchear ciudad/país/paisIso de
+          // participantes YA EXISTENTES por código), pero en JSON para
+          // subirlo desde este mismo panel sin pasar por una planilla.
+          // A propósito NO toca clave/correo/estado -- solo ubicación.
+          formato = 'json-fix-ubicacion';
+          raw.participantes.forEach(p=>{
+            if(!p || !p.codigo) return;
+            const city = p.ciudad || '';
+            const country = p.pais || '';
+            const countryIso = p.paisIso || '';
+            if(!city && !country && !countryIso) return;
+            porCodigo[p.codigo] = { city, country, countryIso };
+          });
+        }else if(raw && raw.tipo === 'quinielaborracha_info_participantes' && Array.isArray(raw.participantes)){
           // v2.8.1 — Formato nuevo (el que arma exportarInfoParticipantes(),
           // ahora con "predicciones" incluidas). CAMBIO DE COMPORTAMIENTO a
           // propósito respecto al resto de esta función (CSV/json-legado,
@@ -1160,6 +1175,24 @@ function importarInfoParticipantes(file){
         const idxCodigo = _colIndex(header, ['Codigo','Código']);
         const idxClave = _colIndex(header, ['Clave']);
         const idxCorreo = _colIndex(header, ['Correo','Email','Correo electronico','Correo electrónico']);
+        // v4.1 — BUG REPORTADO: el ranking mostraba "Orlando, USA, Inglaterra"
+        // en vez de "Orlando, USA" -- el campo `country` de varios
+        // participantes (cargado en un import viejo, previo a este panel)
+        // en realidad tenía guardado el país que predijeron como CAMPEÓN, no
+        // su país de residencia, y `city` traía ciudad+país pegados a mano
+        // ("Orlando, USA") -- cityCountry() (utils.js) concatena ambos tal
+        // cual, de ahí el triplicado. La corrección es un dato, no lógica:
+        // hacía falta poder parchear Ciudad/País/País ISO de participantes
+        // YA EXISTENTES por código -- el comentario de más arriba
+        // ("por codigo -> {clave, email, name, city, country, ...}") ya
+        // documentaba esta intención desde v1.5.1, pero ningún formato la
+        // completaba todavía (el JSON de quinielaborracha_info_participantes
+        // agrega solo códigos NUEVOS a propósito, ver más arriba). Se
+        // agregan acá las 3 columnas opcionales al mismo CSV de
+        // Código/Clave/Correo de siempre.
+        const idxCiudad = _colIndex(header, ['Ciudad']);
+        const idxPais = _colIndex(header, ['Pais','País']);
+        const idxPaisIso = _colIndex(header, ['PaisIso','PaísIso','Pais ISO','País ISO']);
         if(idxCodigo === -1){
           throw new Error("No encontré la columna 'Codigo' en el archivo -- ¿es un archivo exportado desde este panel?");
         }
@@ -1168,8 +1201,11 @@ function importarInfoParticipantes(file){
           if(!codigo) return;
           const clave = idxClave!==-1 ? (r[idxClave]||'').trim() : '';
           const email = idxCorreo!==-1 ? (r[idxCorreo]||'').trim() : '';
-          if(!clave && !email) return;
-          porCodigo[codigo] = { clave, email };
+          const city = idxCiudad!==-1 ? (r[idxCiudad]||'').trim() : '';
+          const country = idxPais!==-1 ? (r[idxPais]||'').trim() : '';
+          const countryIso = idxPaisIso!==-1 ? (r[idxPaisIso]||'').trim() : '';
+          if(!clave && !email && !city && !country) return;
+          porCodigo[codigo] = { clave, email, city, country, countryIso };
         });
       }
 
@@ -1209,6 +1245,7 @@ function importarInfoParticipantes(file){
         if(datos.email) p.email = datos.email;
         if(datos.city) p.city = datos.city;
         if(datos.country) p.country = datos.country;
+        if(datos.countryIso) p.countryIso = datos.countryIso;
         if(datos.estadoQuiniela) p.estadoQuiniela = datos.estadoQuiniela;
         if(datos.fechaCreacion) p.fechaCreacion = datos.fechaCreacion;
         if(datos.fechaEnvio) p.fechaEnvio = datos.fechaEnvio;
