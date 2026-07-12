@@ -1110,17 +1110,33 @@ function importarInfoParticipantes(file){
         if(raw && raw.tipo === 'quinielaborracha_fix_ubicacion' && Array.isArray(raw.participantes)){
           // v4.1 — Formato chico, hermano del CSV de Ciudad/País agregado
           // arriba: mismo caso de uso (parchear ciudad/país/paisIso de
-          // participantes YA EXISTENTES por código), pero en JSON para
-          // subirlo desde este mismo panel sin pasar por una planilla.
-          // A propósito NO toca clave/correo/estado -- solo ubicación.
+          // participantes YA EXISTENTES), pero en JSON para subirlo desde
+          // este mismo panel sin pasar por una planilla. A propósito NO
+          // toca clave/correo/estado -- solo ubicación.
+          //
+          // v4.1.1 — BUG REPORTADO: el archivo se armó con códigos de un
+          // backup de hace días (QB-2026-0001...) que ya no coinciden con
+          // los códigos actuales de esta base -- "Ningún participante
+          // actual coincide con los códigos de este archivo". A
+          // diferencia del resto de esta función (CSV/json-legado, que sí
+          // dependen del código a propósito, ver nota grande más arriba),
+          // este formato puntual matchea por NOMBRE normalizado contra
+          // DB.participants -- ya está cargado en memoria en el momento
+          // de importar, así que no hace falta que el archivo traiga el
+          // código correcto, alcanza con el nombre tal cual figura hoy.
           formato = 'json-fix-ubicacion';
+          const norm = (s)=> String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const porNombre = {};
+          DB.participants.forEach(p=>{ porNombre[norm(p.name)] = p.codigo; });
           raw.participantes.forEach(p=>{
-            if(!p || !p.codigo) return;
+            if(!p || !p.nombre) return;
+            const codigoReal = porNombre[norm(p.nombre)];
+            if(!codigoReal) return; // nadie con ese nombre en la base actual -- se ignora, no rompe el resto
             const city = p.ciudad || '';
             const country = p.pais || '';
             const countryIso = p.paisIso || '';
             if(!city && !country && !countryIso) return;
-            porCodigo[p.codigo] = { city, country, countryIso };
+            porCodigo[codigoReal] = { city, country, countryIso };
           });
         }else if(raw && raw.tipo === 'quinielaborracha_info_participantes' && Array.isArray(raw.participantes)){
           // v2.8.1 — Formato nuevo (el que arma exportarInfoParticipantes(),
