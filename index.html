@@ -105,7 +105,7 @@
   // Señal de que Firebase ya está listo para usarse
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
-<link rel="stylesheet" href="styles.css?v=1.15">
+<link rel="stylesheet" href="styles.css?v=1.16">
 
 <!-- v7.2 — Banner de Modo Prueba (?test=1). Oculto por defecto (display:none
      inline); el script de Firebase de arriba lo muestra solo si TEST_MODE
@@ -212,7 +212,7 @@
       <img id="logo-img" src="" alt="QB" style="width:70px;height:70px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v4.1</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v4.2</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -414,6 +414,8 @@
       <button class="stat-tab on" onclick="statTab('cards')" id="stab-cards">🃏 Tarjetas</button>
       <button class="stat-tab" onclick="statTab('popular')" id="stab-popular">🏆 Torneo real</button>
       <button class="stat-tab" onclick="statTab('goal')" id="stab-goal">⚽ Goleadores</button>
+      <button class="stat-tab" onclick="statTab('country')" id="stab-country">🌎 País goleador</button>
+      <button class="stat-tab" onclick="statTab('hof')" id="stab-hof">👑 Hall de la fama</button>
     </div>
     <div id="stat-cards" class="tab-panel"></div>
     <div id="stat-popular" class="tab-panel" style="display:none"></div>
@@ -430,6 +432,36 @@
           <input type="text" id="sc2" placeholder="País" aria-label="País del jugador" style="width:100px">
           <input type="number" id="sg" placeholder="Goles" aria-label="Cantidad de goles" min="1" style="width:55px">
           <button class="btn btn-blue btn-sm" onclick="addScorer()">+ Agregar</button>
+        </div>
+      </div>
+    </div>
+    <div id="stat-country" class="tab-panel" style="display:none">
+      <div class="rfl">
+        <span class="sec" style="margin:0">Países goleadores del Mundial</span>
+        <button class="btn btn-sm btn-espn" onclick="fetchCountryGoals()">⚡ ESPN en vivo</button>
+      </div>
+      <div class="ib">Top 10 de países por goles marcados en el torneo.</div>
+      <div id="gcb"></div>
+    </div>
+    <div id="stat-hof" class="tab-panel hof-wrap" style="display:none">
+      <div id="hof-intro" class="hof-intro-overlay">
+        <object id="hof-intro-obj" type="image/svg+xml" data="trophy-intro.svg" class="hof-intro-svg" aria-label="Animación de trofeo">🏆</object>
+      </div>
+      <div class="rfl"><span class="sec" style="margin:0">Hall de la fama</span></div>
+      <div class="ib">Campeones de ediciones anteriores de la Quinielita Borracha.</div>
+      <div id="hof-grid" class="hof-grid"></div>
+      <div class="admin-only" id="hof-form-wrap" style="display:none;margin-top:1rem;padding-top:.875rem;border-top:.5px solid var(--qb-border)">
+        <div class="sec">Agregar campeón</div>
+        <div class="rfl" style="align-items:flex-start">
+          <label class="hof-upload-circle" id="hof-upload" for="hof-file" title="Cargar foto del campeón">
+            <span id="hof-upload-ico">📷</span>
+          </label>
+          <input type="file" id="hof-file" accept="image/*" style="display:none" onchange="hofReadPhoto(this)">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <input type="text" id="hof-name" placeholder="Nombre" aria-label="Nombre del campeón" style="width:160px">
+            <input type="number" id="hof-year" placeholder="Año" aria-label="Año del torneo" style="width:90px">
+            <button class="btn btn-blue btn-sm" onclick="addHOF()">+ Agregar</button>
+          </div>
         </div>
       </div>
     </div>
@@ -777,7 +809,7 @@
 <script defer src="partidos-grupos.js?v=1.0"></script>
 <script defer src="utils.js?v=1.10"></script>
 <script defer src="app-static-data.js?v=1.3"></script>
-<script defer src="app-state.js?v=1.3"></script>
+<script defer src="app-state.js?v=1.4"></script>
 <script defer src="scoring.js?v=2.13"></script>
 <script defer src="totp.js?v=1.1"></script>
 <!-- v8.0 — app.js (3906 líneas) se dividió en 16 módulos (Sprint 1,
@@ -792,7 +824,7 @@
      definidas en todos los módulos anteriores. -->
 <script defer src="app-core-data.js?v=1.5"></script>
 <script defer src="app-admin-auth.js?v=1.7"></script>
-<script defer src="app-live-sync.js?v=1.9"></script>
+<script defer src="app-live-sync.js?v=1.10"></script>
 <script defer src="app-tabs.js?v=1.6"></script>
 <script defer src="app-eliminatoria-data.js?v=1.0"></script>
 <script defer src="app-batallas.js?v=3.6"></script>
@@ -803,8 +835,8 @@
 <script defer src="app-bracket-view.js?v=1.8"></script>
 <script defer src="app-bracket-espn-live.js?v=1.4"></script>
 <script defer src="app-integridad.js?v=1.5"></script>
-<script defer src="app-predicciones.js?v=1.13"></script>
-<script defer src="app-estadisticas.js?v=1.11"></script>
+<script defer src="app-predicciones.js?v=1.14"></script>
+<script defer src="app-estadisticas.js?v=1.12"></script>
 <script defer src="app-admin-tools.js?v=1.11"></script>
 <script defer src="app-bootstrap.js?v=1.5"></script>
 <script defer src="registro.js?v=2.39"></script>

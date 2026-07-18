@@ -58,5 +58,14 @@ let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{
   // detalle campo por campo de qué cambió se muestra en pantalla en el
   // momento pero no se persiste, para no hacer crecer este documento con
   // el contenido completo de las predicciones en cada corrida manual.
-  integrityChecks:[]
+  integrityChecks:[],
+  // v4.2 — Hall de la fama (Estadísticas → 👑 Hall de la fama): campeones
+  // de ediciones anteriores del torneo, cargados a mano por el admin.
+  // [{id,name,year,photo,addedAt}] — `photo` es un dataURL JPEG ya
+  // comprimido en el cliente (ver hofReadPhoto(), app-estadisticas.js), no
+  // una referencia a Storage (el proyecto no usa Firebase Storage).
+  // A propósito NO se resetea en ningún flujo de "nuevo torneo"/
+  // clearReality(): es un registro histórico permanente, no algo propio
+  // de la edición en curso.
+  hallOfFame:[]
 };

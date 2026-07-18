@@ -496,6 +496,34 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .sr:last-child{border:none}
 .es{text-align:center;padding:2rem;color:var(--qb-muted);font-size:12px;line-height:1.9}
 
+/* ── HALL DE LA FAMA (v4.2) ── */
+.hof-wrap{position:relative}
+.hof-intro-overlay{
+  position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;
+  background:var(--qb-surface);border-radius:10px;
+  opacity:1;transition:opacity .5s ease;
+}
+.hof-intro-overlay.fade-out{opacity:0;pointer-events:none}
+.hof-intro-svg{width:200px;height:200px;max-width:60%}
+.hof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.75rem}
+.hof-card{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:.875rem .5rem;border:1px solid var(--qb-border2);border-radius:10px;
+  background:var(--qb-surface2);text-align:center;
+}
+.hof-photo{width:76px;height:76px;border-radius:50%;object-fit:cover;border:3px solid var(--qb-gold);background:var(--qb-surface3)}
+.hof-photo-empty{display:flex;align-items:center;justify-content:center;font-size:30px}
+.hof-name{font-weight:700;font-size:12.5px;color:var(--qb-text);word-break:break-word}
+.hof-year{font-family:var(--ff-display);font-size:11px;font-weight:800;color:var(--qb-gold)}
+.hof-rm{position:absolute;top:6px;right:6px;padding:2px 6px;font-size:10px;line-height:1}
+.hof-upload-circle{
+  width:76px;height:76px;border-radius:50%;flex-shrink:0;cursor:pointer;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  border:2px dashed var(--qb-border2);background:var(--qb-surface2);color:var(--qb-muted);
+}
+.hof-upload-circle:hover{border-color:var(--qb-blue);color:var(--qb-blue)}
+.hof-upload-circle img{width:100%;height:100%;object-fit:cover}
+
 /* ── SPINNER ── */
 .spin{animation:rot .7s linear infinite;display:inline-block}
 @keyframes rot{to{transform:rotate(360deg)}}

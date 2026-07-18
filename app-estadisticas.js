@@ -83,13 +83,15 @@ function renderSnapshotPanel(){
 // ══════════════════════════════════════════════════════════════
 
 function statTab(id){
-  ["cards","popular","goal"].forEach(x=>{
+  ["cards","popular","goal","country","hof"].forEach(x=>{
     document.getElementById("stat-"+x).style.display=x===id?"block":"none";
     document.getElementById("stab-"+x)?.classList.toggle("on",x===id);
   });
   if(id==="cards")renderStatCards();
   if(id==="popular")renderTorneoReal();
   if(id==="goal")fetchESPNScorers();
+  if(id==="country")fetchCountryGoals();
+  if(id==="hof")openHOF();
 }
 
 // ── TARJETAS DE JUGADOR ──
@@ -351,6 +353,118 @@ function renderTorneoReal(){
       <span class="sbadge ok">📡 Datos oficiales de ESPN</span>
       <span style="font-size:10px;color:var(--qb-muted)">Se actualiza solo — no hace falta recargar la página</span>
     </div>` + roundsHtml;
+}
+
+// ══════════════════════════════════════════════════════════════
+// HALL DE LA FAMA — campeones de ediciones anteriores, v4.2
+// ══════════════════════════════════════════════════════════════
+// Vive en S.hallOfFame ([{id,name,year,photo,addedAt}], ver app-state.js),
+// mismo mecanismo de persistencia que el resto de S (save()/Firestore).
+// A diferencia de S.reality (que clearReality() borra entre torneos), acá
+// no hay ningún flujo que lo limpie: son los campeones de ediciones
+// pasadas, un registro permanente. `photo` es un dataURL JPEG comprimido
+// en el cliente (ver hofReadPhoto() más abajo) -- no hay Firebase Storage
+// en este proyecto (plan Spark), y al ser pocas entradas (una foto por
+// edición, cargada una sola vez cada tanto) comprimir fuerte alcanza sin
+// arriesgar el límite de 1MiB de quiniela/estado.
+const HOF_INTRO_MS=2400; // ≈ un loop de trophy-intro.svg (dur="2.367s")
+let _hofPendingPhoto=null; // dataURL de la foto recién elegida, antes de "+ Agregar"
+
+// Abre la pestaña: pinta la grilla y dispara la animación de intro. Se
+// llama SOLO desde statTab('hof') -- un cambio remoto mientras la
+// pestaña ya está abierta usa renderHOF() directo (ver applyRemoteState(),
+// app-live-sync.js) para no reiniciar la animación en cada sync ajeno.
+function openHOF(){
+  renderHOF();
+  const overlay=document.getElementById("hof-intro");
+  const obj=document.getElementById("hof-intro-obj");
+  if(!overlay)return;
+  overlay.classList.remove("fade-out");
+  overlay.style.display="flex";
+  if(obj){
+    // Reasignar el mismo "data" no reinicia el SMIL del <object> -- hay
+    // que sacarlo y volverlo a poner para que el trofeo se redibuje desde
+    // cero cada vez que se entra a la pestaña.
+    const src=obj.getAttribute("data");
+    obj.setAttribute("data","");
+    requestAnimationFrame(()=>obj.setAttribute("data",src));
+  }
+  clearTimeout(window._hofIntroTimer);
+  window._hofIntroTimer=setTimeout(()=>{overlay.classList.add("fade-out");},HOF_INTRO_MS);
+}
+
+function renderHOF(){
+  const grid=document.getElementById("hof-grid");if(!grid)return;
+  const list=[...(S.hallOfFame||[])].sort((a,b)=>(b.year-a.year)||(b.addedAt-a.addedAt));
+  if(!list.length){
+    // grid-column:1/-1 -- #hof-grid es un CSS grid de varias columnas; sin
+    // esto, este único item hereda el ancho de UNA columna (~110px) y el
+    // texto queda angosto, una palabra por línea, en vez de ocupar todo el
+    // ancho disponible como el resto de los estados vacíos ".es" del resto
+    // de la app (que viven en contenedores normales, no en un grid).
+    grid.innerHTML=`<div class="es" style="grid-column:1/-1">Todavía no hay campeones cargados en el Hall de la fama 🏆</div>`;
+    return;
+  }
+  grid.innerHTML=list.map(h=>{
+    const photoHtml=h.photo
+      ?`<img class="hof-photo" src="${esc(h.photo)}" alt="Foto de ${esc(h.name)}">`
+      :`<div class="hof-photo hof-photo-empty">🏆</div>`;
+    const rmBtn=isAdmin()?`<button class="btn btn-red btn-sm hof-rm" onclick="rmHOF(${h.id})" title="Quitar" aria-label="Quitar a ${esc(h.name)} del Hall de la fama">✕</button>`:"";
+    return`<div class="hof-card">${rmBtn}${photoHtml}<div class="hof-name">${esc(h.name)}</div><div class="hof-year">${esc(String(h.year))}</div></div>`;
+  }).join("");
+}
+
+// Lee el archivo elegido, lo recorta a cuadrado y lo comprime a un dataURL
+// chico (240x240, JPEG ~70%) antes de guardarlo en memoria -- recién se
+// persiste si el admin confirma con "+ Agregar" (addHOF()).
+function hofReadPhoto(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  if(!file.type.startsWith("image/")){toast("Elegí un archivo de imagen",true);input.value="";return;}
+  if(file.size>10*1024*1024){toast("Imagen demasiado pesada (máx. 10MB)",true);input.value="";return;}
+  const reader=new FileReader();
+  reader.onload=(ev)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const SIZE=240;
+      const canvas=document.createElement("canvas");
+      canvas.width=SIZE;canvas.height=SIZE;
+      const ctx=canvas.getContext("2d");
+      const side=Math.min(img.width,img.height);
+      const sx=(img.width-side)/2,sy=(img.height-side)/2;
+      ctx.drawImage(img,sx,sy,side,side,0,0,SIZE,SIZE);
+      _hofPendingPhoto=canvas.toDataURL("image/jpeg",0.72);
+      const upload=document.getElementById("hof-upload");
+      if(upload)upload.innerHTML=`<img src="${_hofPendingPhoto}" alt="Vista previa">`;
+    };
+    img.onerror=()=>toast("No se pudo leer la imagen",true);
+    img.src=ev.target.result;
+  };
+  reader.onerror=()=>toast("No se pudo leer el archivo",true);
+  reader.readAsDataURL(file);
+}
+
+function addHOF(){
+  if(!isAdmin())return;
+  const nameEl=document.getElementById("hof-name"),yearEl=document.getElementById("hof-year");
+  const name=nameEl.value.trim(),year=parseInt(yearEl.value)||0;
+  if(!name){toast("Escribe el nombre del campeón",true);return;}
+  if(!year){toast("Escribe el año del torneo",true);return;}
+  if(!S.hallOfFame)S.hallOfFame=[];
+  S.hallOfFame.push({id:Date.now(),name,year,photo:_hofPendingPhoto||"",addedAt:Date.now()});
+  _hofPendingPhoto=null;
+  nameEl.value="";yearEl.value="";
+  const fileEl=document.getElementById("hof-file");if(fileEl)fileEl.value="";
+  const upload=document.getElementById("hof-upload");if(upload)upload.innerHTML=`<span id="hof-upload-ico">📷</span>`;
+  save();renderHOF();
+  toast(`🏆 ${name} agregado al Hall de la fama`);
+}
+
+function rmHOF(id){
+  if(!isAdmin())return;
+  if(!confirm("¿Quitar este campeón del Hall de la fama?"))return;
+  S.hallOfFame=(S.hallOfFame||[]).filter(h=>h.id!==id);
+  save();renderHOF();
 }
 
 // ══════════════════════════════════════════════════════════════
