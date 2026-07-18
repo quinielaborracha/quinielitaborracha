@@ -254,7 +254,7 @@
 .rfl{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:.875rem}
 
 /* ── INPUTS ── */
-input[type=text],input[type=number],input[type=url]{
+input[type=text],input[type=number],input[type=url],select{
   padding: 5px 9px;
   border: 1px solid var(--qb-border2);
   border-radius: 6px;
@@ -264,10 +264,11 @@ input[type=text],input[type=number],input[type=url]{
   font-size: 12px;
 }
 input[type=text]::placeholder,input[type=number]::placeholder { color: var(--qb-muted); }
-input[type=text]:focus,input[type=number]:focus { outline: none; border-color: var(--qb-blue); }
+input[type=text]:focus,input[type=number]:focus,select:focus { outline: none; border-color: var(--qb-blue); }
 :root.light input[type=text],
 :root.light input[type=number],
-:root.light input[type=url]{
+:root.light input[type=url],
+:root.light select{
   background: #FFFFFF;
   border-color: var(--qb-border2);
   color: var(--qb-text);
@@ -516,6 +517,11 @@ input[type=text]:focus,input[type=number]:focus { outline: none; border-color: v
 .hof-name{font-weight:700;font-size:15px;color:var(--qb-text);word-break:break-word}
 .hof-year{font-family:var(--ff-display);font-size:13px;font-weight:800;color:var(--qb-gold)}
 .hof-rm{position:absolute;top:8px;right:8px;padding:3px 7px;font-size:11px;line-height:1}
+.hof-cat-badge{
+  position:absolute;top:8px;left:8px;width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  background:var(--qb-surface3);border:1px solid var(--qb-border2);
+}
 .hof-upload-circle{
   width:108px;height:108px;border-radius:50%;flex-shrink:0;cursor:pointer;overflow:hidden;
   display:flex;align-items:center;justify-content:center;font-size:28px;

@@ -355,19 +355,36 @@ function renderTorneoReal(){
 }
 
 // ══════════════════════════════════════════════════════════════
-// HALL DE LA FAMA — campeones de ediciones anteriores, v4.2
+// HALL DE LA FAMA — campeones de ediciones anteriores, v4.2 (v4.4: agrega
+// categorías -- Campeón/2do/3er lugar/Ambulancia/Cenicienta -- y edición
+// por clic derecho)
 // ══════════════════════════════════════════════════════════════
-// Vive en S.hallOfFame ([{id,name,year,photo,addedAt}], ver app-state.js),
-// mismo mecanismo de persistencia que el resto de S (save()/Firestore).
-// A diferencia de S.reality (que clearReality() borra entre torneos), acá
-// no hay ningún flujo que lo limpie: son los campeones de ediciones
-// pasadas, un registro permanente. `photo` es un dataURL JPEG comprimido
-// en el cliente (ver hofReadPhoto() más abajo) -- no hay Firebase Storage
-// en este proyecto (plan Spark), y al ser pocas entradas (una foto por
-// edición, cargada una sola vez cada tanto) comprimir fuerte alcanza sin
-// arriesgar el límite de 1MiB de quiniela/estado.
+// Vive en S.hallOfFame ([{id,name,year,photo,category,addedAt}], ver
+// app-state.js), mismo mecanismo de persistencia que el resto de S
+// (save()/Firestore). A diferencia de S.reality (que clearReality() borra
+// entre torneos), acá no hay ningún flujo que lo limpie: son los premios
+// de ediciones pasadas, un registro permanente. `photo` es un dataURL
+// JPEG comprimido en el cliente (ver hofCompressPhoto() más abajo) -- no
+// hay Firebase Storage en este proyecto (plan Spark), y al ser pocas
+// entradas comprimir fuerte alcanza sin arriesgar el límite de 1MiB de
+// quiniela/estado.
 const HOF_INTRO_MS=2400; // ≈ un loop de trophy-intro.svg (dur="2.367s")
 let _hofPendingPhoto=null; // dataURL de la foto recién elegida, antes de "+ Agregar"
+let _hofEditingId=null;    // id de la entrada que está abierta en el modal de edición (null = modal cerrado)
+let _hofEditPendingPhoto=null; // null = no se tocó la foto al editar (se conserva la que ya tenía)
+
+// "Ambulancia"/"Cenicienta" son los mismos apodos/íconos que ya usa el
+// Ranking para penúltimo y último lugar (ver renderStatCards() más arriba
+// y renderRank(), app-bracket-view.js) -- se reusan acá para que el Hall
+// de la fama pueda premiar (o "castigar") esos puestos, no solo al campeón.
+const HOF_CATEGORIES=[
+  {key:"champ",label:"Campeón",icon:"🏆"},
+  {key:"runner",label:"2do lugar",icon:"🥈"},
+  {key:"third",label:"3er lugar",icon:"🥉"},
+  {key:"ambulance",label:"Ambulancia",icon:"🚑"},
+  {key:"cinderella",label:"Cenicienta",icon:"👸"},
+];
+function hofCatMeta(key){return HOF_CATEGORIES.find(c=>c.key===key)||HOF_CATEGORIES[0];}
 
 // Abre la pestaña: pinta la grilla y dispara la animación de intro. Se
 // llama SOLO desde statTab('hof') -- un cambio remoto mientras la
@@ -405,22 +422,36 @@ function renderHOF(){
     return;
   }
   grid.innerHTML=list.map(h=>{
+    const cat=hofCatMeta(h.category||"champ");
     const photoHtml=h.photo
       ?`<img class="hof-photo" src="${esc(h.photo)}" alt="Foto de ${esc(h.name)}">`
-      :`<div class="hof-photo hof-photo-empty">🏆</div>`;
+      :`<div class="hof-photo hof-photo-empty">${cat.icon}</div>`;
     const rmBtn=isAdmin()?`<button class="btn btn-red btn-sm hof-rm" onclick="rmHOF(${h.id})" title="Quitar" aria-label="Quitar a ${esc(h.name)} del Hall de la fama">✕</button>`:"";
-    return`<div class="hof-card">${rmBtn}${photoHtml}<div class="hof-name">${esc(h.name)}</div><div class="hof-year">${esc(String(h.year))}</div></div>`;
+    const editTitle=isAdmin()?` title="Clic derecho para editar"`:"";
+    return`<div class="hof-card" data-hid="${h.id}"${editTitle}>${rmBtn}<span class="hof-cat-badge" title="${esc(cat.label)}">${cat.icon}</span>${photoHtml}<div class="hof-name">${esc(h.name)}</div><div class="hof-year">${esc(String(h.year))}</div></div>`;
   }).join("");
 }
 
+// v4.4 — Clic derecho sobre una tarjeta abre el modal de edición (solo
+// admin). Delegado en document (igual patrón que .js-rm-scorer en
+// app-predicciones.js) porque #hof-grid se reconstruye entero en cada
+// renderHOF(), así que un listener puesto directo en cada .hof-card se
+// perdería en el siguiente render.
+document.addEventListener("contextmenu",(ev)=>{
+  const card=ev.target.closest(".hof-card");
+  if(!card||!isAdmin())return;
+  ev.preventDefault();
+  openHOFEdit(parseInt(card.dataset.hid));
+});
+
 // Lee el archivo elegido, lo recorta a cuadrado y lo comprime a un dataURL
-// chico (240x240, JPEG ~70%) antes de guardarlo en memoria -- recién se
-// persiste si el admin confirma con "+ Agregar" (addHOF()).
-function hofReadPhoto(input){
-  const file=input.files&&input.files[0];
+// chico (240x240, JPEG ~70%) -- usado tanto por el formulario de alta
+// (hofReadPhoto()) como por el modal de edición (hofEditReadPhoto()), acá
+// compartido para no duplicar el manejo de FileReader/canvas dos veces.
+function hofCompressPhoto(file,onDone){
   if(!file)return;
-  if(!file.type.startsWith("image/")){toast("Elegí un archivo de imagen",true);input.value="";return;}
-  if(file.size>10*1024*1024){toast("Imagen demasiado pesada (máx. 10MB)",true);input.value="";return;}
+  if(!file.type.startsWith("image/")){toast("Elegí un archivo de imagen",true);return;}
+  if(file.size>10*1024*1024){toast("Imagen demasiado pesada (máx. 10MB)",true);return;}
   const reader=new FileReader();
   reader.onload=(ev)=>{
     const img=new Image();
@@ -432,9 +463,7 @@ function hofReadPhoto(input){
       const side=Math.min(img.width,img.height);
       const sx=(img.width-side)/2,sy=(img.height-side)/2;
       ctx.drawImage(img,sx,sy,side,side,0,0,SIZE,SIZE);
-      _hofPendingPhoto=canvas.toDataURL("image/jpeg",0.72);
-      const upload=document.getElementById("hof-upload");
-      if(upload)upload.innerHTML=`<img src="${_hofPendingPhoto}" alt="Vista previa">`;
+      onDone(canvas.toDataURL("image/jpeg",0.72));
     };
     img.onerror=()=>toast("No se pudo leer la imagen",true);
     img.src=ev.target.result;
@@ -443,27 +472,85 @@ function hofReadPhoto(input){
   reader.readAsDataURL(file);
 }
 
+function hofReadPhoto(input){
+  hofCompressPhoto(input.files&&input.files[0],(dataUrl)=>{
+    _hofPendingPhoto=dataUrl;
+    const upload=document.getElementById("hof-upload");
+    if(upload)upload.innerHTML=`<img src="${dataUrl}" alt="Vista previa">`;
+  });
+}
+
 function addHOF(){
   if(!isAdmin())return;
-  const nameEl=document.getElementById("hof-name"),yearEl=document.getElementById("hof-year");
-  const name=nameEl.value.trim(),year=parseInt(yearEl.value)||0;
-  if(!name){toast("Escribe el nombre del campeón",true);return;}
+  const nameEl=document.getElementById("hof-name"),yearEl=document.getElementById("hof-year"),catEl=document.getElementById("hof-category");
+  const name=nameEl.value.trim(),year=parseInt(yearEl.value)||0,category=catEl.value||"champ";
+  if(!name){toast("Escribe el nombre",true);return;}
   if(!year){toast("Escribe el año del torneo",true);return;}
   if(!S.hallOfFame)S.hallOfFame=[];
-  S.hallOfFame.push({id:Date.now(),name,year,photo:_hofPendingPhoto||"",addedAt:Date.now()});
+  S.hallOfFame.push({id:Date.now(),name,year,photo:_hofPendingPhoto||"",category,addedAt:Date.now()});
   _hofPendingPhoto=null;
-  nameEl.value="";yearEl.value="";
+  nameEl.value="";yearEl.value="";catEl.value="champ";
   const fileEl=document.getElementById("hof-file");if(fileEl)fileEl.value="";
   const upload=document.getElementById("hof-upload");if(upload)upload.innerHTML=`<span id="hof-upload-ico">📷</span>`;
   save();renderHOF();
-  toast(`🏆 ${name} agregado al Hall de la fama`);
+  toast(`${hofCatMeta(category).icon} ${name} agregado al Hall de la fama`);
 }
 
 function rmHOF(id){
   if(!isAdmin())return;
-  if(!confirm("¿Quitar este campeón del Hall de la fama?"))return;
+  if(!confirm("¿Quitar esta tarjeta del Hall de la fama?"))return;
   S.hallOfFame=(S.hallOfFame||[]).filter(h=>h.id!==id);
   save();renderHOF();
+}
+
+// ── Edición (clic derecho sobre una tarjeta) ──
+function openHOFEdit(id){
+  if(!isAdmin())return;
+  const h=(S.hallOfFame||[]).find(x=>x.id===id);
+  if(!h)return;
+  _hofEditingId=id;
+  _hofEditPendingPhoto=null; // null = conservar la foto que ya tenía, salvo que elijan una nueva
+  document.getElementById("hof-edit-name").value=h.name;
+  document.getElementById("hof-edit-year").value=h.year;
+  document.getElementById("hof-edit-category").value=h.category||"champ";
+  const fileEl=document.getElementById("hof-edit-file");if(fileEl)fileEl.value="";
+  const upload=document.getElementById("hof-edit-upload");
+  if(upload)upload.innerHTML=h.photo?`<img src="${esc(h.photo)}" alt="Vista previa">`:`<span>📷</span>`;
+  document.getElementById("hof-edit-modal").style.display="flex";
+}
+
+function hofEditReadPhoto(input){
+  hofCompressPhoto(input.files&&input.files[0],(dataUrl)=>{
+    _hofEditPendingPhoto=dataUrl;
+    const upload=document.getElementById("hof-edit-upload");
+    if(upload)upload.innerHTML=`<img src="${dataUrl}" alt="Vista previa">`;
+  });
+}
+
+function saveHOFEdit(){
+  if(!isAdmin()||_hofEditingId===null)return;
+  const h=(S.hallOfFame||[]).find(x=>x.id===_hofEditingId);
+  if(!h)return;
+  const name=document.getElementById("hof-edit-name").value.trim();
+  const year=parseInt(document.getElementById("hof-edit-year").value)||0;
+  const category=document.getElementById("hof-edit-category").value||"champ";
+  if(!name){toast("Escribe el nombre",true);return;}
+  if(!year){toast("Escribe el año del torneo",true);return;}
+  h.name=name;h.year=year;h.category=category;
+  if(_hofEditPendingPhoto!==null)h.photo=_hofEditPendingPhoto;
+  save();renderHOF();closeHOFEdit();
+  toast(`✓ ${name} actualizado`);
+}
+
+function deleteHOFEdit(){
+  if(_hofEditingId===null)return;
+  rmHOF(_hofEditingId); // ya valida isAdmin() y pide confirmación
+  closeHOFEdit();
+}
+
+function closeHOFEdit(){
+  document.getElementById("hof-edit-modal").style.display="none";
+  _hofEditingId=null;_hofEditPendingPhoto=null;
 }
 
 // ══════════════════════════════════════════════════════════════
