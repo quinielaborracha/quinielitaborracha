@@ -60,15 +60,15 @@ let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{
   // el contenido completo de las predicciones en cada corrida manual.
   integrityChecks:[],
   // v4.2 — Hall de la fama (Estadísticas → 👑 Hall de la fama): premios
-  // de ediciones anteriores del torneo, cargados a mano por el admin.
-  // [{id,name,year,photo,category,addedAt}] — `photo` es un dataURL JPEG
-  // ya comprimido en el cliente (ver hofCompressPhoto(),
+  // de ediciones anteriores del torneo, cargados a mano por el admin. Un
+  // elemento por AÑO/edición (v4.4.1): [{id,year,addedAt, champ?,runner?,
+  // third?,ambulance?,cinderella?}] — cada una de esas 5 claves opcionales
+  // es {name,photo} y solo existe si esa categoría (ver HOF_CATEGORIES,
+  // app-estadisticas.js) ya se cargó para ese año. `photo` es un dataURL
+  // JPEG ya comprimido en el cliente (ver hofCompressPhoto(),
   // app-estadisticas.js), no una referencia a Storage (el proyecto no usa
-  // Firebase Storage). `category` (v4.4) es una de HOF_CATEGORIES
-  // (app-estadisticas.js): champ/runner/third/ambulance/cinderella --
-  // entradas viejas sin este campo se tratan como "champ" (ver
-  // hofCatMeta()). A propósito NO se resetea en ningún flujo de "nuevo torneo"/
-  // clearReality(): es un registro histórico permanente, no algo propio
-  // de la edición en curso.
+  // Firebase Storage). A propósito NO se resetea en ningún flujo de "nuevo
+  // torneo"/clearReality(): es un registro histórico permanente, no algo
+  // propio de la edición en curso.
   hallOfFame:[]
 };

@@ -105,7 +105,7 @@
   // Señal de que Firebase ya está listo para usarse
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
-<link rel="stylesheet" href="styles.css?v=1.18">
+<link rel="stylesheet" href="styles.css?v=1.19">
 
 <!-- v7.2 — Banner de Modo Prueba (?test=1). Oculto por defecto (display:none
      inline); el script de Firebase de arriba lo muestra solo si TEST_MODE
@@ -212,7 +212,7 @@
       <img id="logo-img" src="" alt="QB" style="width:70px;height:70px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v4.4</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v4.4.1</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -816,34 +816,47 @@
   </div>
 </div>
 
-<!-- v4.4 — Editar una tarjeta del Hall de la fama (clic derecho sobre la
-     tarjeta, ver openHOFEdit(), app-estadisticas.js). Mismo patrón que
-     exitModal/blockModal/qb-aviso: overlay estático fuera de cualquier
-     tab, que JS solo muestra/oculta -- así siempre puede aparecer encima,
-     sin importar en qué pestaña esté parado el admin. -->
+<!-- v4.4.1 — Editar una edición completa del Hall de la fama (clic derecho
+     sobre la tarjeta, ver openHOFEdit(), app-estadisticas.js): un card =
+     un año, con hasta 5 puestos adentro (Campeón/2do/3er lugar/Ambulancia/
+     Cenicienta), cada uno con su propia foto + nombre. Dejar el nombre de
+     una fila en blanco y guardar borra ese puesto de la edición. Mismo
+     patrón que exitModal/blockModal/qb-aviso: overlay estático fuera de
+     cualquier tab, que JS solo muestra/oculta. -->
 <div class="modal-overlay" id="hof-edit-modal" style="display:none">
-  <div class="modal-box">
-    <div class="modal-title">Editar tarjeta</div>
-    <div class="rfl" style="align-items:flex-start;margin-bottom:.875rem">
-      <label class="hof-upload-circle" id="hof-edit-upload" for="hof-edit-file" title="Cambiar foto">
-        <span>📷</span>
-      </label>
-      <input type="file" id="hof-edit-file" accept="image/*" style="display:none" onchange="hofEditReadPhoto(this)">
-      <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">
-        <input type="text" id="hof-edit-name" placeholder="Nombre" aria-label="Nombre" style="width:100%;box-sizing:border-box">
-        <input type="number" id="hof-edit-year" placeholder="Año" aria-label="Año del torneo" style="width:100%;box-sizing:border-box">
-        <select id="hof-edit-category" aria-label="Categoría" style="width:100%;box-sizing:border-box">
-          <option value="champ">🏆 Campeón</option>
-          <option value="runner">🥈 2do lugar</option>
-          <option value="third">🥉 3er lugar</option>
-          <option value="ambulance">🚑 Ambulancia</option>
-          <option value="cinderella">👸 Cenicienta</option>
-        </select>
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-title">Editar edición</div>
+    <input type="number" id="hof-edit-year" placeholder="Año" aria-label="Año del torneo" style="width:100%;box-sizing:border-box;margin-bottom:.875rem">
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:1rem">
+      <div class="hof-edit-row">
+        <label class="hof-slot-upload" id="hof-edit-champ-upload" for="hof-edit-champ-file" title="Foto">🏆</label>
+        <input type="file" id="hof-edit-champ-file" accept="image/*" style="display:none" onchange="hofEditSlotPhoto(this,'champ')">
+        <input type="text" id="hof-edit-champ-name" placeholder="🏆 Campeón" aria-label="Campeón" style="flex:1;min-width:0">
+      </div>
+      <div class="hof-edit-row">
+        <label class="hof-slot-upload" id="hof-edit-runner-upload" for="hof-edit-runner-file" title="Foto">🥈</label>
+        <input type="file" id="hof-edit-runner-file" accept="image/*" style="display:none" onchange="hofEditSlotPhoto(this,'runner')">
+        <input type="text" id="hof-edit-runner-name" placeholder="🥈 2do lugar" aria-label="2do lugar" style="flex:1;min-width:0">
+      </div>
+      <div class="hof-edit-row">
+        <label class="hof-slot-upload" id="hof-edit-third-upload" for="hof-edit-third-file" title="Foto">🥉</label>
+        <input type="file" id="hof-edit-third-file" accept="image/*" style="display:none" onchange="hofEditSlotPhoto(this,'third')">
+        <input type="text" id="hof-edit-third-name" placeholder="🥉 3er lugar" aria-label="3er lugar" style="flex:1;min-width:0">
+      </div>
+      <div class="hof-edit-row">
+        <label class="hof-slot-upload" id="hof-edit-ambulance-upload" for="hof-edit-ambulance-file" title="Foto">🚑</label>
+        <input type="file" id="hof-edit-ambulance-file" accept="image/*" style="display:none" onchange="hofEditSlotPhoto(this,'ambulance')">
+        <input type="text" id="hof-edit-ambulance-name" placeholder="🚑 Ambulancia" aria-label="Ambulancia" style="flex:1;min-width:0">
+      </div>
+      <div class="hof-edit-row">
+        <label class="hof-slot-upload" id="hof-edit-cinderella-upload" for="hof-edit-cinderella-file" title="Foto">👸</label>
+        <input type="file" id="hof-edit-cinderella-file" accept="image/*" style="display:none" onchange="hofEditSlotPhoto(this,'cinderella')">
+        <input type="text" id="hof-edit-cinderella-name" placeholder="👸 Cenicienta" aria-label="Cenicienta" style="flex:1;min-width:0">
       </div>
     </div>
     <div class="modal-btns">
       <button class="rg-btn rg-btn-primary rg-btn-block" onclick="saveHOFEdit()">Guardar cambios</button>
-      <button class="rg-btn rg-btn-danger rg-btn-block" onclick="deleteHOFEdit()">Quitar del Hall de la fama</button>
+      <button class="rg-btn rg-btn-danger rg-btn-block" onclick="deleteHOFEdit()">Quitar esta edición</button>
       <button class="rg-btn rg-btn-ghost rg-btn-block" onclick="closeHOFEdit()">Cancelar</button>
     </div>
   </div>
@@ -855,7 +868,7 @@
 <script defer src="partidos-grupos.js?v=1.0"></script>
 <script defer src="utils.js?v=1.10"></script>
 <script defer src="app-static-data.js?v=1.3"></script>
-<script defer src="app-state.js?v=1.5"></script>
+<script defer src="app-state.js?v=1.6"></script>
 <script defer src="scoring.js?v=2.13"></script>
 <script defer src="totp.js?v=1.1"></script>
 <!-- v8.0 — app.js (3906 líneas) se dividió en 16 módulos (Sprint 1,
@@ -882,7 +895,7 @@
 <script defer src="app-bracket-espn-live.js?v=1.4"></script>
 <script defer src="app-integridad.js?v=1.5"></script>
 <script defer src="app-predicciones.js?v=1.15"></script>
-<script defer src="app-estadisticas.js?v=1.14"></script>
+<script defer src="app-estadisticas.js?v=1.15"></script>
 <script defer src="app-admin-tools.js?v=1.11"></script>
 <script defer src="app-bootstrap.js?v=1.5"></script>
 <script defer src="registro.js?v=2.39"></script>

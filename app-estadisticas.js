@@ -356,22 +356,37 @@ function renderTorneoReal(){
 
 // ══════════════════════════════════════════════════════════════
 // HALL DE LA FAMA — campeones de ediciones anteriores, v4.2 (v4.4: agrega
-// categorías -- Campeón/2do/3er lugar/Ambulancia/Cenicienta -- y edición
-// por clic derecho)
+// categorías; v4.4.1: un card por EDICIÓN/año, con los puestos -- Campeón/
+// 2do/3er lugar/Ambulancia/Cenicienta -- como slots adentro del mismo
+// card, en vez de un card separado por persona)
 // ══════════════════════════════════════════════════════════════
-// Vive en S.hallOfFame ([{id,name,year,photo,category,addedAt}], ver
-// app-state.js), mismo mecanismo de persistencia que el resto de S
-// (save()/Firestore). A diferencia de S.reality (que clearReality() borra
-// entre torneos), acá no hay ningún flujo que lo limpie: son los premios
-// de ediciones pasadas, un registro permanente. `photo` es un dataURL
-// JPEG comprimido en el cliente (ver hofCompressPhoto() más abajo) -- no
-// hay Firebase Storage en este proyecto (plan Spark), y al ser pocas
-// entradas comprimir fuerte alcanza sin arriesgar el límite de 1MiB de
-// quiniela/estado.
+// Vive en S.hallOfFame (ver app-state.js), mismo mecanismo de persistencia
+// que el resto de S (save()/Firestore). A diferencia de S.reality (que
+// clearReality() borra entre torneos), acá no hay ningún flujo que lo
+// limpie: son los premios de ediciones pasadas, un registro permanente.
+// Forma de cada entrada: {id,year,addedAt, champ?,runner?,third?,
+// ambulance?,cinderella?} -- cada una de esas 5 claves opcionales es
+// {name,photo} y solo existe si esa categoría ya se cargó para ese año
+// (ver HOF_CATEGORIES). `photo` es un dataURL JPEG comprimido en el
+// cliente (ver hofCompressPhoto() más abajo) -- no hay Firebase Storage en
+// este proyecto (plan Spark), y al ser pocas entradas comprimir fuerte
+// alcanza sin arriesgar el límite de 1MiB de quiniela/estado.
+//
+// v4.4.1 — Cambio de forma respecto a v4.2/v4.4 (un card por PERSONA:
+// {id,name,year,photo,addedAt} sin category en v4.2, con category
+// top-level en v4.4). A diferencia de lo que se pensó al principio, SÍ
+// hay datos reales de producción con esa forma vieja (5 campeones
+// cargados en vivo antes de este cambio) -- no se migran de una sola vez
+// para no arriesgar una escritura masiva rara, sino que hofCardsForRender()
+// los agrupa por año EN MEMORIA solo para pintarlos (no dispara save()) y
+// addHOF()/openHOFEdit()/saveHOFEdit() los "suben de forma" en el momento
+// en que el admin toca esa edición por primera vez desde acá (ver
+// hofUpgradeLegacyEntry()) -- de ahí en más quedan persistidos en la forma
+// nueva. Mientras nadie los toque, siguen viéndose bien tal cual estaban.
 const HOF_INTRO_MS=2400; // ≈ un loop de trophy-intro.svg (dur="2.367s")
-let _hofPendingPhoto=null; // dataURL de la foto recién elegida, antes de "+ Agregar"
-let _hofEditingId=null;    // id de la entrada que está abierta en el modal de edición (null = modal cerrado)
-let _hofEditPendingPhoto=null; // null = no se tocó la foto al editar (se conserva la que ya tenía)
+let _hofPendingPhoto=null; // dataURL de la foto recién elegida en el form de alta, antes de "+ Agregar"
+let _hofEditingId=null;    // id del card que está abierto en el modal de edición (null = modal cerrado)
+let _hofEditPendingPhotos={}; // {champ:dataUrl,...} -- solo trae clave la categoría cuya foto se cambió en esta apertura del modal
 
 // "Ambulancia"/"Cenicienta" son los mismos apodos/íconos que ya usa el
 // Ranking para penúltimo y último lugar (ver renderStatCards() más arriba
@@ -385,6 +400,48 @@ const HOF_CATEGORIES=[
   {key:"cinderella",label:"Cenicienta",icon:"👸"},
 ];
 function hofCatMeta(key){return HOF_CATEGORIES.find(c=>c.key===key)||HOF_CATEGORIES[0];}
+
+// ¿Esta entrada ya tiene al menos un slot en la forma nueva (v4.4.1)?
+function hofHasNestedSlots(entry){return HOF_CATEGORIES.some(cat=>entry[cat.key]);}
+
+// Agrupa S.hallOfFame por año PARA PINTAR, sin mutar ni persistir nada.
+// Una entrada de la forma nueva ya es un card completo. Una entrada vieja
+// (v4.2 sin `category`, o v4.4 con `category` top-level -- una fila por
+// PERSONA) se pliega como un slot más dentro del card de su año, usando
+// `category||"champ"` (v4.2 no tenía el concepto de categoría, así que
+// toda fila vieja sin ese campo es implícitamente el campeón).
+function hofCardsForRender(){
+  const byYear=new Map();
+  const order=[];
+  (S.hallOfFame||[]).forEach(h=>{
+    if(hofHasNestedSlots(h)){
+      const existing=byYear.get(h.year);
+      if(!existing)order.push(h.year);
+      if(!existing||h.addedAt>=existing.addedAt)byYear.set(h.year,h);
+      return;
+    }
+    if(!h.name)return; // ni forma nueva ni nombre viejo -- nada que mostrar
+    let card=byYear.get(h.year);
+    if(!card){card={id:h.id,year:h.year,addedAt:h.addedAt};byYear.set(h.year,card);order.push(h.year);}
+    const legacyCat=h.category||"champ";
+    if(!card[legacyCat])card[legacyCat]={name:h.name,photo:h.photo||""};
+  });
+  return order.map(y=>byYear.get(y));
+}
+
+// "Sube de forma" una entrada vieja (una fila = una persona) a la forma
+// nueva (un card = un año, con slots adentro) la primera vez que el admin
+// la toca desde acá -- convierte su nombre/foto propios en el slot de su
+// categoría (`category||"champ"`) y borra los campos viejos, sin perder
+// el `id` (así el resto de la UI, que ya lo tenía guardado en un
+// data-hid, lo sigue encontrando). No hace nada si `entry` ya está en la
+// forma nueva.
+function hofUpgradeLegacyEntry(entry){
+  if(hofHasNestedSlots(entry)||!entry.name)return;
+  const legacyCat=entry.category||"champ";
+  entry[legacyCat]={name:entry.name,photo:entry.photo||""};
+  delete entry.name;delete entry.photo;delete entry.category;
+}
 
 // Abre la pestaña: pinta la grilla y dispara la animación de intro. Se
 // llama SOLO desde statTab('hof') -- un cambio remoto mientras la
@@ -411,24 +468,28 @@ function openHOF(){
 
 function renderHOF(){
   const grid=document.getElementById("hof-grid");if(!grid)return;
-  const list=[...(S.hallOfFame||[])].sort((a,b)=>(b.year-a.year)||(b.addedAt-a.addedAt));
+  const list=hofCardsForRender().sort((a,b)=>(b.year-a.year)||(b.addedAt-a.addedAt));
   if(!list.length){
     // grid-column:1/-1 -- #hof-grid es un CSS grid de varias columnas; sin
-    // esto, este único item hereda el ancho de UNA columna (~110px) y el
-    // texto queda angosto, una palabra por línea, en vez de ocupar todo el
+    // esto, este único item hereda el ancho de UNA columna y el texto
+    // queda angosto, una palabra por línea, en vez de ocupar todo el
     // ancho disponible como el resto de los estados vacíos ".es" del resto
     // de la app (que viven en contenedores normales, no en un grid).
-    grid.innerHTML=`<div class="es" style="grid-column:1/-1">Todavía no hay campeones cargados en el Hall de la fama 🏆</div>`;
+    grid.innerHTML=`<div class="es" style="grid-column:1/-1">Todavía no hay ediciones cargadas en el Hall de la fama 🏆</div>`;
     return;
   }
   grid.innerHTML=list.map(h=>{
-    const cat=hofCatMeta(h.category||"champ");
-    const photoHtml=h.photo
-      ?`<img class="hof-photo" src="${esc(h.photo)}" alt="Foto de ${esc(h.name)}">`
-      :`<div class="hof-photo hof-photo-empty">${cat.icon}</div>`;
-    const rmBtn=isAdmin()?`<button class="btn btn-red btn-sm hof-rm" onclick="rmHOF(${h.id})" title="Quitar" aria-label="Quitar a ${esc(h.name)} del Hall de la fama">✕</button>`:"";
+    const slotsHtml=HOF_CATEGORIES.map(cat=>{
+      const slot=h[cat.key];
+      if(!slot||!slot.name)return"";
+      const photoHtml=slot.photo
+        ?`<img class="hof-slot-photo" src="${esc(slot.photo)}" alt="">`
+        :`<div class="hof-slot-photo hof-slot-photo-empty">${cat.icon}</div>`;
+      return`<div class="hof-slot">${photoHtml}<span class="hof-slot-name">${cat.icon} ${esc(slot.name)}</span></div>`;
+    }).join("");
+    const rmBtn=isAdmin()?`<button class="btn btn-red btn-sm hof-rm" onclick="rmHOF(${h.id})" title="Quitar" aria-label="Quitar la edición ${esc(String(h.year))} del Hall de la fama">✕</button>`:"";
     const editTitle=isAdmin()?` title="Clic derecho para editar"`:"";
-    return`<div class="hof-card" data-hid="${h.id}"${editTitle}>${rmBtn}<span class="hof-cat-badge" title="${esc(cat.label)}">${cat.icon}</span>${photoHtml}<div class="hof-name">${esc(h.name)}</div><div class="hof-year">${esc(String(h.year))}</div></div>`;
+    return`<div class="hof-card" data-hid="${h.id}"${editTitle}>${rmBtn}<div class="hof-year">${esc(String(h.year))}</div><div class="hof-slots">${slotsHtml||'<div class="es" style="padding:0">Sin puestos cargados</div>'}</div></div>`;
   }).join("");
 }
 
@@ -446,8 +507,9 @@ document.addEventListener("contextmenu",(ev)=>{
 
 // Lee el archivo elegido, lo recorta a cuadrado y lo comprime a un dataURL
 // chico (240x240, JPEG ~70%) -- usado tanto por el formulario de alta
-// (hofReadPhoto()) como por el modal de edición (hofEditReadPhoto()), acá
-// compartido para no duplicar el manejo de FileReader/canvas dos veces.
+// (hofReadPhoto()) como por cada fila del modal de edición
+// (hofEditSlotPhoto()), acá compartido para no duplicar el manejo de
+// FileReader/canvas.
 function hofCompressPhoto(file,onDone){
   if(!file)return;
   if(!file.type.startsWith("image/")){toast("Elegí un archivo de imagen",true);return;}
@@ -480,66 +542,97 @@ function hofReadPhoto(input){
   });
 }
 
+// Agrega/actualiza UNA categoría de una edición. Si ya existe un card para
+// ese año, la categoría se agrega/reemplaza AHÍ (mismo card) en vez de
+// crear uno nuevo -- así se puede ir cargando Campeón, 2do, 3ero, etc. de
+// la misma edición sin duplicar tarjetas. El año NO se limpia después de
+// agregar, a propósito: para cargar varios puestos de un mismo Mundial
+// alcanza con cambiar la categoría y el nombre entre cada "+ Agregar".
 function addHOF(){
   if(!isAdmin())return;
-  const nameEl=document.getElementById("hof-name"),yearEl=document.getElementById("hof-year"),catEl=document.getElementById("hof-category");
-  const name=nameEl.value.trim(),year=parseInt(yearEl.value)||0,category=catEl.value||"champ";
-  if(!name){toast("Escribe el nombre",true);return;}
+  const yearEl=document.getElementById("hof-year"),nameEl=document.getElementById("hof-name"),catEl=document.getElementById("hof-category");
+  const year=parseInt(yearEl.value)||0,name=nameEl.value.trim(),category=catEl.value||"champ";
   if(!year){toast("Escribe el año del torneo",true);return;}
+  if(!name){toast("Escribe el nombre",true);return;}
   if(!S.hallOfFame)S.hallOfFame=[];
-  S.hallOfFame.push({id:Date.now(),name,year,photo:_hofPendingPhoto||"",category,addedAt:Date.now()});
+  let entry=S.hallOfFame.find(h=>h.year===year);
+  if(!entry){entry={id:Date.now(),year,addedAt:Date.now()};S.hallOfFame.push(entry);}
+  else hofUpgradeLegacyEntry(entry); // preserva su dato viejo como slot antes de agregarle uno nuevo
+  entry[category]={name,photo:_hofPendingPhoto||""};
   _hofPendingPhoto=null;
-  nameEl.value="";yearEl.value="";catEl.value="champ";
+  nameEl.value="";catEl.value="champ";
   const fileEl=document.getElementById("hof-file");if(fileEl)fileEl.value="";
   const upload=document.getElementById("hof-upload");if(upload)upload.innerHTML=`<span id="hof-upload-ico">📷</span>`;
   save();renderHOF();
-  toast(`${hofCatMeta(category).icon} ${name} agregado al Hall de la fama`);
+  toast(`${hofCatMeta(category).icon} ${name} agregado a la edición ${year}`);
 }
 
 function rmHOF(id){
   if(!isAdmin())return;
-  if(!confirm("¿Quitar esta tarjeta del Hall de la fama?"))return;
+  if(!confirm("¿Quitar esta edición completa del Hall de la fama (Campeón, 2do lugar, etc.)?"))return;
   S.hallOfFame=(S.hallOfFame||[]).filter(h=>h.id!==id);
   save();renderHOF();
 }
 
-// ── Edición (clic derecho sobre una tarjeta) ──
+// ── Edición (clic derecho sobre una tarjeta) -- las 5 categorías juntas ──
 function openHOFEdit(id){
   if(!isAdmin())return;
   const h=(S.hallOfFame||[]).find(x=>x.id===id);
   if(!h)return;
   _hofEditingId=id;
-  _hofEditPendingPhoto=null; // null = conservar la foto que ya tenía, salvo que elijan una nueva
-  document.getElementById("hof-edit-name").value=h.name;
+  _hofEditPendingPhotos={};
   document.getElementById("hof-edit-year").value=h.year;
-  document.getElementById("hof-edit-category").value=h.category||"champ";
-  const fileEl=document.getElementById("hof-edit-file");if(fileEl)fileEl.value="";
-  const upload=document.getElementById("hof-edit-upload");
-  if(upload)upload.innerHTML=h.photo?`<img src="${esc(h.photo)}" alt="Vista previa">`:`<span>📷</span>`;
+  // Prefill de solo lectura (no muta `h`): si todavía es una entrada
+  // vieja, su propio nombre/foto se muestran en la fila de SU categoría
+  // (category||"champ"). La "subida de forma" real recién ocurre si el
+  // admin guarda (saveHOFEdit() la persiste ahí).
+  const legacy=!hofHasNestedSlots(h)&&h.name;
+  HOF_CATEGORIES.forEach(cat=>{
+    let slot=h[cat.key];
+    if(!slot&&legacy&&(h.category||"champ")===cat.key)slot={name:h.name,photo:h.photo||""};
+    slot=slot||{name:"",photo:""};
+    document.getElementById(`hof-edit-${cat.key}-name`).value=slot.name||"";
+    const fileEl=document.getElementById(`hof-edit-${cat.key}-file`);if(fileEl)fileEl.value="";
+    const upload=document.getElementById(`hof-edit-${cat.key}-upload`);
+    if(upload)upload.innerHTML=slot.photo?`<img src="${esc(slot.photo)}" alt="Vista previa">`:cat.icon;
+  });
   document.getElementById("hof-edit-modal").style.display="flex";
 }
 
-function hofEditReadPhoto(input){
+function hofEditSlotPhoto(input,catKey){
   hofCompressPhoto(input.files&&input.files[0],(dataUrl)=>{
-    _hofEditPendingPhoto=dataUrl;
-    const upload=document.getElementById("hof-edit-upload");
+    _hofEditPendingPhotos[catKey]=dataUrl;
+    const upload=document.getElementById(`hof-edit-${catKey}-upload`);
     if(upload)upload.innerHTML=`<img src="${dataUrl}" alt="Vista previa">`;
   });
 }
 
+// Guarda las 5 categorías juntas. Dejar el nombre de una categoría en
+// blanco BORRA esa categoría de la edición (delete h[cat.key]) -- así el
+// mismo modal también sirve para sacar un puesto cargado por error, sin
+// necesitar un botón "quitar" separado por fila.
 function saveHOFEdit(){
   if(!isAdmin()||_hofEditingId===null)return;
   const h=(S.hallOfFame||[]).find(x=>x.id===_hofEditingId);
   if(!h)return;
-  const name=document.getElementById("hof-edit-name").value.trim();
   const year=parseInt(document.getElementById("hof-edit-year").value)||0;
-  const category=document.getElementById("hof-edit-category").value||"champ";
-  if(!name){toast("Escribe el nombre",true);return;}
   if(!year){toast("Escribe el año del torneo",true);return;}
-  h.name=name;h.year=year;h.category=category;
-  if(_hofEditPendingPhoto!==null)h.photo=_hofEditPendingPhoto;
+  // Si esta entrada todavía es vieja, su categoría implícita es la única
+  // que puede tener foto "heredada" en h.photo (top-level) en vez de
+  // h[cat.key].photo -- se resuelve ANTES del forEach para no perderla si
+  // el admin guarda sin volver a subir esa foto puntual.
+  const legacyCat=(!hofHasNestedSlots(h)&&h.name)?(h.category||"champ"):null;
+  h.year=year;
+  HOF_CATEGORIES.forEach(cat=>{
+    const name=document.getElementById(`hof-edit-${cat.key}-name`).value.trim();
+    if(!name){delete h[cat.key];return;}
+    const pendingPhoto=_hofEditPendingPhotos[cat.key];
+    const existingPhoto=cat.key===legacyCat?(h.photo||""):(h[cat.key]?.photo||"");
+    h[cat.key]={name,photo:pendingPhoto!==undefined?pendingPhoto:existingPhoto};
+  });
+  delete h.name;delete h.photo;delete h.category; // limpia los campos de la forma vieja, si los tenía
   save();renderHOF();closeHOFEdit();
-  toast(`✓ ${name} actualizado`);
+  toast(`✓ Edición ${year} actualizada`);
 }
 
 function deleteHOFEdit(){
@@ -550,7 +643,7 @@ function deleteHOFEdit(){
 
 function closeHOFEdit(){
   document.getElementById("hof-edit-modal").style.display="none";
-  _hofEditingId=null;_hofEditPendingPhoto=null;
+  _hofEditingId=null;_hofEditPendingPhotos={};
 }
 
 // ══════════════════════════════════════════════════════════════
