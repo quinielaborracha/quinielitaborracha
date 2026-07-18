@@ -120,8 +120,15 @@ const BONUS_PHASES=[
   {key:"r8",label:"Octavos",mids:[89,90,91,92,93,94,95,96],elimPhase:true,lastPts:6,classifiedPts:4,llavePts:2,prevPhase:"r16"},
   {key:"qf",label:"Cuartos",mids:[97,98,99,100],elimPhase:true,lastPts:6,classifiedPts:6,llavePts:2,prevPhase:"r8"},
   {key:"sf",label:"Semifinales",mids:[101,102],elimPhase:true,lastPts:0,classifiedPts:6,llavePts:2,prevPhase:"qf"},
-  {key:"final",label:"Final",mids:[104],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
+  // v4.3 — "third" antes que "final": ambas dependen solo de "sf" (mismo
+  // prevPhase, ninguna depende de la otra — ver isPrevPhaseClosed() más
+  // abajo), así que este orden no cambia ningún cálculo de puntos, solo el
+  // orden en que Admin → Bonos lista las tarjetas de fase. Se invirtió
+  // porque el Tercer lugar se juega ANTES que la Final en la vida real
+  // (mismo orden que ya usa ELIM_ROUNDS) — antes de este cambio, Admin
+  // mostraba "Final" arriba de "Tercer lugar", al revés de cómo se juegan.
   {key:"third",label:"Tercer lugar",mids:[103],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
+  {key:"final",label:"Final",mids:[104],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
 ];
 
 // Check if previous phase is closed (prereq for llaves+classified pts)

@@ -165,6 +165,20 @@ function autoFillRealityFromElim(){
 const ESPN_CORE='https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/seasons/2026';
 const LDR_TYPES=[1,2,3,4,5,6,7]; // All phases: groups, R32, R16, QF, SF, 3rd, Final
 
+// v4.3 — Sub-tabs de Goleadores: "Jugadores" (gb, de siempre) y "Países"
+// (gcb, antes una pestaña propia de Estadísticas -- se mudó acá adentro
+// porque son la misma fuente de datos, ESPN leaders/goles). Mismo patrón
+// que goalTab()/predTab() (app-tabs.js): toggle de display + dispatch al
+// fetch/render correspondiente.
+function goalTab(id){
+  ["players","countries"].forEach(x=>{
+    document.getElementById("goal-"+x).style.display=x===id?"block":"none";
+    document.getElementById("gtab-"+x)?.classList.toggle("on",x===id);
+  });
+  if(id==="players")fetchESPNScorers();
+  if(id==="countries")fetchCountryGoals();
+}
+
 // v4.2 — Sacado de adentro de fetchESPNScorers() (donde era una función
 // local) para que fetchCountryGoals() (goles agrupados por país, pestaña
 // "País goleador") también pueda usarlo sin duplicar el fetch+cache.
@@ -294,15 +308,16 @@ document.addEventListener("click",(ev)=>{
 });
 
 // ══════════════════════════════════════════════════════════════
-// PAÍS GOLEADOR — top 10 de países por goles (Estadísticas), v4.2
+// PAÍS GOLEADOR — top 10 de países por goles, sub-tab "Países" de
+// Goleadores (Estadísticas). v4.2, movido adentro de Goleadores en v4.3.
 // ══════════════════════════════════════════════════════════════
-// Mismo criterio que Goleadores: intenta ESPN en vivo primero (agrupa los
-// goles de goalBucket por equipo en vez de por jugador, reusando el mismo
-// fetch de leaders/getTeam) y si ESPN todavía no tiene datos cae a sumar
-// por país la lista manual de S.scorers (la misma que carga el admin en
-// "Agregar manualmente" de Goleadores) — así ambas pestañas quedan
-// alimentadas por la misma fuente sin pedirle al admin que cargue los
-// goles dos veces.
+// Mismo criterio que la sub-tab "Jugadores": intenta ESPN en vivo primero
+// (agrupa los goles de goalBucket por equipo en vez de por jugador,
+// reusando el mismo fetch de leaders/getTeam) y si ESPN todavía no tiene
+// datos cae a sumar por país la lista manual de S.scorers (la misma que
+// carga el admin en "Agregar manualmente" de la sub-tab "Jugadores") —
+// así ambas sub-tabs quedan alimentadas por la misma fuente sin pedirle
+// al admin que cargue los goles dos veces.
 async function fetchCountryGoals(){
   const body=document.getElementById("gcb");
   body.innerHTML=`<div class="es"><span class="spin" style="display:inline-block;font-size:24px">↻</span><br><br>Cargando goles por país desde ESPN…</div>`;

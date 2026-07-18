@@ -83,14 +83,13 @@ function renderSnapshotPanel(){
 // ══════════════════════════════════════════════════════════════
 
 function statTab(id){
-  ["cards","popular","goal","country","hof"].forEach(x=>{
+  ["cards","popular","goal","hof"].forEach(x=>{
     document.getElementById("stat-"+x).style.display=x===id?"block":"none";
     document.getElementById("stab-"+x)?.classList.toggle("on",x===id);
   });
   if(id==="cards")renderStatCards();
   if(id==="popular")renderTorneoReal();
-  if(id==="goal")fetchESPNScorers();
-  if(id==="country")fetchCountryGoals();
+  if(id==="goal")goalTab("players"); // v4.3 — Goleadores ahora tiene sub-tabs Jugadores/Países, ver goalTab()
   if(id==="hof")openHOF();
 }
 
