@@ -479,7 +479,15 @@ function renderHOF(){
     return;
   }
   grid.innerHTML=list.map(h=>{
-    const slotsHtml=HOF_CATEGORIES.map(cat=>{
+    // v4.4.2 — El Campeón se pinta aparte, con foto grande y centrada (el
+    // tamaño que tenía antes de sumar las otras 4 categorías) -- las
+    // demás (2do/3er lugar/Ambulancia/Cenicienta) siguen como filas
+    // chicas debajo, son secundarias frente al campeón.
+    const champ=h.champ;
+    const champHtml=(champ&&champ.name)?`<div class="hof-champ-block">${
+      champ.photo?`<img class="hof-champ-photo" src="${esc(champ.photo)}" alt="">`:`<div class="hof-champ-photo hof-champ-photo-empty">🏆</div>`
+    }<div class="hof-champ-name">🏆 ${esc(champ.name)}</div></div>`:"";
+    const slotsHtml=HOF_CATEGORIES.filter(cat=>cat.key!=="champ").map(cat=>{
       const slot=h[cat.key];
       if(!slot||!slot.name)return"";
       const photoHtml=slot.photo
@@ -489,7 +497,8 @@ function renderHOF(){
     }).join("");
     const rmBtn=isAdmin()?`<button class="btn btn-red btn-sm hof-rm" onclick="rmHOF(${h.id})" title="Quitar" aria-label="Quitar la edición ${esc(String(h.year))} del Hall de la fama">✕</button>`:"";
     const editTitle=isAdmin()?` title="Clic derecho para editar"`:"";
-    return`<div class="hof-card" data-hid="${h.id}"${editTitle}>${rmBtn}<div class="hof-year">${esc(String(h.year))}</div><div class="hof-slots">${slotsHtml||'<div class="es" style="padding:0">Sin puestos cargados</div>'}</div></div>`;
+    const empty=(!champHtml&&!slotsHtml)?'<div class="es" style="padding:0">Sin puestos cargados</div>':"";
+    return`<div class="hof-card" data-hid="${h.id}"${editTitle}>${rmBtn}<div class="hof-year">${esc(String(h.year))}</div>${champHtml}${slotsHtml?`<div class="hof-slots">${slotsHtml}</div>`:""}${empty}</div>`;
   }).join("");
 }
 

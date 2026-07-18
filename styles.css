@@ -514,6 +514,18 @@ input[type=text]:focus,input[type=number]:focus,select:focus { outline: none; bo
   background:var(--qb-surface2);
 }
 .hof-year{font-family:var(--ff-display);font-weight:900;font-size:19px;color:var(--qb-gold);text-align:center}
+/* v4.4.2 — El Campeón se destaca del resto de los puestos: foto grande y
+   centrada (mismo tamaño que tenía antes de que existieran las otras 4
+   categorías, v4.2-v4.4), con su propio bloque separado por una línea del
+   resto de los slots (2do/3er lugar/Ambulancia/Cenicienta, que siguen
+   chicos -- son secundarios frente al campeón). */
+.hof-champ-block{
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  padding-bottom:.75rem;border-bottom:1px solid var(--qb-border);
+}
+.hof-champ-photo{width:108px;height:108px;border-radius:50%;object-fit:cover;border:4px solid var(--qb-gold);background:var(--qb-surface3)}
+.hof-champ-photo-empty{display:flex;align-items:center;justify-content:center;font-size:42px}
+.hof-champ-name{font-weight:800;font-size:15px;color:var(--qb-text);text-align:center;word-break:break-word}
 .hof-slots{display:flex;flex-direction:column;gap:9px}
 .hof-slot{display:flex;align-items:center;gap:10px}
 .hof-slot-photo{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--qb-gold);background:var(--qb-surface3);flex-shrink:0}
@@ -808,6 +820,10 @@ input[type=text]:focus,input[type=number]:focus,select:focus { outline: none; bo
   .hof-card{padding:.75rem}
   .hof-slot-photo{width:34px;height:34px}
   .hof-slot-name{font-size:11.5px}
+  /* v4.4.2 — el campeón se achica un poco menos que el resto (sigue
+     siendo el más grande de la tarjeta) para que 2 por fila entren cómodas. */
+  .hof-champ-photo{width:84px;height:84px}
+  .hof-champ-name{font-size:13px}
 }
 
 /* ════════════════════════════════════════════════════════════
