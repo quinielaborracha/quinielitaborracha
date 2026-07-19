@@ -140,8 +140,12 @@ function calcAdv(name){
     ap+=12;
     if(isPreguntaAvanzadaActiva('goles_goleador')&&r.topScorerGoals>0&&parseInt(a.scorerGoals)===parseInt(r.topScorerGoals))ap+=8;
   }
-  // Top country: mismo criterio que el goleador de arriba.
-  const countryMatch=isPreguntaAvanzadaActiva('pais_goleador')&&nn(a.topCountry)&&nn(r.topCountry)&&nn(a.topCountry)===nn(r.topCountry);
+  // Top country: mismo criterio que el goleador de arriba, pero acepta
+  // CUALQUIERA de los dos países si hay empate real (r.topCountry2, v4.5).
+  const countryMatch=isPreguntaAvanzadaActiva('pais_goleador')&&nn(a.topCountry)&&(
+    (nn(r.topCountry)&&nn(a.topCountry)===nn(r.topCountry))||
+    (nn(r.topCountry2)&&nn(a.topCountry)===nn(r.topCountry2))
+  );
   if(countryMatch){
     ap+=8;
     if(isPreguntaAvanzadaActiva('goles_pais')&&r.topCountryGoals>0&&parseInt(a.topCountryGoals)===parseInt(r.topCountryGoals))ap+=10;

@@ -42,7 +42,12 @@ let S={scores:{},checksums:{},elimScores:{},elimTeams:{},scorers:[],matchTimes:{
   autoClose:false,
   hiddenPL:{},  // {name: true} — participantes ocultos del ranking  // si true, cierra fases automáticamente al completarse
   snapshots:[],    // [{id, label, ts, positions:{name:pos,...}}]
-  reality:{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountryGoals:0,mostConceded:""},adv:{},
+  // v4.5 — topCountry2: segundo país "más goleador" para el escenario de
+  // empate en goles entre dos países (bastante probable) -- si está
+  // cargado, calcAdv() (scoring.js) acepta la predicción del participante
+  // contra CUALQUIERA de los dos, no solo topCountry. Vacío = sin empate,
+  // se ignora (mismo criterio que topCountry solo).
+  reality:{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountry2:"",topCountryGoals:0,mostConceded:""},adv:{},
   battles:{},  // {1:{p1,p2,groupMids,elimMids,startedAt,closed}, 2:{...}} — duelos diarios v5.0
   battleHistory:[],  // [{name,p1,p2,pts1,pts2,winner,date}] — historial de duelos cerrados, v5.4
   // v3.4 — Historial de cambios de resultados (Admin → 🔒 Integridad),

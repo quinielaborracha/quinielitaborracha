@@ -1,10 +1,10 @@
 /* ════════════════════════════════════════════════════════════
    app-predicciones.js — extraído de app.js (Sprint 1, división en módulos)
    ════════════════════════════════════════════════════════════
-   Vista de Predicciones / Avanzado / Reglas por participante, y goleadores (ESPN en vivo + manual).
+   Vista de Predicciones / Avanzado / Reglas por participante, y goleadores (FIFA en vivo + manual).
 
    Secciones originales incluidas (encabezados tal cual estaban en
-   app.js): PREDICCIONES / AVANZADO / GOLEADORES / REGLAS; GOLEADORES — ESPN en vivo + manual
+   app.js): PREDICCIONES / AVANZADO / GOLEADORES / REGLAS; GOLEADORES — FIFA en vivo + manual (ESPN hasta v4.4)
 
    Este archivo es un slice LITERAL y contiguo del app.js anterior: no se
    modificó ninguna línea de lógica, solo se trasladó tal cual a su propio
@@ -57,6 +57,7 @@ function renderAdv(){
     <div class="ai"><label>Goleador del torneo</label><input type="text" value="${r.topScorer}" placeholder="Jugador" style="width:145px" onchange="S.reality.topScorer=this.value;save()"></div>
     <div class="ai"><label>Goles del goleador</label><input type="number" value="${r.topScorerGoals||''}" placeholder="0" style="width:60px" onchange="S.reality.topScorerGoals=parseInt(this.value)||0;save()"></div>
     <div class="ai"><label>País más goleador</label><input type="text" value="${r.topCountry}" placeholder="País" style="width:130px" onchange="S.reality.topCountry=this.value;save()"></div>
+    <div class="ai"><label>2do país (si hay empate)</label><input type="text" value="${r.topCountry2||''}" placeholder="País (opcional)" style="width:130px" onchange="S.reality.topCountry2=this.value;save()"></div>
     <div class="ai"><label>Goles de ese país</label><input type="number" value="${r.topCountryGoals||''}" placeholder="0" style="width:60px" onchange="S.reality.topCountryGoals=parseInt(this.value)||0;save()"></div>
     <div class="ai"><label>País más goleado (1 juego)</label><input type="text" value="${r.mostConceded}" placeholder="País" style="width:130px" onchange="S.reality.mostConceded=this.value;save()"></div>
   </div>`;
@@ -68,7 +69,7 @@ function renderAdv(){
   // Build read-only predictions display from las predicciones especiales dinámicas
   // Check prereqs for conditional scoring
   const scorerMatch=n(spec.scorer||"")&&n(r.topScorer)&&n(spec.scorer)===n(r.topScorer);
-  const countryMatch=n(spec.topCountry||"")&&n(r.topCountry)&&n(spec.topCountry)===n(r.topCountry);
+  const countryMatch=n(spec.topCountry||"")&&((n(r.topCountry)&&n(spec.topCountry)===n(r.topCountry))||(n(r.topCountry2)&&n(spec.topCountry)===n(r.topCountry2)));
 
   // Auto-fill notice if champ/runner/third were auto-loaded
   const autoFilled=(r.champ||r.runner||r.third)?"":""
@@ -79,13 +80,17 @@ function renderAdv(){
     {l:"🥉 3er lugar",val:spec.third,pts:8,real:r.third,locked:false},
     {l:"⚽ Goleador del torneo",val:spec.scorer,pts:12,real:r.topScorer,locked:false},
     {l:"⚽ Goles del goleador",val:spec.scorerGoals,pts:8,real:r.topScorerGoals,locked:!scorerMatch,lockReason:"requiere acertar el goleador"},
-    {l:"🌍 País más goleador",val:spec.topCountry,pts:8,real:r.topCountry,locked:false},
+    {l:"🌍 País más goleador",val:spec.topCountry,pts:8,real:r.topCountry,altReal:r.topCountry2,locked:false},
     {l:"🌍 Goles de ese país",val:spec.topCountryGoals,pts:10,real:r.topCountryGoals,locked:!countryMatch,lockReason:"requiere acertar el país"},
     {l:"😬 País más goleado (1 juego)",val:spec.mostConceded,pts:8,real:r.mostConceded,locked:false},
   ];
   const specHtml=specItems.map(it=>{
-    const matched=!it.locked&&it.real&&n(String(it.val||""))===n(String(it.real));
-    const hasReal=!!it.real;
+    // v4.5 — it.altReal (hoy solo "País más goleador"): segunda respuesta
+    // válida para el caso de empate real entre dos países. Cuenta como
+    // acierto contra CUALQUIERA de las dos, y si no acertó se muestran
+    // ambas en la ✗ para que quede claro que había dos respuestas posibles.
+    const matched=!it.locked&&(it.real||it.altReal)&&(n(String(it.val||""))===n(String(it.real||""))||(it.altReal&&n(String(it.val||""))===n(String(it.altReal))));
+    const hasReal=!!(it.real||it.altReal);
     let bg,bc;
     if(it.locked&&hasReal){bg="var(--qb-surface2)";bc="var(--qb-border)";}
     else if(hasReal&&matched){bg="rgba(0,200,83,.07)";bc="rgba(0,200,83,.4)";}
@@ -97,7 +102,7 @@ function renderAdv(){
     }else if(hasReal){
       badge=matched
         ?`<span style="color:#4dde8c;font-weight:700;font-size:10px">+${it.pts}pts</span>`
-        :`<span style="color:#ff8080;font-size:10px">✗ ${esc(String(it.real))}</span>`;
+        :`<span style="color:#ff8080;font-size:10px">✗ ${esc(String(it.real||""))}${it.altReal?" / "+esc(String(it.altReal)):""}</span>`;
     }else{
       badge=`<span style="color:var(--qb-muted);font-size:10px">⏳</span>`;
     }
@@ -160,15 +165,37 @@ function autoFillRealityFromElim(){
 }
 
 // ══════════════════════════════════════════════════════════════
-// GOLEADORES — ESPN en vivo + manual
+// GOLEADORES — FIFA en vivo + manual
 // ══════════════════════════════════════════════════════════════
-const ESPN_CORE='https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/seasons/2026';
-const LDR_TYPES=[1,2,3,4,5,6,7]; // All phases: groups, R32, R16, QF, SF, 3rd, Final
+// v4.5 — BUG REPORTADO: la data de estas 2 sub-tabs (Jugadores/Países)
+// venía de la API de ESPN, la misma que usa TODO el resto del torneo
+// (Fixture/En vivo/bracket) -- pero acá específicamente quedaba
+// desactualizada seguido. Se cambió SOLO el fetch de estas 2 sub-tabs a
+// la API pública de FIFA (api.fifa.com/api/v3), que reporta los goles
+// más al día. A PROPÓSITO no se tocó nada más: ESPN sigue siendo la
+// fuente de TODO el resto del torneo (resultados reales, bracket, Fixture,
+// En vivo, Predicciones) -- esta sección es 100% informativa, no
+// alimenta el motor de puntaje (S.scorers no lo lee scoring.js, ver nota
+// vieja en la sección de "Agregar manualmente" más abajo).
+//
+// fetchESPNScorers()/fetchCountryGoals() mantienen sus nombres de v4.2
+// (cuando sí eran ESPN) para no tocar los onclick= que ya las llaman
+// desde index.html/goalTab() -- son las mismas 2 funciones, con el fetch
+// de adentro cambiado.
+const FIFA_API='https://api.fifa.com/api/v3';
+const FIFA_WC26_SEASON='285023'; // IdSeason de "FIFA World Cup 2026™" (competición 17) en la API de FIFA
+
+// v4.5 — Los nombres que devuelve FIFA vienen en MAYÚSCULA fija (ej.
+// "Kylian MBAPPE") -- se pasan a Título para que se vean igual de
+// prolijos que antes con ESPN.
+function fifaTitleCase(s){
+  return(s||"").toLowerCase().replace(/(^|[\s'-])([a-záéíóúñü])/gi,(m,sep,c)=>sep+c.toUpperCase());
+}
 
 // v4.3 — Sub-tabs de Goleadores: "Jugadores" (gb, de siempre) y "Países"
 // (gcb, antes una pestaña propia de Estadísticas -- se mudó acá adentro
-// porque son la misma fuente de datos, ESPN leaders/goles). Mismo patrón
-// que goalTab()/predTab() (app-tabs.js): toggle de display + dispatch al
+// porque comparten la misma fuente de datos). Mismo patrón que
+// goalTab()/predTab() (app-tabs.js): toggle de display + dispatch al
 // fetch/render correspondiente.
 function goalTab(id){
   ["players","countries"].forEach(x=>{
@@ -179,85 +206,36 @@ function goalTab(id){
   if(id==="countries")fetchCountryGoals();
 }
 
-// v4.2 — Sacado de adentro de fetchESPNScorers() (donde era una función
-// local) para que fetchCountryGoals() (goles agrupados por país, pestaña
-// "País goleador") también pueda usarlo sin duplicar el fetch+cache.
-const getTeam=async(tid)=>{
-  if(!tid)return{name:"",flag:""};
-  const k="wb26_team_"+tid;
-  try{const c=localStorage.getItem(k);if(c)return JSON.parse(c);}catch(e){}
-  let o={name:"",flag:""};
-  try{
-    const r=await fetch(`${ESPN_CORE}/teams/${tid}`);
-    if(r.ok){const j=await r.json();const t=j.team||j;o={name:t.displayName||t.name||"",flag:t.flag?.href||t.logos?.[0]?.href||""};}
-  }catch(e){}
-  try{localStorage.setItem(k,JSON.stringify(o));}catch(e){}
-  return o;
-};
-
 async function fetchESPNScorers(){
   const body=document.getElementById("gb");
-  body.innerHTML=`<div class="es"><span class="spin" style="display:inline-block;font-size:24px">↻</span><br><br>Cargando goleadores desde ESPN…</div>`;
+  body.innerHTML=`<div class="es"><span class="spin" style="display:inline-block;font-size:24px">↻</span><br><br>Cargando goleadores desde FIFA…</div>`;
   try{
-    // Collect goals across all tournament phases (same method as mundial-2026.html)
-    const res=await Promise.all(LDR_TYPES.map(t=>
-      fetch(`${ESPN_CORE}/types/${t}/leaders?limit=100`).then(r=>r.ok?r.json():null).catch(()=>null)
-    ));
-    const goalBucket={};
-    res.filter(Boolean).forEach(j=>{
-      (j.categories||[]).forEach(c=>{
-        if(c.name!=="goals")return;
-        (c.leaders||[]).forEach(l=>{
-          const aid=((l.athlete?.$ref||"").match(/athletes\/(\d+)/)||[])[1];
-          if(!aid)return;
-          const tid=((l.team?.$ref||"").match(/teams\/(\d+)/)||[])[1];
-          const cur=goalBucket[aid]||(goalBucket[aid]={v:0,tid});
-          cur.v+=l.value||0;
-          if(tid)cur.tid=tid;
-        });
-      });
-    });
-    const top=Object.entries(goalBucket).sort((a,b)=>b[1].v-a[1].v).slice(0,20);
+    const r=await fetch(`${FIFA_API}/topseasonplayerstatistics/season/${FIFA_WC26_SEASON}/topscorers?count=20`);
+    if(!r.ok)throw new Error("FIFA no respondió");
+    const j=await r.json();
+    const top=(j.PlayerStatsList||[]).filter(p=>(p.GoalsScored||0)>0);
     if(!top.length)throw new Error("Sin datos de goles aún");
-
-    // Fetch athlete details in parallel (with localStorage cache, same as mundial-2026)
-    const getAth=async(id)=>{
-      const k="wb26_ath_"+id;
-      try{const c=localStorage.getItem(k);if(c)return JSON.parse(c);}catch(e){}
-      let o={n:"Jugador",p:""};
-      try{
-        const r=await fetch(`${ESPN_CORE.replace("/seasons/2026","")}/athletes/${id}`);
-        if(r.ok){const j=await r.json();o={n:j.displayName||j.fullName||o.n,p:j.position?.abbreviation||""};}
-      }catch(e){}
-      try{localStorage.setItem(k,JSON.stringify(o));}catch(e){}
-      return o;
-    };
-    const [aths,teams]=await Promise.all([
-      Promise.all(top.map(([aid])=>getAth(aid))),
-      Promise.all(top.map(([,o])=>getTeam(o.tid)))
-    ]);
 
     const now=new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});
     let html=`<div class="status-bar" style="margin-bottom:.625rem">
-      <span class="sbadge ok">⚽ ESPN en vivo · ${now}</span>
+      <span class="sbadge ok">⚽ FIFA en vivo · ${now}</span>
       <button class="btn btn-sm btn-espn" onclick="fetchESPNScorers()" style="margin-left:4px">↻ Actualizar</button>
     </div>`;
 
-    top.forEach(([aid,o],i)=>{
-      const a=aths[i];const team=teams[i];
-      const teamName=team.name||"";
-      const flagIco=ALL_FLAGS[teamName]||ALL_FLAGS[espnNameES(teamName)]||"⚽";
-      const isFirst=i===0;
-      html+=`<div class="sr" style="${isFirst?"border-top:1px solid var(--qb-border);":""}">
+    top.forEach((p,i)=>{
+      const playerName=fifaTitleCase(p.PlayerInfo?.PlayerName?.[0]?.Description||"Jugador");
+      const teamName=abbr2name(p.PlayerInfo?.IdCountry||"");
+      const flagIco=ALL_FLAGS[teamName]||"⚽";
+      html+=`<div class="sr" style="${i===0?"border-top:1px solid var(--qb-border);":""}">
         <span style="width:24px;font-family:var(--ff-display);font-size:${i<3?"15":"11"}px;font-weight:800;color:${i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#cd7f32":"var(--qb-muted)"}">
           ${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
         </span>
         <span style="font-size:20px;line-height:1;flex-shrink:0">${flagIco}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;color:var(--qb-text)">${esc(a.n)}</div>
+          <div style="font-weight:700;font-size:13px;color:var(--qb-text)">${esc(playerName)}</div>
           <div style="font-size:10px;color:var(--qb-muted)">${esc(teamName)}</div>
         </div>
-        <span style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-blue);min-width:32px;text-align:right">${o.v}</span>
+        <span style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-blue);min-width:32px;text-align:right">${p.GoalsScored}</span>
         <span style="font-size:10px;color:var(--qb-muted);margin-left:2px">⚽</span>
       </div>`;
     });
@@ -266,7 +244,7 @@ async function fetchESPNScorers(){
     // Fallback to manual
     renderScorers(true);
     const statusDiv=document.createElement("div");
-    statusDiv.innerHTML=`<span class="sbadge warn" style="margin-bottom:.5rem;display:inline-flex">⚠️ ESPN aún sin datos — mostrando tabla manual</span>`;
+    statusDiv.innerHTML=`<span class="sbadge warn" style="margin-bottom:.5rem;display:inline-flex">⚠️ FIFA aún sin datos — mostrando tabla manual</span>`;
     body.prepend(statusDiv.firstChild);
   }
 }
@@ -274,12 +252,12 @@ async function fetchESPNScorers(){
 function renderScorers(silent=false){
   const body=document.getElementById("gb");
   if(!S.scorers.length){
-    body.innerHTML=`<div class="es">Sin goleadores aún ⚽<br><br><button class="btn btn-espn btn-sm" onclick="fetchESPNScorers()">⚡ Cargar desde ESPN</button></div>`;
+    body.innerHTML=`<div class="es">Sin goleadores aún ⚽<br><br><button class="btn btn-espn btn-sm" onclick="fetchESPNScorers()">⚡ Cargar desde FIFA</button></div>`;
     return;
   }
   let html=`<div class="status-bar" style="margin-bottom:.5rem">
     <span class="sbadge info">📋 Datos manuales</span>
-    <button class="btn btn-sm btn-espn" onclick="fetchESPNScorers()" style="margin-left:4px">⚡ ESPN en vivo</button>
+    <button class="btn btn-sm btn-espn" onclick="fetchESPNScorers()" style="margin-left:4px">⚡ FIFA en vivo</button>
   </div>`;
   html+=[...S.scorers].sort((a,b)=>b.goals-a.goals).map((s,i)=>{
     const flagIco=ALL_FLAGS[s.country]||"⚽";
@@ -309,52 +287,39 @@ document.addEventListener("click",(ev)=>{
 
 // ══════════════════════════════════════════════════════════════
 // PAÍS GOLEADOR — top 10 de países por goles, sub-tab "Países" de
-// Goleadores (Estadísticas). v4.2, movido adentro de Goleadores en v4.3.
+// Goleadores (Estadísticas). v4.2, movido adentro de Goleadores en v4.3,
+// pasado de ESPN a FIFA en v4.5 (ver nota grande arriba de fetchESPNScorers).
 // ══════════════════════════════════════════════════════════════
-// Mismo criterio que la sub-tab "Jugadores": intenta ESPN en vivo primero
-// (agrupa los goles de goalBucket por equipo en vez de por jugador,
-// reusando el mismo fetch de leaders/getTeam) y si ESPN todavía no tiene
-// datos cae a sumar por país la lista manual de S.scorers (la misma que
-// carga el admin en "Agregar manualmente" de la sub-tab "Jugadores") —
-// así ambas sub-tabs quedan alimentadas por la misma fuente sin pedirle
-// al admin que cargue los goles dos veces.
+// Mismo criterio que la sub-tab "Jugadores": intenta FIFA en vivo primero
+// y si todavía no tiene datos cae a sumar por país la lista manual de
+// S.scorers (la misma que carga el admin en "Agregar manualmente" de la
+// sub-tab "Jugadores") — así ambas sub-tabs quedan alimentadas por la
+// misma fuente sin pedirle al admin que cargue los goles dos veces.
 async function fetchCountryGoals(){
   const body=document.getElementById("gcb");
-  body.innerHTML=`<div class="es"><span class="spin" style="display:inline-block;font-size:24px">↻</span><br><br>Cargando goles por país desde ESPN…</div>`;
+  body.innerHTML=`<div class="es"><span class="spin" style="display:inline-block;font-size:24px">↻</span><br><br>Cargando goles por país desde FIFA…</div>`;
   try{
-    const res=await Promise.all(LDR_TYPES.map(t=>
-      fetch(`${ESPN_CORE}/types/${t}/leaders?limit=100`).then(r=>r.ok?r.json():null).catch(()=>null)
-    ));
-    const teamGoals={};
-    res.filter(Boolean).forEach(j=>{
-      (j.categories||[]).forEach(c=>{
-        if(c.name!=="goals")return;
-        (c.leaders||[]).forEach(l=>{
-          const tid=((l.team?.$ref||"").match(/teams\/(\d+)/)||[])[1];
-          if(!tid)return;
-          teamGoals[tid]=(teamGoals[tid]||0)+(l.value||0);
-        });
-      });
-    });
-    const top=Object.entries(teamGoals).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const r=await fetch(`${FIFA_API}/topseasonteamstatistics/season/${FIFA_WC26_SEASON}/topscorers?count=15`);
+    if(!r.ok)throw new Error("FIFA no respondió");
+    const j=await r.json();
+    const top=(j.TeamStatsList||[]).filter(t=>(t.Goals||0)>0).slice(0,10);
     if(!top.length)throw new Error("Sin datos de goles aún");
 
-    const teams=await Promise.all(top.map(([tid])=>getTeam(tid)));
     const now=new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"});
     let html=`<div class="status-bar" style="margin-bottom:.625rem">
-      <span class="sbadge ok">⚽ ESPN en vivo · ${now}</span>
+      <span class="sbadge ok">⚽ FIFA en vivo · ${now}</span>
       <button class="btn btn-sm btn-espn" onclick="fetchCountryGoals()" style="margin-left:4px">↻ Actualizar</button>
     </div>`;
-    top.forEach(([,goals],i)=>{
-      const team=teams[i];const teamName=team.name||"";
-      const flagIco=ALL_FLAGS[teamName]||ALL_FLAGS[espnNameES(teamName)]||"⚽";
+    top.forEach((t,i)=>{
+      const teamName=abbr2name(t.TeamInfo?.IdCountry||"");
+      const flagIco=ALL_FLAGS[teamName]||"⚽";
       html+=`<div class="sr" style="${i===0?"border-top:1px solid var(--qb-border);":""}">
         <span style="width:24px;font-family:var(--ff-display);font-size:${i<3?"15":"11"}px;font-weight:800;color:${i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#cd7f32":"var(--qb-muted)"}">
           ${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
         </span>
         <span style="font-size:20px;line-height:1;flex-shrink:0">${flagIco}</span>
         <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:var(--qb-text)">${esc(teamName)}</div></div>
-        <span style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-blue);min-width:32px;text-align:right">${goals}</span>
+        <span style="font-family:var(--ff-display);font-size:22px;font-weight:900;color:var(--qb-blue);min-width:32px;text-align:right">${t.Goals}</span>
         <span style="font-size:10px;color:var(--qb-muted);margin-left:2px">⚽</span>
       </div>`;
     });
@@ -362,7 +327,7 @@ async function fetchCountryGoals(){
   }catch(e){
     renderCountryGoalsManual();
     const statusDiv=document.createElement("div");
-    statusDiv.innerHTML=`<span class="sbadge warn" style="margin-bottom:.5rem;display:inline-flex">⚠️ ESPN aún sin datos — mostrando tabla manual</span>`;
+    statusDiv.innerHTML=`<span class="sbadge warn" style="margin-bottom:.5rem;display:inline-flex">⚠️ FIFA aún sin datos — mostrando tabla manual</span>`;
     body.prepend(statusDiv.firstChild);
   }
 }
@@ -379,12 +344,12 @@ function renderCountryGoalsManual(){
   });
   const top=Object.values(bucket).sort((a,b)=>b.goals-a.goals).slice(0,10);
   if(!top.length){
-    body.innerHTML=`<div class="es">Sin goles cargados aún ⚽<br><br><button class="btn btn-espn btn-sm" onclick="fetchCountryGoals()">⚡ Cargar desde ESPN</button></div>`;
+    body.innerHTML=`<div class="es">Sin goles cargados aún ⚽<br><br><button class="btn btn-espn btn-sm" onclick="fetchCountryGoals()">⚡ Cargar desde FIFA</button></div>`;
     return;
   }
   let html=`<div class="status-bar" style="margin-bottom:.5rem">
     <span class="sbadge info">📋 Datos manuales (suma de "Agregar manualmente" en Goleadores)</span>
-    <button class="btn btn-sm btn-espn" onclick="fetchCountryGoals()" style="margin-left:4px">⚡ ESPN en vivo</button>
+    <button class="btn btn-sm btn-espn" onclick="fetchCountryGoals()" style="margin-left:4px">⚡ FIFA en vivo</button>
   </div>`;
   html+=top.map((t,i)=>{
     const flagIco=ALL_FLAGS[t.name]||"⚽";
