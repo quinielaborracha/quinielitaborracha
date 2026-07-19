@@ -3154,7 +3154,7 @@ function buildDashAvanzadoHtml(p){
   const spec = getDynamicSpec(name) || {};
 
   const scorerMatch = n(spec.scorer||'') && n(r.topScorer) && n(spec.scorer)===n(r.topScorer);
-  const countryMatch = n(spec.topCountry||'') && ((n(r.topCountry) && n(spec.topCountry)===n(r.topCountry)) || (n(r.topCountry2) && n(spec.topCountry)===n(r.topCountry2)));
+  const countryMatch = n(spec.topCountry||'') && [r.topCountry,r.topCountry2,r.topCountry3].some(c=>n(c)&&n(spec.topCountry)===n(c));
 
   const specItems = [
     {l:"🥇 Campeón",                       val:spec.champ,          pts:15, real:r.champ,            locked:false},
@@ -3162,17 +3162,18 @@ function buildDashAvanzadoHtml(p){
     {l:"🥉 3er lugar",                      val:spec.third,          pts:8,  real:r.third,            locked:false},
     {l:"⚽ Goleador del torneo",             val:spec.scorer,         pts:12, real:r.topScorer,        locked:false},
     {l:"⚽ Goles del goleador",              val:spec.scorerGoals,    pts:8,  real:r.topScorerGoals,   locked:!scorerMatch,  lockReason:"requiere acertar el goleador"},
-    {l:"🌍 País más goleador",              val:spec.topCountry,     pts:8,  real:r.topCountry,   altReal:r.topCountry2,   locked:false},
+    {l:"🌍 País más goleador",              val:spec.topCountry,     pts:8,  real:r.topCountry,   altReals:[r.topCountry2,r.topCountry3].filter(Boolean),   locked:false},
     {l:"🌍 Goles de ese país",              val:spec.topCountryGoals,pts:10, real:r.topCountryGoals,  locked:!countryMatch, lockReason:"requiere acertar el país"},
     {l:"😬 País más goleado (1 juego)",      val:spec.mostConceded,   pts:8,  real:r.mostConceded,     locked:false},
   ];
 
   const specHtml = specItems.map(it=>{
-    // v4.5 — it.altReal (hoy solo "País más goleador"): segunda respuesta
-    // válida si hubo empate real entre dos países (ver la nota gemela en
-    // renderAdv(), app-predicciones.js).
-    const matched = !it.locked && (it.real||it.altReal) && (n(String(it.val||'')) === n(String(it.real||'')) || (it.altReal && n(String(it.val||''))===n(String(it.altReal))));
-    const hasReal = !!(it.real||it.altReal);
+    // v4.5 — it.altReals (hoy solo "País más goleador", v4.6: hasta 2
+    // alternativas): respuestas alternativas válidas si hubo empate real
+    // entre países (ver la nota gemela en renderAdv(), app-predicciones.js).
+    const alts = it.altReals||[];
+    const matched = !it.locked && (it.real||alts.length) && (n(String(it.val||'')) === n(String(it.real||'')) || alts.some(a=>n(String(it.val||''))===n(String(a))));
+    const hasReal = !!(it.real||alts.length);
     let bg, bc;
     if(it.locked && hasReal){ bg="var(--qb-surface2)"; bc="var(--qb-border)"; }
     else if(hasReal && matched){ bg="rgba(0,200,83,.07)"; bc="rgba(0,200,83,.4)"; }
@@ -3184,7 +3185,7 @@ function buildDashAvanzadoHtml(p){
     } else if(hasReal){
       badge = matched
         ? `<span style="color:#4dde8c;font-weight:700;font-size:10px">+${it.pts}pts</span>`
-        : `<span style="color:#ff8080;font-size:10px">✗ ${esc(String(it.real||''))}${it.altReal?' / '+esc(String(it.altReal)):''}</span>`;
+        : `<span style="color:#ff8080;font-size:10px">✗ ${[it.real,...alts].filter(Boolean).map(v=>esc(String(v))).join(' / ')}</span>`;
     } else {
       badge = `<span style="color:var(--qb-muted);font-size:10px">⏳</span>`;
     }

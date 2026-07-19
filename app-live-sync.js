@@ -155,7 +155,7 @@ function applyStatePayload(p){
   S.hiddenPL=p.hiddenPL?new Set(Object.keys(p.hiddenPL).filter(k=>p.hiddenPL[k])):new Set();
   S.snapshots=p.snapshots||[];
   S.autoClose=p.autoClose!==undefined?p.autoClose:false;
-  S.reality=p.reality||{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountry2:"",topCountryGoals:0,mostConceded:""};
+  S.reality=p.reality||{champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountry2:"",topCountry3:"",topCountryGoals:0,mostConceded:""};
   S.adv=p.adv||{};
   S.battles=p.battles||{};
   S.battleHistory=p.battleHistory||[];

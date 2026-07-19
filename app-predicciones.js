@@ -58,6 +58,7 @@ function renderAdv(){
     <div class="ai"><label>Goles del goleador</label><input type="number" value="${r.topScorerGoals||''}" placeholder="0" style="width:60px" onchange="S.reality.topScorerGoals=parseInt(this.value)||0;save()"></div>
     <div class="ai"><label>País más goleador</label><input type="text" value="${r.topCountry}" placeholder="País" style="width:130px" onchange="S.reality.topCountry=this.value;save()"></div>
     <div class="ai"><label>2do país (si hay empate)</label><input type="text" value="${r.topCountry2||''}" placeholder="País (opcional)" style="width:130px" onchange="S.reality.topCountry2=this.value;save()"></div>
+    <div class="ai"><label>3er país (si hay empate)</label><input type="text" value="${r.topCountry3||''}" placeholder="País (opcional)" style="width:130px" onchange="S.reality.topCountry3=this.value;save()"></div>
     <div class="ai"><label>Goles de ese país</label><input type="number" value="${r.topCountryGoals||''}" placeholder="0" style="width:60px" onchange="S.reality.topCountryGoals=parseInt(this.value)||0;save()"></div>
     <div class="ai"><label>País más goleado (1 juego)</label><input type="text" value="${r.mostConceded}" placeholder="País" style="width:130px" onchange="S.reality.mostConceded=this.value;save()"></div>
   </div>`;
@@ -69,7 +70,7 @@ function renderAdv(){
   // Build read-only predictions display from las predicciones especiales dinámicas
   // Check prereqs for conditional scoring
   const scorerMatch=n(spec.scorer||"")&&n(r.topScorer)&&n(spec.scorer)===n(r.topScorer);
-  const countryMatch=n(spec.topCountry||"")&&((n(r.topCountry)&&n(spec.topCountry)===n(r.topCountry))||(n(r.topCountry2)&&n(spec.topCountry)===n(r.topCountry2)));
+  const countryMatch=n(spec.topCountry||"")&&[r.topCountry,r.topCountry2,r.topCountry3].some(c=>n(c)&&n(spec.topCountry)===n(c));
 
   // Auto-fill notice if champ/runner/third were auto-loaded
   const autoFilled=(r.champ||r.runner||r.third)?"":""
@@ -80,17 +81,19 @@ function renderAdv(){
     {l:"🥉 3er lugar",val:spec.third,pts:8,real:r.third,locked:false},
     {l:"⚽ Goleador del torneo",val:spec.scorer,pts:12,real:r.topScorer,locked:false},
     {l:"⚽ Goles del goleador",val:spec.scorerGoals,pts:8,real:r.topScorerGoals,locked:!scorerMatch,lockReason:"requiere acertar el goleador"},
-    {l:"🌍 País más goleador",val:spec.topCountry,pts:8,real:r.topCountry,altReal:r.topCountry2,locked:false},
+    {l:"🌍 País más goleador",val:spec.topCountry,pts:8,real:r.topCountry,altReals:[r.topCountry2,r.topCountry3].filter(Boolean),locked:false},
     {l:"🌍 Goles de ese país",val:spec.topCountryGoals,pts:10,real:r.topCountryGoals,locked:!countryMatch,lockReason:"requiere acertar el país"},
     {l:"😬 País más goleado (1 juego)",val:spec.mostConceded,pts:8,real:r.mostConceded,locked:false},
   ];
   const specHtml=specItems.map(it=>{
-    // v4.5 — it.altReal (hoy solo "País más goleador"): segunda respuesta
-    // válida para el caso de empate real entre dos países. Cuenta como
-    // acierto contra CUALQUIERA de las dos, y si no acertó se muestran
-    // ambas en la ✗ para que quede claro que había dos respuestas posibles.
-    const matched=!it.locked&&(it.real||it.altReal)&&(n(String(it.val||""))===n(String(it.real||""))||(it.altReal&&n(String(it.val||""))===n(String(it.altReal))));
-    const hasReal=!!(it.real||it.altReal);
+    // v4.5 — it.altReals (hoy solo "País más goleador", v4.6: hasta 2
+    // alternativas): respuestas alternativas válidas para el caso de
+    // empate real entre países (doble o triple). Cuenta como acierto
+    // contra CUALQUIERA de ellas, y si no acertó se muestran todas en la
+    // ✗ para que quede claro que había más de una respuesta posible.
+    const alts=it.altReals||[];
+    const matched=!it.locked&&(it.real||alts.length)&&(n(String(it.val||""))===n(String(it.real||""))||alts.some(a=>n(String(it.val||""))===n(String(a))));
+    const hasReal=!!(it.real||alts.length);
     let bg,bc;
     if(it.locked&&hasReal){bg="var(--qb-surface2)";bc="var(--qb-border)";}
     else if(hasReal&&matched){bg="rgba(0,200,83,.07)";bc="rgba(0,200,83,.4)";}
@@ -102,7 +105,7 @@ function renderAdv(){
     }else if(hasReal){
       badge=matched
         ?`<span style="color:#4dde8c;font-weight:700;font-size:10px">+${it.pts}pts</span>`
-        :`<span style="color:#ff8080;font-size:10px">✗ ${esc(String(it.real||""))}${it.altReal?" / "+esc(String(it.altReal)):""}</span>`;
+        :`<span style="color:#ff8080;font-size:10px">✗ ${[it.real,...alts].filter(Boolean).map(v=>esc(String(v))).join(" / ")}</span>`;
     }else{
       badge=`<span style="color:var(--qb-muted);font-size:10px">⏳</span>`;
     }

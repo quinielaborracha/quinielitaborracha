@@ -194,7 +194,7 @@ function importBackupJSON(input){
 // ── Clear reality form ──
 function clearReality(){
   if(!confirm("¿Limpiar todos los resultados reales del torneo (campeón, goleador, etc.)?"))return;
-  S.reality={champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountry2:"",topCountryGoals:0,mostConceded:""};
+  S.reality={champ:"",runner:"",third:"",topScorer:"",topScorerGoals:0,topCountry:"",topCountry2:"",topCountry3:"",topCountryGoals:0,mostConceded:""};
   save();renderAdv();renderRank();
   toast("✓ Resultados reales limpiados");
 }
