@@ -8,8 +8,8 @@ gente nueva).
 ## Archivos que el sitio realmente carga (los únicos referenciados por `index.html`)
 
 ```
-participantes.js → partidos-grupos.js → utils.js → paises.js → app-static-data.js →
-  app-state.js → scoring.js → totp.js →
+participantes.js → torneo-mundial2026.js → partidos-grupos.js → utils.js → paises.js →
+  app-static-data.js → app-state.js → scoring.js → totp.js →
   app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
   app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
   app-bracket-annexc.js → app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
@@ -21,10 +21,11 @@ participantes.js → partidos-grupos.js → utils.js → paises.js → app-stati
 - `index.html` — estructura, `firebaseConfig`, loader, modales (login + 2FA)
 - `styles.css` — estilos
 - `participantes.js` — capa de datos compartida (`DB.participants`), Mi Quiniela
-- `partidos-grupos.js` — **solo** los 72 nombres de partido de fase de grupos (dato público del fixture, sin datos de ningún participante). Reemplaza al viejo `legacy-migracion.js` del proyecto original, que sí traía datos personales de 27 participantes — por diseño, **no se incluye acá**.
+- `torneo-mundial2026.js` — **la config del torneo en curso**: un solo objeto `TORNEO_MUNDIAL_2026` con el fixture completo del Mundial 2026 (`matchLabels`, `espnAbbrMap`, `midAbbrs`, `mgmap`, `ges`, `arules`). Sprint 2 de la hoja de ruta comercial (2026-07-22): consolida lo que antes vivía repartido entre `partidos-grupos.js` y `app-static-data.js`. Un futuro segundo torneo (Copa América, Euro) trae su propio objeto `TORNEO_<NOMBRE>` en su propio archivo, sin tocar `scoring.js`/`utils.js`/`app-bracket-*.js`.
+- `partidos-grupos.js` — reasigna `MATCH_LABELS` desde `TORNEO_MUNDIAL_2026.matchLabels` (re-export delgado; el dato en sí vive en `torneo-mundial2026.js`). Reemplaza al viejo `legacy-migracion.js` del proyecto original, que sí traía datos personales de 27 participantes — por diseño, **no se incluye acá**.
 - `utils.js` — helpers puros (validación, checksums)
-- `paises.js` — datos de país agnósticos de torneo: `TEAM_NAMES`, `ESPN_NAME_ES`, `ALL_FLAGS`, `AVATAR_MAP`. Sprint 1 de la hoja de ruta comercial (2026-07-22): separado de `app-static-data.js` para que un futuro segundo torneo (Copa América, Euro, etc.) reuse esta misma base sin duplicarla. Carga temprano porque `utils.js` ya depende de estos globals en `abbr2name()`/`espnNameES()`.
-- `app-static-data.js` — datos de referencia puros específicos del **Mundial 2026** puntual: grupos/banderas (`GES`/`FLAGS2`/`ABBR`/`BGCOL`/`MGMAP`), mapeos de ESPN por partido (`ESPN_ABBR_MAP`/`MID_ABBRS`) y los puntos fijos de "Reglas avanzadas" (`ARULES`). Consolidado desde 3 archivos donde vivían mezclados con lógica que no tenía nada que ver.
+- `paises.js` — datos de país agnósticos de torneo: `TEAM_NAMES`, `ESPN_NAME_ES`, `ALL_FLAGS`, `AVATAR_MAP`. Sprint 1 de la hoja de ruta comercial: separado de `app-static-data.js` para que un futuro segundo torneo reuse esta misma base sin duplicarla. Carga temprano porque `utils.js` ya depende de estos globals en `abbr2name()`/`espnNameES()`.
+- `app-static-data.js` — reasigna `ESPN_ABBR_MAP`/`MID_ABBRS`/`MGMAP`/`GES`/`ARULES` desde `TORNEO_MUNDIAL_2026` (mismo patrón que `partidos-grupos.js`). `FLAGS2`/`ABBR`/`BGCOL` quedan con su valor literal acá — un set más chico, no específico del fixture del torneo en curso.
 - `app-state.js` — declara `S`, el objeto de estado mutable compartido (resultados reales, checksums, bonos, batallas, snapshots — lo que persiste en `quiniela/estado`). Va justo antes de `scoring.js`, su mayor consumidor.
 - `scoring.js` — cálculo de puntos / standings / bracket
 - `totp.js` — funciones puras de TOTP (2FA admin, RFC 6238)

@@ -10,7 +10,7 @@ const path = require("path");
 
 const FILES_IN_ORDER = [
   "participantes.js",
-  "partidos-grupos.js",
+  "torneo-mundial2026.js", "partidos-grupos.js",
   "utils.js", "paises.js",
   "app-static-data.js",
   "app-state.js",
