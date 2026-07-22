@@ -90,6 +90,20 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   `ANNEX_C` (las 495 combinaciones oficiales de FIFA para asignar los
   mejores terceros de grupo a su cruce de Dieciseisavos) y va justo antes
   que `app-bracket-compute.js`, su único consumidor.
+- **Sprint 3a de la hoja de ruta comercial** (2026-07-22): `scoring.js`
+  (7 lugares) y `utils.js` (`validateElimScore`) tenían el rango de
+  partido de eliminatoria hardcodeado literal (`73`/`104`). Ahora leen
+  `ELIM_MID_MIN`/`ELIM_MID_MAX` (`app-eliminatoria-data.js`, derivados
+  de `BONUS_PHASES` con `Math.min`/`Math.max`, no hardcodeados a mano) —
+  aunque `app-eliminatoria-data.js` carga DESPUÉS de `utils.js`/
+  `scoring.js`, funciona porque ambos solo leen esos globals adentro de
+  funciones que se invocan mucho después de que todo terminó de cargar
+  (mismo patrón ya usado con `BONUS_PHASES` en `scoring.js`). Pendiente
+  (Sprint 3b, alcance más grande, sesión aparte): `registro.js` tiene su
+  propia copia del fixture de grupos (`GROUP_MATCHES`) y arma el bracket
+  con offsets hardcodeados; `app-live-sync.js` tiene el mapeo de IDs de
+  ESPN a partido hardcodeado; `totalMatches()` (registro.js) tiene la
+  fórmula `72+32+8` literal. Ninguno de estos se tocó todavía.
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

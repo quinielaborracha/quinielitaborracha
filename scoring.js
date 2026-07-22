@@ -540,7 +540,7 @@ function calcClassifiedPtsForPhase(name,phase){
 function calcElimPts(name){
   let pts=0;
   // Match pts
-  for(let pid=73;pid<=104;pid++)pts+=calcElimMatchPts(name,pid);
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++)pts+=calcElimMatchPts(name,pid);
   // Classified pts — en vivo por fase (gated por isPrevPhaseClosed)
   BONUS_PHASES.forEach(phase=>{
     if(phase.elimPhase)pts+=calcClassifiedPtsForPhase(name,phase);
@@ -680,7 +680,7 @@ function buildChronologicalResults(name){
     });
   }
   const elimActivo=getReglasElim().activo!==false;
-  for(let pid=73;pid<=104;pid++){
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){
     const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
     if(phase&&(!elimActivo||!isFasePuntosActiva(phase.key)))continue; // v1.2 (fase 2) — puntos de esta fase apagados: no entra a la racha
     const t=S.elimTimes&&S.elimTimes[pid];if(!t)continue;
@@ -764,7 +764,7 @@ function getPlayedDaysList(){
       days.add(dayKeyOf(t));
     });
   }
-  for(let pid=73;pid<=104;pid++){
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){
     const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
     const t=S.elimTimes&&S.elimTimes[pid];if(!t)continue;
     const s=S.elimScores[pid]||S.elimScores[String(pid)];if(!s||s.live)continue;
@@ -790,7 +790,7 @@ function calcPtsForDay(name,dayKey){
       if(rR===pR){pts+=rR==="D"?Rg.empate:Rg.ganador;if(p.h===s.h&&p.a===s.a)pts+=Rg.exacto;}
     });
   }
-  for(let pid=73;pid<=104;pid++){
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){
     const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
     const t=S.elimTimes&&S.elimTimes[pid];if(!t||dayKeyOf(t)!==dayKey)continue;
     const s=S.elimScores[pid]||S.elimScores[String(pid)];if(!s||s.live)continue;
@@ -881,7 +881,7 @@ function getChronoMatchEvents(){
     });
   }
   const elimActivo=getReglasElim().activo!==false;
-  for(let pid=73;pid<=104;pid++){
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){
     const phase=phaseForPid(pid);if(phase&&!isFaseActiva(phase.key))continue;
     if(phase&&(!elimActivo||!isFasePuntosActiva(phase.key)))continue;
     const t=S.elimTimes&&S.elimTimes[pid];if(!t)continue;
@@ -1043,7 +1043,7 @@ function getMatchIdsInWindow(days){
   };
   const groupMids=MIDS.filter(mid=>inWindow(S.matchTimes[mid]));
   const elimMids=[];
-  for(let pid=73;pid<=104;pid++){if(inWindow(S.elimTimes[pid]))elimMids.push(pid);}
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){if(inWindow(S.elimTimes[pid]))elimMids.push(pid);}
   return{groupMids,elimMids};
 }
 
@@ -1063,7 +1063,7 @@ function getMatchIdsByCount(count){
   const now=Date.now();
   const todos=[];
   MIDS.forEach(mid=>{const ts=S.matchTimes[mid];if(ts)todos.push({tipo:"g",id:mid,ts});});
-  for(let pid=73;pid<=104;pid++){const ts=S.elimTimes[pid];if(ts)todos.push({tipo:"e",id:pid,ts});}
+  for(let pid=ELIM_MID_MIN;pid<=ELIM_MID_MAX;pid++){const ts=S.elimTimes[pid];if(ts)todos.push({tipo:"e",id:pid,ts});}
   const futuros=todos.filter(m=>m.ts>=now).sort((a,b)=>a.ts-b.ts).slice(0,n);
   const groupMids=futuros.filter(m=>m.tipo==="g").map(m=>m.id);
   const elimMids=futuros.filter(m=>m.tipo==="e").map(m=>m.id);

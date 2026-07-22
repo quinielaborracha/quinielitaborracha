@@ -244,7 +244,7 @@ function validateScore(mid,h,a){
 // esa dependencia, para poder validar rango/tipo de un resultado de
 // eliminatoria igual de a fondo.
 function validateElimScore(pid,h,a){
-  if(pid<73||pid>104) return{ok:false,err:`P${pid} no es un partido de eliminatoria válido (rango 73-104)`};
+  if(pid<ELIM_MID_MIN||pid>ELIM_MID_MAX) return{ok:false,err:`P${pid} no es un partido de eliminatoria válido (rango ${ELIM_MID_MIN}-${ELIM_MID_MAX})`};
   if(typeof h!=="number"||typeof a!=="number") return{ok:false,err:"Los goles deben ser números"};
   if(isNaN(h)||isNaN(a)) return{ok:false,err:"Valores NaN detectados"};
   if(h<0||a<0) return{ok:false,err:"Los goles no pueden ser negativos"};

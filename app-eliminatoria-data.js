@@ -131,6 +131,18 @@ const BONUS_PHASES=[
   {key:"final",label:"Final",mids:[104],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
 ];
 
+// Sprint 3a (hoja de ruta comercial, 2026-07-22): rango de match-ID de
+// TODA la eliminatoria, derivado de BONUS_PHASES en vez de hardcodeado
+// a mano. scoring.js/utils.js antes escribían "73"/"104" literal en ~9
+// lugares (loops de puntaje, validación de rango) -- ahora leen
+// ELIM_MID_MIN/ELIM_MID_MAX, que se recalculan solos si BONUS_PHASES
+// cambia. Un futuro segundo torneo con menos partidos de eliminatoria
+// (ej. Copa América: 8 en vez de 32) solo necesita su propio
+// BONUS_PHASES -- scoring.js/utils.js no se tocan.
+const ELIM_MIDS_ALL = BONUS_PHASES.filter(p=>p.elimPhase).flatMap(p=>p.mids);
+const ELIM_MID_MIN = Math.min(...ELIM_MIDS_ALL);
+const ELIM_MID_MAX = Math.max(...ELIM_MIDS_ALL);
+
 // Check if previous phase is closed (prereq for llaves+classified pts)
 
 // Bonos = ONLY last place. Classified+llaves are in calcElimPts.
