@@ -41,7 +41,7 @@ window.__fb = {
   serverTimestamp: () => "__serverTimestamp__",
 };
 
-for (const f of ["utils.js", "participantes.js"]) {
+for (const f of ["utils.js", "paises.js", "participantes.js"]) {
   const code = fs.readFileSync(path.join(__dirname, f), "utf8");
   const script = window.document.createElement("script");
   script.textContent = code;

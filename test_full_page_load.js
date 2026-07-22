@@ -11,7 +11,7 @@ const path = require("path");
 const FILES_IN_ORDER = [
   "participantes.js",
   "partidos-grupos.js",
-  "utils.js",
+  "utils.js", "paises.js",
   "app-static-data.js",
   "app-state.js",
   "scoring.js",

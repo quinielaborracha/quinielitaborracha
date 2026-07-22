@@ -25,7 +25,7 @@ const fs = require("fs");
 const path = require("path");
 
 const FILES_IN_ORDER = [
-  "participantes.js","partidos-grupos.js","utils.js","app-static-data.js","app-state.js","scoring.js","totp.js",
+  "participantes.js","partidos-grupos.js","utils.js", "paises.js","app-static-data.js","app-state.js","scoring.js","totp.js",
   "app-core-data.js","app-admin-auth.js","app-live-sync.js","app-tabs.js",
   "app-eliminatoria-data.js","app-batallas.js","app-bracket-render.js",
   "app-bracket-annexc.js","app-bracket-compute.js","app-bracket-espn-sync.js","app-bracket-view.js",

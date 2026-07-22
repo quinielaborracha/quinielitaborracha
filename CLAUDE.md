@@ -46,7 +46,7 @@ superior declarada en un archivo está disponible en cualquiera que cargue
 después. El orden importa y es exactamente este:
 
 ```
-participantes.js → partidos-grupos.js → utils.js → app-static-data.js →
+participantes.js → partidos-grupos.js → utils.js → paises.js → app-static-data.js →
 app-state.js → scoring.js → totp.js →
 app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
 app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
@@ -67,13 +67,16 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   el primer render (`load()`, `renderRank()`, etc.) llamando funciones
   definidas en todos los módulos anteriores, y arranca Firebase Auth +
   sincronización en vivo.
-- `participantes.js`, `partidos-grupos.js`, `utils.js`, `app-static-data.js`,
-  `app-state.js`, `scoring.js`, `totp.js` cargan antes que los `app-*.js`
-  porque son la capa de datos/estado/helpers que estos consumen.
-  `app-static-data.js` declara datos de referencia puros que nunca
-  cambian con el torneo (equipos, grupos, banderas, mapeos de ESPN,
-  puntos fijos de "Reglas avanzadas") — consolidado ahí porque `utils.js`
-  ya depende de varios de esos globals (`TEAM_NAMES`/`MID_ABBRS`/
+- `participantes.js`, `partidos-grupos.js`, `utils.js`, `paises.js`,
+  `app-static-data.js`, `app-state.js`, `scoring.js`, `totp.js` cargan antes
+  que los `app-*.js` porque son la capa de datos/estado/helpers que estos
+  consumen. `paises.js` (Sprint 1 de la hoja de ruta comercial,
+  2026-07-22) declara datos de país agnósticos de torneo (`TEAM_NAMES`,
+  `ESPN_NAME_ES`, `ALL_FLAGS`, `AVATAR_MAP`) — separado de
+  `app-static-data.js`, que ahora solo tiene lo específico del Mundial
+  2026 puntual (grupos, mapeos de partido de ESPN, puntos fijos de
+  "Reglas avanzadas"). Va justo antes que `app-static-data.js` porque
+  `utils.js` ya depende de varios de sus globals (`TEAM_NAMES`/
   `ESPN_NAME_ES`) en `abbr2name()`/`espnNameES()`. `app-state.js` declara
   únicamente `S` (el estado MUTABLE compartido: resultados reales,
   checksums, bonos, batallas, snapshots — lo que persiste en

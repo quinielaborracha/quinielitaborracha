@@ -8,7 +8,7 @@ gente nueva).
 ## Archivos que el sitio realmente carga (los únicos referenciados por `index.html`)
 
 ```
-participantes.js → partidos-grupos.js → utils.js → app-static-data.js →
+participantes.js → partidos-grupos.js → utils.js → paises.js → app-static-data.js →
   app-state.js → scoring.js → totp.js →
   app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
   app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
@@ -23,7 +23,8 @@ participantes.js → partidos-grupos.js → utils.js → app-static-data.js →
 - `participantes.js` — capa de datos compartida (`DB.participants`), Mi Quiniela
 - `partidos-grupos.js` — **solo** los 72 nombres de partido de fase de grupos (dato público del fixture, sin datos de ningún participante). Reemplaza al viejo `legacy-migracion.js` del proyecto original, que sí traía datos personales de 27 participantes — por diseño, **no se incluye acá**.
 - `utils.js` — helpers puros (validación, checksums)
-- `app-static-data.js` — datos de referencia puros que nunca cambian con el torneo: equipos (`TEAM_NAMES`), grupos/banderas (`GES`/`ALL_FLAGS`/`FLAGS2`/`ABBR`/`BGCOL`/`MGMAP`), mapeos de ESPN (`ESPN_ABBR_MAP`/`MID_ABBRS`/`ESPN_NAME_ES`) y los puntos fijos de "Reglas avanzadas" (`ARULES`). Consolidado desde 3 archivos donde vivían mezclados con lógica que no tenía nada que ver. Carga temprano porque `utils.js` ya depende de varios de estos globals en `abbr2name()`/`espnNameES()`.
+- `paises.js` — datos de país agnósticos de torneo: `TEAM_NAMES`, `ESPN_NAME_ES`, `ALL_FLAGS`, `AVATAR_MAP`. Sprint 1 de la hoja de ruta comercial (2026-07-22): separado de `app-static-data.js` para que un futuro segundo torneo (Copa América, Euro, etc.) reuse esta misma base sin duplicarla. Carga temprano porque `utils.js` ya depende de estos globals en `abbr2name()`/`espnNameES()`.
+- `app-static-data.js` — datos de referencia puros específicos del **Mundial 2026** puntual: grupos/banderas (`GES`/`FLAGS2`/`ABBR`/`BGCOL`/`MGMAP`), mapeos de ESPN por partido (`ESPN_ABBR_MAP`/`MID_ABBRS`) y los puntos fijos de "Reglas avanzadas" (`ARULES`). Consolidado desde 3 archivos donde vivían mezclados con lógica que no tenía nada que ver.
 - `app-state.js` — declara `S`, el objeto de estado mutable compartido (resultados reales, checksums, bonos, batallas, snapshots — lo que persiste en `quiniela/estado`). Va justo antes de `scoring.js`, su mayor consumidor.
 - `scoring.js` — cálculo de puntos / standings / bracket
 - `totp.js` — funciones puras de TOTP (2FA admin, RFC 6238)

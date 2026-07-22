@@ -1,9 +1,23 @@
 /* ════════════════════════════════════════════════════════════
    app-static-data.js
    ════════════════════════════════════════════════════════════
-   Datos de referencia puros (sin funciones): equipos, grupos, banderas,
-   mapeos de ESPN, puntos fijos de "Reglas avanzadas". Nada de esto
-   cambia según el estado del torneo -- para eso está app-state.js.
+   Datos de referencia puros (sin funciones) ESPECÍFICOS DEL TORNEO en
+   curso: grupos, mapeos de partido de ESPN, puntos fijos de "Reglas
+   avanzadas". Nada de esto cambia según el estado en vivo del torneo
+   (para eso está app-state.js), pero SÍ cambia si algún día se carga un
+   torneo distinto al Mundial 2026 -- a diferencia de los datos de país
+   (nombre, bandera, avatar), que son iguales sea cual sea el torneo y
+   viven en paises.js.
+
+   Sprint 1 de la "hoja de ruta comercial" (motor de datos de torneo,
+   2026-07-22): TEAM_NAMES/ESPN_NAME_ES/ALL_FLAGS/AVATAR_MAP se movieron
+   a paises.js (nuevo, carga justo antes que este archivo) por ser datos
+   de país agnósticos de torneo. ESPN_ABBR_MAP/MID_ABBRS/MGMAP/GES/
+   FLAGS2/ABBR/BGCOL/ARULES quedan acá: son del fixture/reglas del
+   Mundial 2026 puntual (Sprint 2 los va a parametrizar por torneo).
+   Cero cambios de comportamiento en este split: cada global sigue
+   llamándose exactamente igual, así que ningún archivo que ya los usaba
+   (utils.js, scoring.js, app-bracket-compute.js, etc.) necesitó tocarse.
 
    v1.7 — Consolidado desde 3 archivos distintos donde estos datos
    estaban mezclados con lógica que no tenía nada que ver: ESPN_ABBR_MAP/
@@ -11,34 +25,14 @@
    app-core-data.js (junto a rebuildDynamicData()/flagOfChampion(), que sí
    son lógica real); TEAM_NAMES vivía en app-bracket-compute.js (el motor
    de cálculo de llaves); ESPN_NAME_ES vivía en app-bracket-espn-sync.js
-   (el sync de resultados). Cero cambios de comportamiento: cada global
-   se sigue llamando exactamente igual, así que ningún archivo que ya los
-   usaba (utils.js, scoring.js, app-bracket-compute.js, etc.) necesitó
-   tocarse. Carga temprano (después de utils.js, antes de app-state.js),
-   porque utils.js ya depende de TEAM_NAMES/MID_ABBRS/ESPN_NAME_ES en
-   abbr2name()/espnNameES() -- antes esos datos vivían varios archivos
-   DESPUÉS de utils.js en el orden de carga; funcionaba igual porque
-   esas funciones nunca se invocan hasta mucho después de que TODO
-   terminó de cargar, pero ahora el orden de lectura del código coincide
-   con el orden real de dependencia.
+   (el sync de resultados). Carga temprano (después de utils.js, antes de
+   app-state.js), porque utils.js ya depende de TEAM_NAMES/MID_ABBRS/
+   ESPN_NAME_ES en abbr2name()/espnNameES() -- antes esos datos vivían
+   varios archivos DESPUÉS de utils.js en el orden de carga; funcionaba
+   igual porque esas funciones nunca se invocan hasta mucho después de
+   que TODO terminó de cargar, pero ahora el orden de lectura del código
+   coincide con el orden real de dependencia.
    ════════════════════════════════════════════════════════════ */
-
-// ── Equipos: abreviatura → nombre completo ──
-// Nombre canónico de cada equipo para comparaciones
-const TEAM_NAMES = {
-  "MEX":"México","RSA":"Sudáfrica","KOR":"Corea del Sur","CZE":"Chequia",
-  "CAN":"Canadá","BIH":"Bosnia y Herzegovina","QAT":"Catar","SUI":"Suiza",
-  "BRA":"Brasil","MAR":"Marruecos","HAI":"Haití","SCO":"Escocia",
-  "USA":"Estados Unidos","PAR":"Paraguay","AUS":"Australia","TUR":"Turquía",
-  "GER":"Alemania","CIV":"Costa de Marfil","ECU":"Ecuador","CUR":"Curazao",
-  "NED":"Países Bajos","JPN":"Japón","SWE":"Suecia","TUN":"Túnez",
-  "KSA":"Arabia Saudita","URU":"Uruguay","ESP":"España","CPV":"Cabo Verde",
-  "IRN":"Irán","NZL":"Nueva Zelanda","BEL":"Bélgica","EGY":"Egipto",
-  "FRA":"Francia","SEN":"Senegal","IRQ":"Irak","NOR":"Noruega",
-  "ARG":"Argentina","ALG":"Argelia","AUT":"Austria","JOR":"Jordania",
-  "ENG":"Inglaterra","CRO":"Croacia","GHA":"Ghana","PAN":"Panamá",
-  "POR":"Portugal","CGO":"RD Congo","UZB":"Uzbekistán","COL":"Colombia",
-};
 
 // ── ESPN: mapa de partidos de fase de grupos (abbr → matchId) ──
 // ══════════════════════════════════════════════════════════════
@@ -51,142 +45,14 @@ const MID_ABBRS={1:"MEX|RSA",2:"KOR|CZE",3:"CAN|BIH",4:"USA|PAR",5:"HAI|SCO",6:"
 
 // Normaliza abreviaturas alternativas que usa ESPN vs nuestro mapa
 
-// ── ESPN: traducción de nombres de equipo (en → es) ──
-// Traducción de nombres ESPN (en) → español para los equipos
-const ESPN_NAME_ES={
-  "Mexico":"México","South Korea":"Corea del Sur","Czech Republic":"República Checa","Czechia":"República Checa",
-  "Bosnia and Herzegovina":"Bosnia y Herzegovina","Qatar":"Catar","Switzerland":"Suiza",
-  "Brazil":"Brasil","Morocco":"Marruecos","Haiti":"Haití","Scotland":"Escocia",
-  "United States":"Estados Unidos","USA":"Estados Unidos","Turkey":"Turquía","Turkiye":"Turquía","Türkiye":"Turquía",
-  "Germany":"Alemania","Ivory Coast":"Costa de Marfil","Cote d'Ivoire":"Costa de Marfil","Côte d'Ivoire":"Costa de Marfil","Ecuador":"Ecuador",
-  "Netherlands":"Países Bajos","Japan":"Japón","Sweden":"Suecia","Tunisia":"Túnez",
-  "Saudi Arabia":"Arabia Saudita","Uruguay":"Uruguay","Spain":"España","Cape Verde":"Cabo Verde",
-  "Iran":"Irán","New Zealand":"Nueva Zelanda","Belgium":"Bélgica","Egypt":"Egipto",
-  "France":"Francia","Senegal":"Senegal","Iraq":"Irak","Norway":"Noruega",
-  "Argentina":"Argentina","Algeria":"Argelia","Austria":"Austria","Jordan":"Jordania",
-  "Portugal":"Portugal","DR Congo":"RD Congo","Congo DR":"RD Congo","Congo":"RD Congo","Uzbekistan":"Uzbekistán",
-  "Colombia":"Colombia","England":"Inglaterra","Croatia":"Croacia","Ghana":"Ghana","Panama":"Panamá",
-  "Paraguay":"Paraguay","Australia":"Australia","Korea Republic":"Corea del Sur","Curacao":"Curazao","Curaçao":"Curazao",
-  "Canada":"Canadá","Bosnia-Herzegovina":"Bosnia y Herzegovina","South Africa":"Sudáfrica",
-};
-
 // ── Grupos, banderas y colores ──
 const MGMAP={1:"A",2:"A",3:"B",4:"D",5:"C",6:"D",7:"C",8:"B",9:"E",10:"E",11:"F",12:"F",13:"H",14:"H",15:"G",16:"G",17:"I",18:"I",19:"J",20:"J",21:"L",22:"L",23:"K",24:"K",25:"A",26:"B",27:"B",28:"A",29:"C",30:"C",31:"D",32:"D",33:"E",34:"E",35:"F",36:"F",37:"H",38:"H",39:"G",40:"G",41:"I",42:"I",43:"J",44:"J",45:"L",46:"L",47:"K",48:"K",49:"C",50:"C",51:"B",52:"B",53:"A",54:"A",55:"E",56:"E",57:"F",58:"F",59:"D",60:"D",61:"I",62:"I",63:"G",64:"G",65:"H",66:"H",67:"L",68:"L",69:"J",70:"J",71:"K",72:"K"};
 
 const GES={A:["🇲🇽 México","🇿🇦 Sudáfrica","🇰🇷 Corea del Sur","🇨🇿 Chequia"],B:["🇨🇦 Canadá","🇧🇦 Bosnia-Herz.","🇶🇦 Qatar","🇨🇭 Suiza"],C:["🇧🇷 Brasil","🇲🇦 Marruecos","🇭🇹 Haití","🏴󠁧󠁢󠁳󠁣󠁴󠁿 Escocia"],D:["🇺🇸 EE.UU.","🇵🇾 Paraguay","🇦🇺 Australia","🇹🇷 Turquía"],E:["🇩🇪 Alemania","🇨🇮 C.Marfil","🇪🇨 Ecuador","🇨🇼 Curazao"],F:["🇳🇱 P.Bajos","🇯🇵 Japón","🇸🇪 Suecia","🇹🇳 Túnez"],G:["🇧🇪 Bélgica","🇪🇬 Egipto","🇮🇷 Irán","🇳🇿 N.Zelanda"],H:["🇪🇸 España","🇨🇻 C.Verde","🇸🇦 A.Saudita","🇺🇾 Uruguay"],I:["🇫🇷 Francia","🇸🇳 Senegal","🇮🇶 Irak","🇳🇴 Noruega"],J:["🇦🇷 Argentina","🇩🇿 Argelia","🇦🇹 Austria","🇯🇴 Jordania"],K:["🇵🇹 Portugal","🇨🇩 R.D.Congo","🇺🇿 Uzbekistán","🇨🇴 Colombia"],L:["🇬🇧 Inglaterra","🇭🇷 Croacia","🇬🇭 Ghana","🇵🇦 Panamá"]};
 
-// Complete flag map for all 48 nations including problematic ones
-const ALL_FLAGS={
-  "México":"🇲🇽","Mexico":"🇲🇽",
-  "Sudáfrica":"🇿🇦","Sudafrica":"🇿🇦","South Africa":"🇿🇦",
-  "Corea del Sur":"🇰🇷","Korea":"🇰🇷",
-  "República Checa":"🇨🇿","Chequia":"🇨🇿","Czech":"🇨🇿",
-  "Canadá":"🇨🇦","Canada":"🇨🇦",
-  "Bosnia y Herzegovina":"🇧🇦","Bosnia":"🇧🇦",
-  "Catar":"🇶🇦","Qatar":"🇶🇦",
-  "Suiza":"🇨🇭","Switzerland":"🇨🇭",
-  "Brasil":"🇧🇷","Brazil":"🇧🇷",
-  "Marruecos":"🇲🇦","Morocco":"🇲🇦",
-  "Haití":"🇭🇹","Haiti":"🇭🇹",
-  "Escocia":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿",
-  "Estados Unidos":"🇺🇸","EE.UU.":"🇺🇸","USA":"🇺🇸","United States":"🇺🇸",
-  "Paraguay":"🇵🇾",
-  "Australia":"🇦🇺",
-  "Turquía":"🇹🇷","Turkey":"🇹🇷","Turkiye":"🇹🇷",
-  "Alemania":"🇩🇪","Germany":"🇩🇪",
-  "Costa de Marfil":"🇨🇮","C.Marfil":"🇨🇮","Ivory Coast":"🇨🇮","Côte d'Ivoire":"🇨🇮",
-  "Ecuador":"🇪🇨",
-  "Curazao":"🇨🇼","Curacao":"🇨🇼",
-  "Países Bajos":"🇳🇱","Paises Bajos":"🇳🇱","Netherlands":"🇳🇱","P.Bajos":"🇳🇱",
-  "Japón":"🇯🇵","Japan":"🇯🇵",
-  "Suecia":"🇸🇪","Sweden":"🇸🇪",
-  "Túnez":"🇹🇳","Tunisia":"🇹🇳",
-  "Arabia Saudita":"🇸🇦","A.Saudita":"🇸🇦","Saudi Arabia":"🇸🇦",
-  "Uruguay":"🇺🇾",
-  "España":"🇪🇸","Spain":"🇪🇸",
-  "Cabo Verde":"🇨🇻","C.Verde":"🇨🇻","Cape Verde":"🇨🇻",
-  "Irán":"🇮🇷","Iran":"🇮🇷",
-  "Nueva Zelanda":"🇳🇿","New Zealand":"🇳🇿","N.Zelanda":"🇳🇿",
-  "Bélgica":"🇧🇪","Belgium":"🇧🇪",
-  "Egipto":"🇪🇬","Egypt":"🇪🇬",
-  "Francia":"🇫🇷","France":"🇫🇷",
-  "Senegal":"🇸🇳",
-  "Irak":"🇮🇶","Iraq":"🇮🇶",
-  "Noruega":"🇳🇴","Norway":"🇳🇴",
-  "Argentina":"🇦🇷",
-  "Argelia":"🇩🇿","Algeria":"🇩🇿",
-  "Austria":"🇦🇹",
-  "Jordania":"🇯🇴","Jordan":"🇯🇴",
-  "Portugal":"🇵🇹",
-  "RD Congo":"🇨🇩","R.D.Congo":"🇨🇩","DR Congo":"🇨🇩","Congo DR":"🇨🇩","Congo":"🇨🇩","República Del Congo":"🇨🇩",
-  "Uzbekistán":"🇺🇿","Uzbekistan":"🇺🇿",
-  "Colombia":"🇨🇴",
-  "Inglaterra":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-  "Croacia":"🇭🇷","Croatia":"🇭🇷",
-  "Ghana":"🇬🇭",
-  "Panamá":"🇵🇦","Panama":"🇵🇦",
-};
-
 const FLAGS2={"España":"🇪🇸","Paises Bajos":"🇳🇱","Países Bajos":"🇳🇱","Francia":"🇫🇷","Portugal":"🇵🇹","Inglaterra":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Argentina":"🇦🇷","Brasil":"🇧🇷","Alemania":"🇩🇪","Italia":"🇮🇹","Holanda":"🇳🇱","Colombia":"🇨🇴","Uruguay":"🇺🇾","México":"🇲🇽","Chile":"🇨🇱","Bélgica":"🇧🇪","Croacia":"🇭🇷","Marruecos":"🇲🇦","Japón":"🇯🇵","Corea del Sur":"🇰🇷","Suiza":"🇨🇭","Australia":"🇦🇺","Ecuador":"🇪🇨","Senegal":"🇸🇳","Ghana":"🇬🇭","Irán":"🇮🇷","Arabia Saudita":"🇸🇦","Turquía":"🇹🇷","Canadá":"🇨🇦","Estados Unidos":"🇺🇸","Noruega":"🇳🇴","Suecia":"🇸🇪","Dinamarca":"🇩🇰","Polonia":"🇵🇱"};
 const ABBR={"España":"ES","Paises Bajos":"NL","Países Bajos":"NL","Francia":"FR","Portugal":"PT","Inglaterra":"EN","Argentina":"AR","Brasil":"BR"};
 const BGCOL={"España":"#c60b1e","Paises Bajos":"#ae1c28","Países Bajos":"#ae1c28","Francia":"#002395","Portugal":"#006600","Inglaterra":"#cf111b","Argentina":"#74acdf","Brasil":"#009c3b"};
-
-// ── Avatares de campeón (v1.8; v3.10 — varias opciones por país) ──
-// Carpeta avatars/ (raíz del repo, servida tal cual por GitHub Pages) con
-// una o más ilustraciones por país -- todavía no hay una para cada uno de
-// los 48 equipos del torneo, así que AVATAR_MAP solo tiene entrada para
-// los que ya existen como archivo. Mismo criterio de clave que ALL_FLAGS/
-// TEAM_NAMES (nombre completo en español, con tilde): es el mismo string
-// que guarda preds.special.campeon / S.adv[name].champ, así que
-// avatarOfChampion() (app-core-data.js) puede buscar por esa clave
-// directo, sin normalizar. País sin avatar todavía → sin entrada acá →
-// avatarOfChampion() devuelve "" y quien lo consume no muestra nada
-// (a propósito: mejor vacío que un avatar genérico que no representa a
-// nadie).
-//
-// v3.10 — BUG REPORTADO: cada país solo tenía UN archivo asignado acá
-// aunque ya existieran 2-3 ilustraciones distintas en avatars/ para varios
-// (Brasil, México, Argentina...) -- todos los que compartían campeón
-// quedaban con el mismo avatar, sin variedad. Además, Países Bajos tenía
-// 3 archivos en la carpeta (Cruiff/Davids/Gullit) pero NINGUNA entrada
-// acá -- avatarOfChampion() devolvía "" siempre para quien predijera ese
-// campeón, sin ningún error visible que lo delatara (mismo patrón de bug
-// silencioso que el de los íconos de ranking hardcodeados). Cada valor
-// ahora es un ARRAY con todas las variantes disponibles; avatarOfChampion()
-// elige una determinística (no al azar en cada render, para que el mismo
-// participante no cambie de cara cada vez que se repinta la pantalla).
-const AVATAR_DIR = "avatars/";
-const AVATAR_MAP = {
-  "México":["Campos_Mexico_2.webp","Memo2_Mexico.webp"],
-  "Sudáfrica":["Tau_Sudafrica.webp"],
-  "Corea del Sur":["Son_Corea_del_Sur.webp"],
-  "Canadá":["Davies_Canada.webp"],
-  "Brasil":["Dinho_Brasil.webp","Neymar_Brasil_3.webp","Ronaldo_Brasil_2.webp"],
-  "Marruecos":["Hakimi_Marruecos.webp"],
-  "Estados Unidos":["Lalas_USA.webp"],
-  "Paraguay":["Almiron_Paraguay.webp"],
-  "Australia":["Ryan_Australia.webp"],
-  "Alemania":["Klinsmann_Alemania_2.webp","Klose_Alemania.webp"],
-  "Costa de Marfil":["Haller_Costa_De_Marfil.webp"],
-  "Ecuador":["Caicedo_Ecuador.webp"],
-  "Países Bajos":["Cruiff_Paises_Bajos_3.webp","Davids_Paises_Bajos.webp","Gullit_Paises_Bajos_2.webp"],
-  "Japón":["Kubo_Japon.webp"],
-  "Arabia Saudita":["Salem_Arabia_Saudita.webp"],
-  "Uruguay":["Valverde_Uruguay.webp"],
-  "España":["Raul_Spain_2.webp","Sergio_Spain.webp"],
-  "Cabo Verde":["Ryan_Mendes_Cabo_Verde.webp"],
-  "Bélgica":["Lukaku_Belgica.webp"],
-  "Egipto":["Salah_Egipto.webp"],
-  "Francia":["Platini_Francia_2.webp","Thuran_Francia_3.webp","Zindane2_Francia.webp"],
-  "Noruega":["Solskjaer_Noruega_2.webp","haalnad_Noruega.webp"],
-  "Argentina":["LMessi_Argentina.webp","Maradona2_Argentina_2.webp"],
-  "Inglaterra":["David_Inglaterra.webp"],
-  "Croacia":["Modric_Croacia.webp","Suker_Croacia_2.webp"],
-  "Ghana":["Mane_Ghana.webp"],
-  "Panamá":["Panama.webp"],
-  "Portugal":["Cristiano_Portugal.webp","Figo_Portugal_2.webp"],
-  "Colombia":["Higuita_Colombia_2.webp","Pibe_Colombia.webp"],
-};
 
 // v1.7 — BRULES/ELIMRULES/LASTRULES (reglas básicas/eliminatoria/último
 // lugar) se eliminaron de acá: eran listas hardcodeadas que la pestaña
