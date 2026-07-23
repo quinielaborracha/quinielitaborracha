@@ -198,15 +198,40 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
     caso de un cruce con grupo sin datos (cae en `"?"`, no explota).
     Suite completa verde (59 harnesses), Mundial 2026 real sin cambios
     de comportamiento.
-  - **4c (pendiente, sesión aparte):** crear `torneo-copaamerica.js`
-    con datos ficticios (16 equipos, 4 grupos, `bracketFormat:"direct"`,
-    `directCrosses` de cuartos de final) y validar de punta a punta
-    (registro, predicciones, ranking, bracket) cargándolo en lugar de
-    `torneo-mundial2026.js` — recién ahí el motor queda realmente
-    probado con un segundo torneo completo, no solo con la función de
-    cruces en aislado. Esto también es el prerrequisito real para el
-    selector de plantillas de la Fase 2 (constructor de torneo): hoy
-    solo hay un archivo `TORNEO_<NOMBRE>` para elegir.
+  - **4c (mismo día): `torneo-copaamerica.js` — el checkpoint real.**
+    Segundo torneo completo con datos ficticios (16 equipos, 4 grupos de
+    4, `bracketFormat:"direct"`, `directCrosses` de Cuartos de Final:
+    `1A-2B`/`1B-2A`/`1C-2D`/`1D-2C`) que reusa `paises.js` (se agregaron
+    Chile/Perú/Bolivia/Venezuela/Costa Rica — los 5 países CONMEBOL/
+    invitados que faltaban porque ninguno clasificó al Mundial 2026).
+    Sorteo y fixture 100% ficticios (no hay fecha real confirmada de
+    próxima edición) — alcanza para probar el motor, que es el objetivo.
+    Nuevo `test_copa_america_e2e.js` arma su propio `FILES_IN_ORDER`
+    reemplazando `torneo-mundial2026.js` por `torneo-copaamerica.js` +
+    un shim de una línea (`const TORNEO_MUNDIAL_2026 =
+    TORNEO_COPA_AMERICA;`) y ejercita de punta a punta: fase de grupos
+    completa (24 partidos) → `calcGroupStandings()` calcula bien los 4
+    grupos → `generarLlavesDieciseisavos()` detecta `bracketFormat:
+    "direct"` y arma los 4 cruces de Cuartos correctos → avanza Cuartos
+    → Semis → Final → resuelve un campeón → `calcElimMatchPts()` no
+    explota con un torneo de 4 rondas de eliminatoria en vez de las 6
+    del Mundial. 17/17 checks en verde; suite completa (59 harnesses)
+    también verde, Mundial 2026 real sin cambios de comportamiento.
+
+    **Nota importante para la Fase 2 (constructor de torneo):**
+    `torneo-copaamerica.js` NO se carga desde `index.html` — sigue
+    siendo un archivo de prueba, no una plantilla elegible en runtime.
+    `app-static-data.js`/`partidos-grupos.js`/`app-eliminatoria-data.js`
+    hoy leen el identificador `TORNEO_MUNDIAL_2026` literal (no uno
+    genérico), así que "elegir plantilla" en Fase 2 va a necesitar
+    además renombrar ese identificador a algo neutral (`TORNEO_ACTUAL`
+    ya existe como alias en `app-static-data.js`, pero declarado
+    DESPUÉS de `partidos-grupos.js` en el orden de carga — no alcanza
+    todavía) antes de que un selector real pueda simplemente cargar uno
+    u otro archivo `TORNEO_<NOMBRE>.js`. Con esto, el motor de datos de
+    torneo (Fase 1 completa: Sprints 1/2/3a/3b/3c/4a/4b/4c) queda
+    probado con 2 formatos de bracket reales — lo que falta para Fase 2
+    es la ergonomía de selección, no el motor en sí.
 
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker

@@ -64,6 +64,12 @@ Soporte: `manifest.json`, `sw.js` (PWA), `favicon.png`, `apple-touch-icon.png`,
   instancia que arranca limpia.
 - Tests (`test_*.js`, `sim_firestore_rules.js`): no los carga `index.html`,
   viven en el repo solo como harness de verificación para desarrollo futuro.
+- `torneo-copaamerica.js`: tampoco lo carga `index.html` (esta instancia
+  sigue siendo Mundial 2026). Es el checkpoint del Sprint 4c de la hoja
+  de ruta comercial (ver `CLAUDE.md`) — un segundo torneo completo con
+  datos ficticios (16 equipos, formato "directo a cuartos") que prueba
+  que el motor soporta un formato de bracket distinto al del Mundial,
+  ejercitado por `test_copa_america_e2e.js`.
 
 ## Antes de que funcione
 

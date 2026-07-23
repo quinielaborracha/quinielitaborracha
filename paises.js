@@ -32,6 +32,10 @@ const TEAM_NAMES = {
   "ARG":"Argentina","ALG":"Argelia","AUT":"Austria","JOR":"Jordania",
   "ENG":"Inglaterra","CRO":"Croacia","GHA":"Ghana","PAN":"Panamá",
   "POR":"Portugal","CGO":"RD Congo","UZB":"Uzbekistán","COL":"Colombia",
+  // Sprint 4c (hoja de ruta comercial, 2026-07-23): agregados para la
+  // Copa América ficticia (torneo-copaamerica.js) -- no estaban porque
+  // ninguno de estos 5 países clasificó al Mundial 2026.
+  "CHI":"Chile","PER":"Perú","BOL":"Bolivia","VEN":"Venezuela","CRC":"Costa Rica",
 };
 
 // ── ESPN: traducción de nombres de equipo (en → es) ──
@@ -51,6 +55,7 @@ const ESPN_NAME_ES={
   "Colombia":"Colombia","England":"Inglaterra","Croatia":"Croacia","Ghana":"Ghana","Panama":"Panamá",
   "Paraguay":"Paraguay","Australia":"Australia","Korea Republic":"Corea del Sur","Curacao":"Curazao","Curaçao":"Curazao",
   "Canada":"Canadá","Bosnia-Herzegovina":"Bosnia y Herzegovina","South Africa":"Sudáfrica",
+  "Chile":"Chile","Peru":"Perú","Perú":"Perú","Bolivia":"Bolivia","Venezuela":"Venezuela","Costa Rica":"Costa Rica",
 };
 
 // ── Banderas ──
@@ -104,6 +109,7 @@ const ALL_FLAGS={
   "Croacia":"🇭🇷","Croatia":"🇭🇷",
   "Ghana":"🇬🇭",
   "Panamá":"🇵🇦","Panama":"🇵🇦",
+  "Chile":"🇨🇱","Perú":"🇵🇪","Peru":"🇵🇪","Bolivia":"🇧🇴","Venezuela":"🇻🇪","Costa Rica":"🇨🇷",
 };
 
 // ── Avatares de campeón (v1.8; v3.10 — varias opciones por país) ──
