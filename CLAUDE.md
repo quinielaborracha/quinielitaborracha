@@ -149,6 +149,41 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   propio `TORNEO_<NOMBRE>`/`BONUS_PHASES`/`ELIM_ROUNDS`/`ELIM_TREE` — lo
   que se ganó acá es que ARMARLOS ya no exige tocar `scoring.js`/
   `utils.js`/`registro.js`.
+
+- **Sprint 4 (checkpoint real de Fase 1, retomado 2026-07-23): Copa
+  América de punta a punta.** Al planificar la Fase 2 (constructor de
+  torneo) apareció el motivo por el que hacía falta retomar esto: el
+  wizard de Fase 2 necesita elegir entre ≥2 plantillas reales, y solo
+  existía una (Mundial 2026). Se partió en 3 sub-sprints:
+  - **4a** (este commit): `ELIM_1_16_IDS`/`ELIM_1_16_LABELS`/
+    `ELIM_TREE`/`ELIM_ROUNDS`/`BONUS_PHASES`/`WORLD_POOL` eran literales
+    Mundial-2026-específicos escritos directamente en
+    `app-eliminatoria-data.js` (un módulo `app-*.js` genérico, NO un
+    archivo de datos por torneo) — quedaron fuera de la consolidación de
+    Sprints 2/3b porque esa vez solo se tocó la fase de grupos, no la
+    eliminatoria. Ahora viven en `TORNEO_MUNDIAL_2026`
+    (`elim1_16Ids`/`elim1_16Labels`/`elimTree`/`elimRounds`/
+    `bonusPhases`/`worldPool`) y `app-eliminatoria-data.js` solo
+    reasigna, mismo patrón que Sprint 3b — cero cambio de comportamiento
+    (verificado con la suite completa, ningún test tocado). También se
+    agregaron `bracketFormat` (`"best-thirds"` por ahora) y `groupKeys`
+    (`["A".."L"]`) al objeto, para que Sprint 4b tenga de dónde leerlos.
+  - **4b (pendiente, sesión aparte):** `generarLlavesDieciseisavos()`
+    (`app-bracket-compute.js`) tiene la lógica real de "mejores
+    terceros + Annex C" escrita a mano con grupos `A`-`L` y pids 73-88
+    literales — es el "Sprint 3: motor de bracket con dos formatos" del
+    roadmap original, nunca hecho. Falta enseñarle un segundo camino
+    ("direct": los 2 primeros de cada grupo cruzan directo, sin
+    terceros ni Annex C) gateado por `TORNEO_MUNDIAL_2026.bracketFormat`,
+    y generalizar `groups` (hoy `["A",...,"L"]` hardcodeado adentro de
+    la función) a leer `TORNEO_<NOMBRE>.groupKeys`.
+  - **4c (pendiente):** crear `torneo-copaamerica.js` con datos
+    ficticios (16 equipos, 4 grupos, `bracketFormat:"direct"`,
+    directo a cuartos) y validar de punta a punta (registro,
+    predicciones, ranking, bracket) — recién ahí el motor queda
+    realmente probado con un segundo formato, no solo con la extracción
+    de datos.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

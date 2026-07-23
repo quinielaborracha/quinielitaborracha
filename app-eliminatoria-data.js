@@ -22,53 +22,27 @@
 // ══════════════════════════════════════════════════════════════
 
 // Partidos 1/16 — solo IDs y slot labels (equipos se cargan dinámicamente)
+// Sprint 4a (hoja de ruta comercial, 2026-07-23): antes estos eran arrays/
+// objetos literales acá mismo -- Mundial-2026-específicos igual que
+// GROUP_MATCHES lo era en registro.js antes del Sprint 3b. Ahora se
+// reasignan desde TORNEO_MUNDIAL_2026 (mismo patrón, cero cambio de
+// comportamiento) para que un futuro segundo torneo (Copa América) traiga
+// su propio ELIM_1_16_IDS/ELIM_TREE/ELIM_ROUNDS/BONUS_PHASES/WORLD_POOL
+// vía su propio TORNEO_<NOMBRE>, sin tocar scoring.js/app-bracket-*.js/
+// registro.js, que siguen leyendo estos mismos globals tal cual.
 
-const ELIM_1_16_IDS=[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88];
-const ELIM_1_16_LABELS={
-  73:"P73",74:"P74",75:"P75",76:"P76",
-  77:"P77",78:"P78",79:"P79",80:"P80",
-  81:"P81",82:"P82",83:"P83",84:"P84",
-  85:"P85",86:"P86",87:"P87",88:"P88",
-};
+const ELIM_1_16_IDS=TORNEO_MUNDIAL_2026.elim1_16Ids;
+const ELIM_1_16_LABELS=TORNEO_MUNDIAL_2026.elim1_16Labels;
 
-// Pool de 48 selecciones del Mundial 2026 para simulación
-const WORLD_POOL=["México","Sudáfrica","Corea del Sur","República Checa","Canadá","Bosnia y Herzegovina","Qatar","Suiza","Brasil","Marruecos","Haití","Escocia","Estados Unidos","Paraguay","Australia","Turquía","Alemania","Costa de Marfil","Ecuador","Curazao","Países Bajos","Japón","Suecia","Túnez","Arabia Saudita","Uruguay","España","Cabo Verde","Irán","Nueva Zelanda","Bélgica","Egipto","Francia","Senegal","Irak","Noruega","Argentina","Argelia","Austria","Jordania","Portugal","RD Congo","Uzbekistán","Colombia","Inglaterra","Croacia","Ghana","Panamá"];
+// Pool de selecciones del torneo en curso, para simulación
+const WORLD_POOL=TORNEO_MUNDIAL_2026.worldPool;
 
 // Estructura del bracket: cada partido posterior depende de quién ganó antes
 // parentH/parentA = id del partido cuyos ganadores se enfrentan aquí
 // Para P103 (3er lugar): perdedores de semis
-const ELIM_TREE={
-  // 1/8
-  89:{parentH:74,parentA:77,useLoserH:false,useLoserA:false},
-  90:{parentH:73,parentA:75,useLoserH:false,useLoserA:false},
-  91:{parentH:76,parentA:78,useLoserH:false,useLoserA:false},
-  92:{parentH:79,parentA:80,useLoserH:false,useLoserA:false},
-  93:{parentH:83,parentA:84,useLoserH:false,useLoserA:false},
-  94:{parentH:81,parentA:82,useLoserH:false,useLoserA:false},
-  95:{parentH:86,parentA:88,useLoserH:false,useLoserA:false},
-  96:{parentH:85,parentA:87,useLoserH:false,useLoserA:false},
-  // 1/4
-  97:{parentH:89,parentA:90,useLoserH:false,useLoserA:false},
-  98:{parentH:93,parentA:94,useLoserH:false,useLoserA:false},
-  99:{parentH:91,parentA:92,useLoserH:false,useLoserA:false},
-  100:{parentH:95,parentA:96,useLoserH:false,useLoserA:false},
-  // 1/2
-  101:{parentH:97,parentA:98,useLoserH:false,useLoserA:false},
-  102:{parentH:99,parentA:100,useLoserH:false,useLoserA:false},
-  // 3er/4to lugar (perdedores de semis)
-  103:{parentH:101,parentA:102,useLoserH:true,useLoserA:true},
-  // Final
-  104:{parentH:101,parentA:102,useLoserH:false,useLoserA:false},
-};
+const ELIM_TREE=TORNEO_MUNDIAL_2026.elimTree;
 
-const ELIM_ROUNDS=[
-  {lbl:"Dieciseisavos de final",ids:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88]},
-  {lbl:"Octavos de final",ids:[89,90,91,92,93,94,95,96]},
-  {lbl:"Cuartos de final",ids:[97,98,99,100]},
-  {lbl:"Semifinales",ids:[101,102]},
-  {lbl:"Tercer y cuarto lugar",ids:[103]},
-  {lbl:"🏆 Gran Final",ids:[104]},
-];
+const ELIM_ROUNDS=TORNEO_MUNDIAL_2026.elimRounds;
 
 // v6.2 — Antes esto leía ELIMRAW[name] (array fijo) y recorría ELIM_TREE
 // recursivamente para resolver equipos en rondas posteriores a 1/16.
@@ -113,23 +87,15 @@ const ELIM_ROUNDS=[
 // SISTEMA DE BONOS — Último lugar + Clasificados + Llaves
 // ══════════════════════════════════════════════════════════════
 
-// Definición de fases con sus IDs de partido y puntos de clasificación
-const BONUS_PHASES=[
-  {key:"grupos",label:"Fase de Grupos",mids:Array.from({length:72},(_,i)=>i+1),elimPhase:false,lastPts:8,classifiedPts:0,llavePts:0,prevPhase:null},
-  {key:"r16",label:"Dieciseisavos",mids:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],elimPhase:true,lastPts:6,classifiedPts:3,llavePts:2,prevPhase:"grupos"},
-  {key:"r8",label:"Octavos",mids:[89,90,91,92,93,94,95,96],elimPhase:true,lastPts:6,classifiedPts:4,llavePts:2,prevPhase:"r16"},
-  {key:"qf",label:"Cuartos",mids:[97,98,99,100],elimPhase:true,lastPts:6,classifiedPts:6,llavePts:2,prevPhase:"r8"},
-  {key:"sf",label:"Semifinales",mids:[101,102],elimPhase:true,lastPts:0,classifiedPts:6,llavePts:2,prevPhase:"qf"},
-  // v4.3 — "third" antes que "final": ambas dependen solo de "sf" (mismo
-  // prevPhase, ninguna depende de la otra — ver isPrevPhaseClosed() más
-  // abajo), así que este orden no cambia ningún cálculo de puntos, solo el
-  // orden en que Admin → Bonos lista las tarjetas de fase. Se invirtió
-  // porque el Tercer lugar se juega ANTES que la Final en la vida real
-  // (mismo orden que ya usa ELIM_ROUNDS) — antes de este cambio, Admin
-  // mostraba "Final" arriba de "Tercer lugar", al revés de cómo se juegan.
-  {key:"third",label:"Tercer lugar",mids:[103],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
-  {key:"final",label:"Final",mids:[104],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
-];
+// Definición de fases con sus IDs de partido y puntos de clasificación.
+// v4.3 — "third" antes que "final" en TORNEO_MUNDIAL_2026.bonusPhases:
+// ambas dependen solo de "sf" (mismo prevPhase, ninguna depende de la
+// otra — ver isPrevPhaseClosed() más abajo), así que este orden no cambia
+// ningún cálculo de puntos, solo el orden en que Admin → Bonos lista las
+// tarjetas de fase. Se invirtió porque el Tercer lugar se juega ANTES que
+// la Final en la vida real (mismo orden que ya usa ELIM_ROUNDS) — antes
+// mostraba "Final" arriba de "Tercer lugar", al revés de cómo se juegan.
+const BONUS_PHASES=TORNEO_MUNDIAL_2026.bonusPhases;
 
 // Sprint 3a (hoja de ruta comercial, 2026-07-22): rango de match-ID de
 // TODA la eliminatoria, derivado de BONUS_PHASES en vez de hardcodeado

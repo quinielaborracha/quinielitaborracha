@@ -108,5 +108,86 @@ const TORNEO_MUNDIAL_2026 = (function(){
       "760510":97,"760511":98,"760512":99,"760513":100,
       "760514":101,"760515":102,"760516":103,"760517":104,
     },
+
+    // Formato de bracket de eliminatoria: "best-thirds" (mejores terceros
+    // de grupo avanzan vía Annex C, formato Mundial 2026 con 12 grupos)
+    // vs. "direct" (los 2 primeros de cada grupo avanzan directo, sin
+    // terceros -- formato Copa América/Euro). app-bracket-compute.js
+    // (Sprint 4b, hoja de ruta comercial) lee este flag para decidir qué
+    // lógica de cruces usar.
+    bracketFormat: "best-thirds",
+
+    // Grupos del torneo, en el orden en que se muestran (A-L) -- antes
+    // hardcodeado como Array literal directo en generarLlavesDieciseisavos()
+    // (app-bracket-compute.js).
+    groupKeys: ["A","B","C","D","E","F","G","H","I","J","K","L"],
+
+    // Partidos 1/16 -- solo IDs y slot labels (equipos se cargan
+    // dinámicamente). Antes vivían como ELIM_1_16_IDS/ELIM_1_16_LABELS
+    // hardcodeados en app-eliminatoria-data.js (Sprint 4a).
+    elim1_16Ids: [73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],
+    elim1_16Labels: {
+      73:"P73",74:"P74",75:"P75",76:"P76",
+      77:"P77",78:"P78",79:"P79",80:"P80",
+      81:"P81",82:"P82",83:"P83",84:"P84",
+      85:"P85",86:"P86",87:"P87",88:"P88",
+    },
+
+    // Pool de 48 selecciones del Mundial 2026 para simulación. Antes
+    // WORLD_POOL hardcodeado en app-eliminatoria-data.js (Sprint 4a).
+    worldPool: ["México","Sudáfrica","Corea del Sur","República Checa","Canadá","Bosnia y Herzegovina","Qatar","Suiza","Brasil","Marruecos","Haití","Escocia","Estados Unidos","Paraguay","Australia","Turquía","Alemania","Costa de Marfil","Ecuador","Curazao","Países Bajos","Japón","Suecia","Túnez","Arabia Saudita","Uruguay","España","Cabo Verde","Irán","Nueva Zelanda","Bélgica","Egipto","Francia","Senegal","Irak","Noruega","Argentina","Argelia","Austria","Jordania","Portugal","RD Congo","Uzbekistán","Colombia","Inglaterra","Croacia","Ghana","Panamá"],
+
+    // Estructura del bracket: cada partido posterior depende de quién
+    // ganó antes (parentH/parentA = id del partido cuyos ganadores se
+    // enfrentan acá). Para P103 (3er lugar): perdedores de semis. Antes
+    // ELIM_TREE hardcodeado en app-eliminatoria-data.js (Sprint 4a).
+    elimTree: {
+      // 1/8
+      89:{parentH:74,parentA:77,useLoserH:false,useLoserA:false},
+      90:{parentH:73,parentA:75,useLoserH:false,useLoserA:false},
+      91:{parentH:76,parentA:78,useLoserH:false,useLoserA:false},
+      92:{parentH:79,parentA:80,useLoserH:false,useLoserA:false},
+      93:{parentH:83,parentA:84,useLoserH:false,useLoserA:false},
+      94:{parentH:81,parentA:82,useLoserH:false,useLoserA:false},
+      95:{parentH:86,parentA:88,useLoserH:false,useLoserA:false},
+      96:{parentH:85,parentA:87,useLoserH:false,useLoserA:false},
+      // 1/4
+      97:{parentH:89,parentA:90,useLoserH:false,useLoserA:false},
+      98:{parentH:93,parentA:94,useLoserH:false,useLoserA:false},
+      99:{parentH:91,parentA:92,useLoserH:false,useLoserA:false},
+      100:{parentH:95,parentA:96,useLoserH:false,useLoserA:false},
+      // 1/2
+      101:{parentH:97,parentA:98,useLoserH:false,useLoserA:false},
+      102:{parentH:99,parentA:100,useLoserH:false,useLoserA:false},
+      // 3er/4to lugar (perdedores de semis)
+      103:{parentH:101,parentA:102,useLoserH:true,useLoserA:true},
+      // Final
+      104:{parentH:101,parentA:102,useLoserH:false,useLoserA:false},
+    },
+
+    // Rondas de eliminatoria en orden de juego. Antes ELIM_ROUNDS
+    // hardcodeado en app-eliminatoria-data.js (Sprint 4a).
+    elimRounds: [
+      {lbl:"Dieciseisavos de final",ids:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88]},
+      {lbl:"Octavos de final",ids:[89,90,91,92,93,94,95,96]},
+      {lbl:"Cuartos de final",ids:[97,98,99,100]},
+      {lbl:"Semifinales",ids:[101,102]},
+      {lbl:"Tercer y cuarto lugar",ids:[103]},
+      {lbl:"🏆 Gran Final",ids:[104]},
+    ],
+
+    // Fases con sus IDs de partido y puntos de Bonos (último lugar,
+    // clasificados, llaves). Antes BONUS_PHASES hardcodeado en
+    // app-eliminatoria-data.js (Sprint 4a) -- la fase "grupos" ahora usa
+    // groupMatches.map() en vez de Array.from({length:72}) literal.
+    bonusPhases: [
+      {key:"grupos",label:"Fase de Grupos",mids:groupMatches.map(m=>m.id),elimPhase:false,lastPts:8,classifiedPts:0,llavePts:0,prevPhase:null},
+      {key:"r16",label:"Dieciseisavos",mids:[73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88],elimPhase:true,lastPts:6,classifiedPts:3,llavePts:2,prevPhase:"grupos"},
+      {key:"r8",label:"Octavos",mids:[89,90,91,92,93,94,95,96],elimPhase:true,lastPts:6,classifiedPts:4,llavePts:2,prevPhase:"r16"},
+      {key:"qf",label:"Cuartos",mids:[97,98,99,100],elimPhase:true,lastPts:6,classifiedPts:6,llavePts:2,prevPhase:"r8"},
+      {key:"sf",label:"Semifinales",mids:[101,102],elimPhase:true,lastPts:0,classifiedPts:6,llavePts:2,prevPhase:"qf"},
+      {key:"third",label:"Tercer lugar",mids:[103],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
+      {key:"final",label:"Final",mids:[104],elimPhase:true,lastPts:0,classifiedPts:0,llavePts:2,prevPhase:"sf"},
+    ],
   };
 })();
