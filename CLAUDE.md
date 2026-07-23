@@ -121,13 +121,34 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   esta es una asignación de nivel superior que se ejecuta apenas carga
   el archivo).
 
-  Pendiente (Sprint 3c, alcance mayor, sesión aparte): `KO_SLOT_IDS` y
-  `parentSlotsOf()` (registro.js) arman el árbol del bracket del wizard
-  con tamaños de ronda (16/8/4/2/1) y `prevBasePid` (73/89/97/101)
-  escritos a mano — es una generalización real (iterar `ELIM_ROUNDS`
-  genéricamente en vez de 5 bloques desenrollados a mano por ronda), no
-  una extracción de dato como Sprint 3a/3b. Ninguno de estos 2 archivos
-  se tocó todavía.
+- **Sprint 3c** (mismo roadmap, 2026-07-25): `computeBracket()`
+  (`registro.js`) tenía 3 bloques casi idénticos (r16/qf/sf), cada uno
+  con su tamaño de ronda (8/4/2) y su pid de arranque (89/97/101) +
+  `prevBasePid` (73/89/97) escritos a mano — números que solo tienen
+  sentido para el bracket de 32 equipos del Mundial 2026. Ahora es un
+  solo loop sobre `KO_PHASES[1..3]` que deriva el pid de arranque de
+  cada ronda desde `ELIM_ROUNDS[idx].ids[0]` (la MISMA fuente que ya usa
+  el motor de puntaje real) — un futuro segundo torneo con menos rondas
+  trae su propio `ELIM_ROUNDS`/`KO_PHASES` más cortos, sin tocar este
+  loop. `KO_SLOT_IDS` (antes una segunda lista con los mismos tamaños de
+  ronda escritos aparte) ahora se deriva de `KO_PHASES` con
+  `.flatMap()`. El `total:72` de la fase de grupos en
+  `computeCompletionFromPreds()` pasó a `GROUP_MATCHES.length`.
+  Verificado con la suite completa, incluyendo
+  `test_bracket_cruce_real_wizard.js`/`test_ko_equipos_reales_persistencia.js`
+  (los que más de cerca prueban este bracket) — cero cambio de
+  comportamiento.
+
+  Con esto, la "hoja de ruta comercial" de motor de datos de torneo
+  queda completa por ahora: `scoring.js`/`utils.js` (Sprint 3a) y
+  `registro.js` (Sprint 3c) ya no tienen el rango/forma del bracket
+  hardcodeado a mano — todo se deriva de `ELIM_ROUNDS`/`BONUS_PHASES`/
+  `KO_PHASES` y del objeto `TORNEO_MUNDIAL_2026` (Sprints 1/2/3b). Un
+  futuro segundo torneo con distinta forma de bracket (ej. Copa
+  América: sin mejores terceros, menos rondas) todavía necesita su
+  propio `TORNEO_<NOMBRE>`/`BONUS_PHASES`/`ELIM_ROUNDS`/`ELIM_TREE` — lo
+  que se ganó acá es que ARMARLOS ya no exige tocar `scoring.js`/
+  `utils.js`/`registro.js`.
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

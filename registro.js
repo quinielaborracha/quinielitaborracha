@@ -147,13 +147,13 @@ const KO_PHASES = [
   {key:'third', label:'Tercer lugar',           n:1},
   {key:'final', label:'Final',                  n:1},
 ];
-const KO_SLOT_IDS = [
-  ...Array.from({length:16},(_,i)=>`r32_${i+1}`),
-  ...Array.from({length:8}, (_,i)=>`r16_${i+1}`),
-  ...Array.from({length:4}, (_,i)=>`qf_${i+1}`),
-  ...Array.from({length:2}, (_,i)=>`sf_${i+1}`),
-  'third','final'
-];
+// Sprint 3c (hoja de ruta comercial, 2026-07-25): antes era una segunda
+// lista con los mismos tamaños de ronda (16/8/4/2/1/1) escritos aparte
+// de KO_PHASES -- ahora se deriva de ahí, una sola fuente para "cuántas
+// llaves tiene cada fase".
+const KO_SLOT_IDS = KO_PHASES.flatMap(ph =>
+  ph.n === 1 ? [ph.key] : Array.from({length:ph.n},(_,i)=>`${ph.key}_${i+1}`)
+);
 
 /* ════════════════════════════════════════
    v1.2 — CONSTRUCTOR DE TORNEOS (fase 1)
@@ -699,7 +699,7 @@ function computeBracket(preds){
   }
 
   const r32 = [];
-  for(let i=0;i<16;i++){
+  for(let i=0;i<KO_PHASES[0].n;i++){
     const slot = `r32_${i+1}`;
     const pred = preds[slot];
     if(r32SembradoDeGrupos){
@@ -756,27 +756,44 @@ function computeBracket(preds){
     if(!node) return [prevArr[2*seqIdx], prevArr[2*seqIdx+1]];
     return [prevArr[node.parentH-prevBasePid], prevArr[node.parentA-prevBasePid]];
   }
-  const r16 = [];
-  for(let i=0;i<8;i++){
-    const slot = `r16_${i+1}`;
-    const [m1,m2] = parentSlotsOf(89+i, r32, 73, i);
-    const r = resolveKoMatch('r16', slot, preds, firstKo, m1.winner, m2.winner);
-    r16.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
+  // Sprint 3c (hoja de ruta comercial, 2026-07-25): r16/qf/sf eran 3
+  // bloques casi idénticos, cada uno con su tamaño de ronda (8/4/2) y su
+  // pid de arranque (89/97/101) + prevBasePid (73/89/97) escritos a
+  // mano -- números que solo tienen sentido para el bracket de 32
+  // equipos del Mundial 2026. Ahora es un solo loop sobre KO_PHASES[1..3]
+  // (r16, qf, sf -- third/final quedan aparte, dependen del
+  // perdedor/ganador de sf, no de parentSlotsOf) que deriva el pid de
+  // arranque de cada ronda desde ELIM_ROUNDS[idx].ids[0]
+  // (app-eliminatoria-data.js, la MISMA fuente que ya usa el motor de
+  // puntaje real) -- un futuro segundo torneo con menos rondas de
+  // eliminatoria trae su propio ELIM_ROUNDS/KO_PHASES más cortos, sin
+  // tocar este loop. basePidFallback solo se usa si ELIM_ROUNDS no está
+  // cargado (tests que aíslan registro.js): en ese caso parentSlotsOf ya
+  // cae al cruce secuencial de siempre (ver arriba), así que el pid
+  // pasado ahí no cambia ningún resultado -- el fallback es solo para no
+  // pasar undefined.
+  const basePidFallback = [73,89,97,101,103,104];
+  function basePidForPhaseIdx(idx){
+    if(typeof ELIM_ROUNDS!=='undefined' && ELIM_ROUNDS[idx]) return ELIM_ROUNDS[idx].ids[0];
+    return basePidFallback[idx];
   }
-  const qf = [];
-  for(let i=0;i<4;i++){
-    const slot = `qf_${i+1}`;
-    const [m1,m2] = parentSlotsOf(97+i, r16, 89, i);
-    const r = resolveKoMatch('qf', slot, preds, firstKo, m1.winner, m2.winner);
-    qf.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
+  let prevArr = r32;
+  const koMidRounds = [];
+  for(let phaseIdx=1; phaseIdx<=3; phaseIdx++){ // 1=r16, 2=qf, 3=sf (0=r32 sembrado de grupos más arriba; 4=third y 5=final se arman aparte, más abajo)
+    const ph = KO_PHASES[phaseIdx];
+    const basePid = basePidForPhaseIdx(phaseIdx);
+    const prevBasePid = basePidForPhaseIdx(phaseIdx-1);
+    const arr = [];
+    for(let i=0;i<ph.n;i++){
+      const slot = `${ph.key}_${i+1}`;
+      const [m1,m2] = parentSlotsOf(basePid+i, prevArr, prevBasePid, i);
+      const r = resolveKoMatch(ph.key, slot, preds, firstKo, m1.winner, m2.winner);
+      arr.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
+    }
+    koMidRounds.push(arr);
+    prevArr = arr;
   }
-  const sf = [];
-  for(let i=0;i<2;i++){
-    const slot = `sf_${i+1}`;
-    const [m1,m2] = parentSlotsOf(101+i, qf, 97, i);
-    const r = resolveKoMatch('sf', slot, preds, firstKo, m1.winner, m2.winner);
-    sf.push({ slot, a:r.a, b:r.b, from:[m1.slot,m2.slot], winner:r.winner });
-  }
+  const [r16, qf, sf] = koMidRounds;
   const thirdFallbackA = (sf[0].a && sf[0].b) ? koLoser(preds[sf[0].slot], sf[0].a, sf[0].b, firstKo==='sf') : null;
   const thirdFallbackB = (sf[1].a && sf[1].b) ? koLoser(preds[sf[1].slot], sf[1].a, sf[1].b, firstKo==='sf') : null;
   const thirdR = resolveKoMatch('third', 'third', preds, firstKo, thirdFallbackA, thirdFallbackB);
@@ -810,7 +827,7 @@ function computeCompletionFromPreds(preds){
   const groupsAns = GROUP_MATCHES.filter(m=>groupMatchResult(m.id, preds)).length;
   const bracket = computeBracket(preds);
   const phases = [];
-  if(isGruposActivaWizard())phases.push({key:'groups', label:'Fase de grupos', done:groupsAns, total:72});
+  if(isGruposActivaWizard())phases.push({key:'groups', label:'Fase de grupos', done:groupsAns, total:GROUP_MATCHES.length});
   KO_PHASES.forEach(ph=>{
     if(!isKoPhaseActive(ph.key))return; // v1.2 — fase desactivada: no existe en este torneo
     const slots = bracket.ready ? koSlotsOf(bracket, ph.key) : [];
