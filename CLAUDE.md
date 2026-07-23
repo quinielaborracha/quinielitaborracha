@@ -262,6 +262,55 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   wizard, un build step, o un selector en el panel admin, a diseñar
   cuando arranque esa fase.
 
+- **Sprint 6 (Fase 2 "constructor de torneo" -- primera feature real,
+  2026-07-23): marca propia (logo/color).** Investigando el wizard de 3
+  decisiones del roadmap original (plantilla / modo de puntaje / marca),
+  encontramos que el "modo de puntaje" YA es 100% editable en vivo desde
+  siempre (`DB.configGlobal.reglas`, panel Admin → Configuración del
+  torneo → Reglas) — no había nada que construir ahí todavía (el
+  bloqueo de reglas una vez publicado el torneo queda pendiente, ver
+  abajo). Lo que sí faltaba era marca propia, así que se hizo primero
+  por ser la más autocontenida (no toca lógica de puntaje ni puede
+  romper un torneo en curso):
+  - `RG_DEFAULT_CONFIG` (`participantes.js`) suma `logoUrl`/`colorAcento`
+    (strings vacíos por defecto — mismo criterio que `whatsappGroupLink`:
+    vacío = comportamiento idéntico al de siempre).
+  - `applyBrandingConfig()` (`app-bootstrap.js`, nueva) reemplaza las 2
+    líneas que fijaban `logo-img.src = BORRACHI_SRC` a mano: ahora usa
+    `DB.configGlobal.logoUrl || BORRACHI_SRC`, y aplica
+    `colorAcento` sobre la variable CSS `--qb-red` (`style.setProperty`/
+    `removeProperty`, según haya valor o no). Se llama al bootear Y
+    dentro de `onParticipantesChange()` — mismo patrón reactivo que
+    Modo Mantenimiento: si el admin cambia la marca con gente conectada,
+    se ve al instante sin refrescar.
+  - Nueva tarjeta "🎨 Marca del torneo" en `renderTorneoConfig()`
+    (`app-admin-tools.js`, arriba de "⚙️ Fases activas"): URL de logo +
+    selector de color nativo (`<input type="color">`) + botón
+    "↩️ Restablecer". `updateBrandingCampo()`/`resetBrandingConfig()`
+    son las únicas 2 funciones que escriben estos 2 campos (mismo
+    criterio que `updateReglaValor()`/`toggleReglaSwitch()` para
+    Reglas). El valor de `logoUrl` se escapa con `esc()` (utils.js) al
+    insertarlo en el atributo `value=""` del input — mismo criterio XSS
+    que el resto del panel.
+  - Nuevo `test_marca_torneo.js`: default (sin marca = look de siempre),
+    configurar desde el input REAL (evento `change` real, no llamada
+    directa), XSS (una URL maliciosa no rompe el HTML del panel), y
+    restablecer. 13/13 checks en verde.
+
+  **Pendiente (sesión aparte):** bloqueo de reglas de puntaje una vez
+  publicado el torneo — hoy nada impide cambiar los puntos a mitad de
+  camino. La idea más simple (evaluada, no implementada todavía):
+  auto-bloquear los campos numéricos de Reglas en cuanto exista al menos
+  un resultado real cargado (`Object.keys(S.scores).length>0`), sin
+  exigirle al admin que se acuerde de apretar un botón de "publicar".
+
+  **Selector de plantilla (elegir qué `torneo-<nombre>.js` carga
+  `index.html`)** sigue sin programarse — se bajó de alcance a "paso de
+  setup" en vez de "feature en la app", porque Fase 2 sigue siendo un
+  proyecto Firebase por cliente (no multi-tenant): armar un cliente
+  nuevo ya es, gracias al Sprint 5, cambiar una sola línea de
+  `<script src>`.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

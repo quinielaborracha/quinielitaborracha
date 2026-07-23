@@ -209,6 +209,51 @@ function clearReality(){
 // pueda escribirlo). isFaseActiva()/getActivePhases()/etc. (scoring.js)
 // son la única fuente de verdad que lee este dato — esta pantalla solo
 // lo edita, no duplica ninguna lógica de cuáles fases existen.
+// ══════════════════════════════════════════════════════════════
+// MARCA DEL TORNEO — Sprint 6 (hoja de ruta comercial, Fase 2
+// "constructor de torneo" -- marca propia, 2026-07-23)
+// ══════════════════════════════════════════════════════════════
+// Logo (URL) y color de acento (reemplaza --qb-red, ver styles.css)
+// editables por el admin. Vacío = el look de siempre (BORRACHI_SRC +
+// rojo), aplicado en applyBrandingConfig() (app-bootstrap.js) tanto al
+// arrancar como en cada onParticipantesChange() -- así un cambio de
+// marca se ve al instante en todos los navegadores conectados, mismo
+// patrón que Modo Mantenimiento.
+function buildBrandingHtml(cfg){
+  const logoUrl=cfg.logoUrl||'';
+  const color=cfg.colorAcento||'#D4001A';
+  return `<div class="card">
+    <div class="card-title">🎨 Marca del torneo</div>
+    <div class="muted" style="font-size:11.5px;margin-bottom:.75rem">
+      Logo y color de acento propios para esta quiniela. Vacío = el diseño de siempre (mascota + rojo).
+    </div>
+    <div style="margin-bottom:.75rem">
+      <label style="font-weight:700;color:var(--qb-text);display:block;margin-bottom:4px">URL del logo</label>
+      <input type="text" value="${esc(logoUrl)}" placeholder="https://..." data-branding-field="logoUrl" onchange="updateBrandingCampo(this)" style="width:100%;max-width:360px">
+    </div>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <label style="font-weight:700;color:var(--qb-text)">Color de acento</label>
+      <input type="color" value="${esc(color)}" data-branding-field="colorAcento" onchange="updateBrandingCampo(this)">
+      <button class="btn" type="button" onclick="resetBrandingConfig()">↩️ Restablecer</button>
+    </div>
+  </div>`;
+}
+function updateBrandingCampo(el){
+  const field=el.dataset.brandingField;
+  DB.configGlobal[field]=el.value.trim();
+  saveData(DB);
+  if(typeof applyBrandingConfig==="function")applyBrandingConfig();
+  toast("✓ Guardado");
+}
+function resetBrandingConfig(){
+  DB.configGlobal.logoUrl='';
+  DB.configGlobal.colorAcento='';
+  saveData(DB);
+  if(typeof applyBrandingConfig==="function")applyBrandingConfig();
+  renderTorneoConfig();
+  toast("↩️ Diseño por defecto restablecido");
+}
+
 function renderTorneoConfig(){
   const c=document.getElementById("torneo-content");
   if(!c)return;
@@ -232,6 +277,8 @@ function renderTorneoConfig(){
   };
   const R=DB.configGlobal.reglas;
   c.innerHTML=`
+    ${buildBrandingHtml(DB.configGlobal)}
+
     <div class="card">
       <div class="card-title">⚙️ Fases activas</div>
       <div class="muted" style="font-size:11.5px;margin-bottom:.75rem">

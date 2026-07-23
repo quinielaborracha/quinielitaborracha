@@ -83,6 +83,13 @@ const RG_DEFAULT_CONFIG = {
   // el admin cargue un link acá -- mismo criterio que fechaCierre vacía
   // ("sin cierre configurado").
   whatsappGroupLink:'',
+  // Sprint 6 (hoja de ruta comercial, Fase 2 "constructor de torneo" --
+  // marca propia, 2026-07-23): logo/color editables desde Admin →
+  // Configuración del torneo → 🎨 Marca. Vacíos por defecto = mismo
+  // logo (BORRACHI_SRC) y mismo color de acento (--qb-red) de siempre —
+  // ver applyBrandingConfig() en app-bootstrap.js.
+  logoUrl:'',
+  colorAcento:'',
   // v3.3 — Modo Mantenimiento: cierra la app entera a cualquiera que no
   // sea admin (ver applyMaintenanceGuard() en app-admin-auth.js). El
   // admin SIEMPRE puede entrar -- eso NO es un campo acá (a propósito:

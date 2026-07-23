@@ -49,8 +49,22 @@ initTheme();
 // Logo: misma imagen en ambos modos (light y dark)
 // v6.6 — Antes usaba LOGO_SRC (el escudo con espadas). Ahora usa BORRACHI_SRC
 // (la mascota) según lo pedido para esta entrega.
-const logoEl=document.getElementById("logo-img");
-if(logoEl)logoEl.src=BORRACHI_SRC;
+// Sprint 6 (hoja de ruta comercial, Fase 2 "constructor de torneo" --
+// marca propia, 2026-07-23): si el admin cargó logoUrl/colorAcento
+// (Configuración del torneo → 🎨 Marca), se aplican encima del default
+// de siempre. Se llama acá (boot inicial) y de nuevo en cada disparo de
+// onParticipantesChange() más abajo, mismo patrón reactivo que
+// mantenimientoActivo/fasesActivas -- si el admin cambia la marca
+// mientras hay gente conectada, se actualiza sin que nadie refresque.
+function applyBrandingConfig(){
+  const cfg=DB.configGlobal||{};
+  const logoEl=document.getElementById("logo-img");
+  if(logoEl)logoEl.src=cfg.logoUrl||BORRACHI_SRC;
+  const root=document.documentElement;
+  if(cfg.colorAcento)root.style.setProperty("--qb-red",cfg.colorAcento);
+  else root.style.removeProperty("--qb-red");
+}
+applyBrandingConfig();
 // Fecha de hoy para el header mobile (ej. "18 JUN 2026 · 27 participantes")
 function setHeaderToday(){
   const el=document.getElementById("hdr-today");
@@ -95,6 +109,7 @@ onParticipantesChange(()=>{
   // Admin bloquee/desbloquee a todos los demás conectados al instante,
   // sin que nadie tenga que refrescar la página.
   if(typeof applyMaintenanceGuard==="function")applyMaintenanceGuard();
+  applyBrandingConfig();
   // v3.7 — Aviso a Participantes: mismo motivo que el guard de arriba --
   // si el admin activa el switch o guarda un texto nuevo mientras hay
   // gente conectada, les aparece el popup al instante.
