@@ -30,8 +30,16 @@
    tiempo real a partir de los marcadores que el participante predijo en
    grupos: tabla de posiciones -> 24 (1°s y 2°s) + 8 mejores terceros ->
    cruce. Ver bloque "BRACKET DINÁMICO" más abajo para el detalle.
+
+   Sprint 3b (hoja de ruta comercial, 2026-07-22): el valor de este
+   array vivía escrito acá aparte, como una TERCERA copia del mismo
+   fixture que también tenían MATCH_LABELS (partidos-grupos.js) y MGMAP
+   (app-static-data.js) -- verificado byte a byte que las 3 coincidían
+   antes de consolidar. Ahora reasigna desde TORNEO_MUNDIAL_2026.groupMatches
+   (torneo-mundial2026.js, carga segundo en index.html, mucho antes que
+   este archivo que es el último) -- fuente única, cero duplicación.
    ════════════════════════════════════════ */
-const GROUP_MATCHES=[{"id":1,"g":"A","a":"México","b":"Sudáfrica"},{"id":2,"g":"A","a":"Corea del Sur","b":"República Checa"},{"id":3,"g":"B","a":"Canadá","b":"Bosnia y Herzegovina"},{"id":4,"g":"D","a":"Estados Unidos","b":"Paraguay"},{"id":5,"g":"C","a":"Haití","b":"Escocia"},{"id":6,"g":"D","a":"Australia","b":"Turquía"},{"id":7,"g":"C","a":"Brasil","b":"Marruecos"},{"id":8,"g":"B","a":"Catar","b":"Suiza"},{"id":9,"g":"E","a":"Costa de Marfil","b":"Ecuador"},{"id":10,"g":"E","a":"Alemania","b":"Curazao"},{"id":11,"g":"F","a":"Países Bajos","b":"Japón"},{"id":12,"g":"F","a":"Suecia","b":"Túnez"},{"id":13,"g":"H","a":"Arabia Saudita","b":"Uruguay"},{"id":14,"g":"H","a":"España","b":"Cabo Verde"},{"id":15,"g":"G","a":"Irán","b":"Nueva Zelanda"},{"id":16,"g":"G","a":"Bélgica","b":"Egipto"},{"id":17,"g":"I","a":"Francia","b":"Senegal"},{"id":18,"g":"I","a":"Irak","b":"Noruega"},{"id":19,"g":"J","a":"Argentina","b":"Argelia"},{"id":20,"g":"J","a":"Austria","b":"Jordania"},{"id":21,"g":"L","a":"Ghana","b":"Panamá"},{"id":22,"g":"L","a":"Inglaterra","b":"Croacia"},{"id":23,"g":"K","a":"Portugal","b":"RD Congo"},{"id":24,"g":"K","a":"Uzbekistán","b":"Colombia"},{"id":25,"g":"A","a":"República Checa","b":"Sudáfrica"},{"id":26,"g":"B","a":"Suiza","b":"Bosnia y Herzegovina"},{"id":27,"g":"B","a":"Canadá","b":"Catar"},{"id":28,"g":"A","a":"México","b":"Corea del Sur"},{"id":29,"g":"C","a":"Brasil","b":"Haití"},{"id":30,"g":"C","a":"Escocia","b":"Marruecos"},{"id":31,"g":"D","a":"Turquía","b":"Paraguay"},{"id":32,"g":"D","a":"Estados Unidos","b":"Australia"},{"id":33,"g":"E","a":"Alemania","b":"Costa de Marfil"},{"id":34,"g":"E","a":"Ecuador","b":"Curazao"},{"id":35,"g":"F","a":"Países Bajos","b":"Suecia"},{"id":36,"g":"F","a":"Túnez","b":"Japón"},{"id":37,"g":"H","a":"Uruguay","b":"Cabo Verde"},{"id":38,"g":"H","a":"España","b":"Arabia Saudita"},{"id":39,"g":"G","a":"Bélgica","b":"Irán"},{"id":40,"g":"G","a":"Nueva Zelanda","b":"Egipto"},{"id":41,"g":"I","a":"Noruega","b":"Senegal"},{"id":42,"g":"I","a":"Francia","b":"Irak"},{"id":43,"g":"J","a":"Argentina","b":"Austria"},{"id":44,"g":"J","a":"Jordania","b":"Argelia"},{"id":45,"g":"L","a":"Inglaterra","b":"Ghana"},{"id":46,"g":"L","a":"Panamá","b":"Croacia"},{"id":47,"g":"K","a":"Portugal","b":"Uzbekistán"},{"id":48,"g":"K","a":"Colombia","b":"RD Congo"},{"id":49,"g":"C","a":"Escocia","b":"Brasil"},{"id":50,"g":"C","a":"Marruecos","b":"Haití"},{"id":51,"g":"B","a":"Suiza","b":"Canadá"},{"id":52,"g":"B","a":"Bosnia y Herzegovina","b":"Catar"},{"id":53,"g":"A","a":"República Checa","b":"México"},{"id":54,"g":"A","a":"Sudáfrica","b":"Corea del Sur"},{"id":55,"g":"E","a":"Curazao","b":"Costa de Marfil"},{"id":56,"g":"E","a":"Ecuador","b":"Alemania"},{"id":57,"g":"F","a":"Japón","b":"Suecia"},{"id":58,"g":"F","a":"Túnez","b":"Países Bajos"},{"id":59,"g":"D","a":"Turquía","b":"Estados Unidos"},{"id":60,"g":"D","a":"Paraguay","b":"Australia"},{"id":61,"g":"I","a":"Noruega","b":"Francia"},{"id":62,"g":"I","a":"Senegal","b":"Irak"},{"id":63,"g":"G","a":"Egipto","b":"Irán"},{"id":64,"g":"G","a":"Nueva Zelanda","b":"Bélgica"},{"id":65,"g":"H","a":"Cabo Verde","b":"Arabia Saudita"},{"id":66,"g":"H","a":"Uruguay","b":"España"},{"id":67,"g":"L","a":"Panamá","b":"Inglaterra"},{"id":68,"g":"L","a":"Croacia","b":"Ghana"},{"id":69,"g":"J","a":"Argelia","b":"Austria"},{"id":70,"g":"J","a":"Jordania","b":"Argentina"},{"id":71,"g":"K","a":"Colombia","b":"Portugal"},{"id":72,"g":"K","a":"RD Congo","b":"Uzbekistán"}];
+const GROUP_MATCHES = TORNEO_MUNDIAL_2026.groupMatches;
 /* v0.4 — BANDERAS POR IMAGEN
    Antes se usaban emojis de bandera (TEAM_FLAG). Inglaterra y Escocia
    compartían el mismo emoji genérico (🏴) porque sus banderas reales usan
@@ -1474,7 +1482,7 @@ function findByEmail(email){
   return DB.participants.find(p=> p.emailHash ? p.emailHash===h : norm(p.email)===norm(email));
 }
 
-function totalMatches(){ return 72 + KO_SLOT_IDS.length + activeSpecialQuestions().length; } // 72+32+8 = 112 (menos las preguntas avanzadas apagadas)
+function totalMatches(){ return GROUP_MATCHES.length + KO_SLOT_IDS.length + activeSpecialQuestions().length; } // 72+32+8 = 112 (menos las preguntas avanzadas apagadas)
 function countAnswered(pid){ return getCompletionStatus(pid).totalDone; }
 
 /* ════════════════════════════════════════

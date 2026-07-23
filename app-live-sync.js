@@ -31,16 +31,12 @@
 // generados por generarLlavesDieciseisavos() — con el ID exacto no hace
 // falta adivinar: sabemos qué pid es cada partido sin importar qué
 // equipos tenga cargados hoy.
-const ESPN_GAMEID_TO_PID={
-  "760486":73,"760489":74,"760488":75,"760487":76,
-  "760492":77,"760490":78,"760491":79,"760495":80,
-  "760494":81,"760493":82,"760496":83,"760497":84,
-  "760498":85,"760500":86,"760501":87,"760499":88,
-  "760503":89,"760502":90,"760504":91,"760505":92,
-  "760506":93,"760507":94,"760509":95,"760508":96,
-  "760510":97,"760511":98,"760512":99,"760513":100,
-  "760514":101,"760515":102,"760516":103,"760517":104,
-};
+//
+// Sprint 3b (hoja de ruta comercial, 2026-07-22): el valor vivía escrito
+// acá tal cual. Ahora reasigna desde TORNEO_MUNDIAL_2026.espnGameIdToPid
+// (torneo-mundial2026.js) -- un futuro segundo torneo trae su propio
+// mapeo de gameId de ESPN (calendario distinto), sin tocar este archivo.
+const ESPN_GAMEID_TO_PID = TORNEO_MUNDIAL_2026.espnGameIdToPid;
 
 // v7.2 — Modo Prueba (?test=1): se calcula directo desde la URL (no
 // depende de window.__fb ni de su orden de carga) para que esté disponible

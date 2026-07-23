@@ -98,7 +98,8 @@ const utilsScript = window.document.createElement("script");
 utilsScript.textContent = codeUtils;
 window.document.body.appendChild(utilsScript);
 
-const code1 = fs.readFileSync(path.join(__dirname, "participantes.js"), "utf8");
+const codeTorneo = fs.readFileSync(path.join(__dirname, "torneo-mundial2026.js"), "utf8");
+const code1 = codeTorneo + ";\n" + fs.readFileSync(path.join(__dirname, "participantes.js"), "utf8");
 let code2 = fs.readFileSync(path.join(__dirname, "registro.js"), "utf8");
 
 const closeIdx = code2.lastIndexOf("})();");

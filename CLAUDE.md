@@ -98,12 +98,36 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   aunque `app-eliminatoria-data.js` carga DESPUÉS de `utils.js`/
   `scoring.js`, funciona porque ambos solo leen esos globals adentro de
   funciones que se invocan mucho después de que todo terminó de cargar
-  (mismo patrón ya usado con `BONUS_PHASES` en `scoring.js`). Pendiente
-  (Sprint 3b, alcance más grande, sesión aparte): `registro.js` tiene su
-  propia copia del fixture de grupos (`GROUP_MATCHES`) y arma el bracket
-  con offsets hardcodeados; `app-live-sync.js` tiene el mapeo de IDs de
-  ESPN a partido hardcodeado; `totalMatches()` (registro.js) tiene la
-  fórmula `72+32+8` literal. Ninguno de estos se tocó todavía.
+  (mismo patrón ya usado con `BONUS_PHASES` en `scoring.js`).
+- **Sprint 3b** (mismo roadmap, 2026-07-22): `registro.js` tenía su
+  PROPIA copia estructurada del fixture (`GROUP_MATCHES`, {id,g,a,b}) y
+  `app-live-sync.js` tenía el mapeo de IDs de ESPN a partido
+  (`ESPN_GAMEID_TO_PID`) hardcodeados — 2 fuentes de dato más que
+  coincidían con `torneo-mundial2026.js` por disciplina manual, no por
+  construcción (verificado byte a byte antes de consolidar). Ahora
+  `torneo-mundial2026.js` es una IIFE que declara `groupMatches` como
+  fuente ÚNICA (72 entradas {id,g,a,b}) y DERIVA `matchLabels`/`mgmap`
+  de ahí mismo; `registro.js`/`app-live-sync.js` reasignan
+  `GROUP_MATCHES`/`ESPN_GAMEID_TO_PID` desde ese mismo objeto.
+  `totalMatches()` (registro.js) usaba `72` literal — ahora usa
+  `GROUP_MATCHES.length`. 4 tests que cargan `registro.js` aislado (sin
+  `index.html` de por medio: `test_autosave_indicador_real.js`,
+  `test_envio_quiniela_confirmado.js`, `test_login_reclaim.js`,
+  `test_registro_creacion_confirmada.js`) necesitaron sumar la carga de
+  `torneo-mundial2026.js` a su harness — sin eso, `GROUP_MATCHES =
+  TORNEO_MUNDIAL_2026.groupMatches` explota porque el global no existe
+  en ese scope aislado (a diferencia de `ELIM_MID_MIN`/`BONUS_PHASES` en
+  Sprint 3a, que se leen adentro de funciones invocadas mucho después;
+  esta es una asignación de nivel superior que se ejecuta apenas carga
+  el archivo).
+
+  Pendiente (Sprint 3c, alcance mayor, sesión aparte): `KO_SLOT_IDS` y
+  `parentSlotsOf()` (registro.js) arman el árbol del bracket del wizard
+  con tamaños de ronda (16/8/4/2/1) y `prevBasePid` (73/89/97/101)
+  escritos a mano — es una generalización real (iterar `ELIM_ROUNDS`
+  genéricamente en vez de 5 bloques desenrollados a mano por ronda), no
+  una extracción de dato como Sprint 3a/3b. Ninguno de estos 2 archivos
+  se tocó todavía.
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
