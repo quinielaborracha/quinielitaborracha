@@ -168,21 +168,45 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
     (verificado con la suite completa, ningún test tocado). También se
     agregaron `bracketFormat` (`"best-thirds"` por ahora) y `groupKeys`
     (`["A".."L"]`) al objeto, para que Sprint 4b tenga de dónde leerlos.
-  - **4b (pendiente, sesión aparte):** `generarLlavesDieciseisavos()`
-    (`app-bracket-compute.js`) tiene la lógica real de "mejores
-    terceros + Annex C" escrita a mano con grupos `A`-`L` y pids 73-88
-    literales — es el "Sprint 3: motor de bracket con dos formatos" del
-    roadmap original, nunca hecho. Falta enseñarle un segundo camino
-    ("direct": los 2 primeros de cada grupo cruzan directo, sin
-    terceros ni Annex C) gateado por `TORNEO_MUNDIAL_2026.bracketFormat`,
-    y generalizar `groups` (hoy `["A",...,"L"]` hardcodeado adentro de
-    la función) a leer `TORNEO_<NOMBRE>.groupKeys`.
-  - **4c (pendiente):** crear `torneo-copaamerica.js` con datos
-    ficticios (16 equipos, 4 grupos, `bracketFormat:"direct"`,
-    directo a cuartos) y validar de punta a punta (registro,
-    predicciones, ranking, bracket) — recién ahí el motor queda
-    realmente probado con un segundo formato, no solo con la extracción
-    de datos.
+  - **4b (mismo día): "Sprint 3: motor de bracket con dos formatos"**
+    del roadmap original — `generarLlavesDieciseisavos()`
+    (`app-bracket-compute.js`) tenía la lógica de "mejores terceros +
+    Annex C" escrita a mano con grupos `["A",...,"L"]` literal, y
+    `calcGroupStandings()`/`calcH2H()`/`allGroupsComplete()`
+    (`scoring.js`) + `rebuildDynamicData()` (`app-core-data.js`) +
+    `updateGenerarBtn()`/`simularMarcadores()`
+    (`app-bracket-compute.js`) tenían la cantidad de partidos de grupos
+    (`72`) hardcodeada en 6 lugares más. Se agregó un alias genérico
+    `TORNEO_ACTUAL = TORNEO_MUNDIAL_2026` (`app-static-data.js`) que
+    esos 6 lugares ahora leen (`TORNEO_ACTUAL.groupMatches.length`) en
+    vez del literal — un futuro segundo torneo con menos partidos de
+    grupos (Copa América: 24) no requiere tocarlos. Además,
+    `generarLlavesDieciseisavos()` ahora lee
+    `TORNEO_ACTUAL.bracketFormat`: si es `"direct"` (Copa
+    América/Euro — 2 primeros de cada grupo cruzan directo, sin
+    terceros), delega en la función nueva `generarLlavesDirecto()`, que
+    resuelve cruces `{pid:{h:"1A",a:"2B"}}` contra
+    `TORNEO_ACTUAL.directCrosses` (dato puro por torneo, sin lógica de
+    sorteo tipo Annex C que resolver acá); si sigue en `"best-thirds"`
+    (Mundial 2026), el camino existente no cambió una línea. `groups`
+    (antes `["A",...,"L"]` literal) ahora lee
+    `TORNEO_ACTUAL.groupKeys`. Nuevo test
+    `test_bracket_formato_direct.js` prueba `generarLlavesDirecto()` en
+    aislado (mutando `TORNEO_ACTUAL.directCrosses`/`bracketFormat`
+    después del boot real — son propiedades de un objeto, se pueden
+    pisar sin recargar nada aunque el binding sea `const`), incluido el
+    caso de un cruce con grupo sin datos (cae en `"?"`, no explota).
+    Suite completa verde (59 harnesses), Mundial 2026 real sin cambios
+    de comportamiento.
+  - **4c (pendiente, sesión aparte):** crear `torneo-copaamerica.js`
+    con datos ficticios (16 equipos, 4 grupos, `bracketFormat:"direct"`,
+    `directCrosses` de cuartos de final) y validar de punta a punta
+    (registro, predicciones, ranking, bracket) cargándolo en lugar de
+    `torneo-mundial2026.js` — recién ahí el motor queda realmente
+    probado con un segundo torneo completo, no solo con la función de
+    cruces en aislado. Esto también es el prerrequisito real para el
+    selector de plantillas de la Fase 2 (constructor de torneo): hoy
+    solo hay un archivo `TORNEO_<NOMBRE>` para elegir.
 
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker

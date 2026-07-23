@@ -73,3 +73,13 @@ const BGCOL={"España":"#c60b1e","Paises Bajos":"#ae1c28","Países Bajos":"#ae1c
 // DB.configGlobal.reglas.avanzado.<id> (v2.7.6 — switch individual por
 // pregunta, ver calcAdv en scoring.js).
 const ARULES = TORNEO_MUNDIAL_2026.arules;
+
+// Alias genérico del torneo en curso -- para código que necesita leer el
+// objeto completo (bracketFormat, groupKeys, cantidad de partidos) en vez
+// de un global puntual. Sprint 4b (hoja de ruta comercial, 2026-07-23):
+// scoring.js/app-core-data.js/app-bracket-compute.js tenían la cantidad
+// de partidos de grupos (72) y las letras de grupo (A-L) escritas a mano
+// en varios lugares -- ahora leen TORNEO_ACTUAL.groupMatches.length /
+// TORNEO_ACTUAL.groupKeys. Un futuro segundo torneo solo cambia esta
+// línea (o qué archivo TORNEO_<NOMBRE> carga index.html).
+const TORNEO_ACTUAL = TORNEO_MUNDIAL_2026;

@@ -1264,8 +1264,8 @@ function calcGroupStandings() {
     });
   });
 
-  // Procesar todos los partidos de grupos (P1–P72)
-  for (let mid = 1; mid <= 72; mid++) {
+  // Procesar todos los partidos de grupos
+  for (let mid = 1; mid <= TORNEO_ACTUAL.groupMatches.length; mid++) {
     const sc = S.scores[mid]; if (!sc) continue;
     const g = MGMAP[mid]; if (!g) continue;
     const abbrs = MID_ABBRS[mid]; if (!abbrs) continue;
@@ -1307,7 +1307,7 @@ function calcGroupStandings() {
 
 function calcH2H(g, nameA, nameB) {
   let aPts=0, bPts=0, aGf=0, bGf=0;
-  for (let mid = 1; mid <= 72; mid++) {
+  for (let mid = 1; mid <= TORNEO_ACTUAL.groupMatches.length; mid++) {
     if (MGMAP[mid] !== g) continue;
     const sc = S.scores[mid]; if (!sc) continue;
     const abbrs = MID_ABBRS[mid]; if (!abbrs) continue;
@@ -1350,7 +1350,7 @@ function annexCLookup(groups8) {
 }
 
 function allGroupsComplete() {
-  for (let mid = 1; mid <= 72; mid++) {
+  for (let mid = 1; mid <= TORNEO_ACTUAL.groupMatches.length; mid++) {
     if (!S.scores[mid] && !S.scores[String(mid)]) return false;
   }
   return true;

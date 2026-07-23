@@ -131,7 +131,7 @@ function rebuildDynamicData(){
     PM[p.name] = {city:p.city, country:p.country, champFlag: flagOfChampion(p.name, p.country), champAvatar: avatarOfChampion(p.name)};
   });
   MD = {}; MIDS = [];
-  for(let mid=1; mid<=72; mid++){
+  for(let mid=1; mid<=TORNEO_ACTUAL.groupMatches.length; mid++){
     const preds = {};
     (DB.participants||[]).forEach(p=>{
       const v = (DB.predictions[p.id]||{})[mid];

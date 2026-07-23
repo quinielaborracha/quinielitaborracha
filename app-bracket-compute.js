@@ -48,17 +48,25 @@
 // Verificar si todos los 72 partidos de grupos tienen resultado
 
 // FUNCIÓN PRINCIPAL: Calcular y cargar llaves de Dieciseisavos automáticamente
+// Sprint 4b (hoja de ruta comercial, 2026-07-23): antes esta función solo
+// sabía calcular cruces en formato "mejores terceros" (Mundial 2026, 12
+// grupos + Annex C). Ahora lee TORNEO_ACTUAL.bracketFormat: si es
+// "direct" (Copa América/Euro: los 2 primeros de cada grupo cruzan
+// directo, sin terceros), delega en generarLlavesDirecto() más abajo y
+// corta acá -- el resto de esta función (el camino "best-thirds", con
+// Annex C) sigue exactamente igual, cero cambio de comportamiento para
+// el Mundial 2026.
 function generarLlavesDieciseisavos() {
   if (!allGroupsComplete()) {
     toast("Faltan resultados de la fase de grupos", true);
     return;
   }
-  if (!confirm("¿Generar las llaves de Dieciseisavos automáticamente a partir de los resultados de grupos?")) return;
+  if (!confirm("¿Generar las llaves automáticamente a partir de los resultados de grupos?")) return;
 
   const standings = calcGroupStandings();
   // Verificar que todos los grupos tengan al menos 3 equipos con partidos jugados
-  const groups = ["A","B","C","D","E","F","G","H","I","J","K","L"];
-  
+  const groups = TORNEO_ACTUAL.groupKeys;
+
   // Obtener 1eros y 2dos de cada grupo
   const firsts = {}, seconds = {}, thirds_all = [];
   groups.forEach(g => {
@@ -67,6 +75,11 @@ function generarLlavesDieciseisavos() {
     if (arr.length >= 2) seconds[g] = arr[1].name;
     if (arr.length >= 3) thirds_all.push({ ...arr[2], group: g });
   });
+
+  if (TORNEO_ACTUAL.bracketFormat === "direct") {
+    generarLlavesDirecto(groups, firsts, seconds);
+    return;
+  }
 
   // Obtener los 8 mejores terceros
   const best8thirds = [...thirds_all].sort((a,b) => {
@@ -167,14 +180,52 @@ function generarLlavesDieciseisavos() {
   }
 }
 
+// Cruces para torneos "direct" (sin mejores terceros): TORNEO_ACTUAL.directCrosses
+// es {pid: {h:"1A", a:"2B"}, ...} -- "1A"/"2B" = 1ero/2do del grupo A/B.
+// Es dato puro del torneo (la tabla de cruces la define cada TORNEO_<NOMBRE>,
+// no hay lógica de sorteo tipo Annex C que resolver acá), así que esta
+// función solo resuelve esos códigos contra firsts/seconds ya calculados.
+function generarLlavesDirecto(groups, firsts, seconds) {
+  const crosses = TORNEO_ACTUAL.directCrosses || {};
+  const resolve = code => {
+    const rank = code[0], g = code.slice(1);
+    return rank === "1" ? firsts[g] : seconds[g];
+  };
+  const allMatches = {};
+  Object.entries(crosses).forEach(([pid, c]) => {
+    allMatches[pid] = { h: resolve(c.h) || "?", a: resolve(c.a) || "?" };
+  });
+  Object.entries(allMatches).forEach(([pid, teams]) => {
+    S.elimTeams[Number(pid)] = { h: teams.h || "?", a: teams.a || "?" };
+  });
+
+  save();
+  renderElim();
+  renderBracket();
+  renderRank();
+
+  toast("✓ Llaves generadas");
+
+  const summaryEl = document.getElementById("generate-summary");
+  if (summaryEl) {
+    summaryEl.innerHTML = `<div class="ib" style="margin-top:.5rem">
+      <strong>Grupos clasificados:</strong><br>
+      🥇 1eros: ${groups.map(g=>firsts[g]?g+": "+firsts[g]:"").filter(Boolean).join(", ")}<br>
+      🥈 2dos: ${groups.map(g=>seconds[g]?g+": "+seconds[g]:"").filter(Boolean).join(", ")}
+    </div>`;
+    summaryEl.style.display = "block";
+  }
+}
+
 function simularMarcadores(){
   // Find next incomplete phase
   let targetPhase=null;
   // First check group stage
-  const gruposComplete=Array.from({length:72},(_,i)=>i+1).every(mid=>S.scores[mid]||S.scores[String(mid)]);
+  const totalGroupMatches=TORNEO_ACTUAL.groupMatches.length;
+  const gruposComplete=Array.from({length:totalGroupMatches},(_,i)=>i+1).every(mid=>S.scores[mid]||S.scores[String(mid)]);
   if(!gruposComplete){
     if(!confirm("¿Simular marcadores de la Fase de Grupos? Solo llena los partidos vacíos."))return;
-    for(let mid=1;mid<=72;mid++){
+    for(let mid=1;mid<=totalGroupMatches;mid++){
       if(S.scores[mid]||S.scores[String(mid)])continue;
       const h=Math.floor(Math.random()*4);
       const a=Math.floor(Math.random()*4);
@@ -246,11 +297,12 @@ function updateGenerarBtn(){
   const btn=document.getElementById("btn-generar-llaves");
   const status=document.getElementById("generar-status");
   if(!btn)return;
-  const played=Object.keys(S.scores).filter(m=>Number(m)>=1&&Number(m)<=72).length;
-  const complete=played>=72;
+  const total=TORNEO_ACTUAL.groupMatches.length;
+  const played=Object.keys(S.scores).filter(m=>Number(m)>=1&&Number(m)<=total).length;
+  const complete=played>=total;
   btn.disabled=!complete;
   btn.style.opacity=complete?"1":"0.45";
-  if(status)status.textContent=complete?"✓ Fase de grupos completa":played+"/72 partidos";
+  if(status)status.textContent=complete?"✓ Fase de grupos completa":played+"/"+total+" partidos";
 }
 
 // ══════════════════════════════════════════════════════════════
