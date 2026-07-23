@@ -33,10 +33,11 @@
 // equipos tenga cargados hoy.
 //
 // Sprint 3b (hoja de ruta comercial, 2026-07-22): el valor vivía escrito
-// acá tal cual. Ahora reasigna desde TORNEO_MUNDIAL_2026.espnGameIdToPid
+// acá tal cual. Ahora reasigna desde TORNEO_ACTUAL.espnGameIdToPid
 // (torneo-mundial2026.js) -- un futuro segundo torneo trae su propio
 // mapeo de gameId de ESPN (calendario distinto), sin tocar este archivo.
-const ESPN_GAMEID_TO_PID = TORNEO_MUNDIAL_2026.espnGameIdToPid;
+// Sprint 5 (mismo roadmap, 2026-07-23): TORNEO_MUNDIAL_2026 → TORNEO_ACTUAL.
+const ESPN_GAMEID_TO_PID = TORNEO_ACTUAL.espnGameIdToPid;
 
 // v7.2 — Modo Prueba (?test=1): se calcula directo desde la URL (no
 // depende de window.__fb ni de su orden de carga) para que esté disponible

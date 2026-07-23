@@ -35,11 +35,13 @@
    array vivía escrito acá aparte, como una TERCERA copia del mismo
    fixture que también tenían MATCH_LABELS (partidos-grupos.js) y MGMAP
    (app-static-data.js) -- verificado byte a byte que las 3 coincidían
-   antes de consolidar. Ahora reasigna desde TORNEO_MUNDIAL_2026.groupMatches
+   antes de consolidar. Ahora reasigna desde TORNEO_ACTUAL.groupMatches
    (torneo-mundial2026.js, carga segundo en index.html, mucho antes que
    este archivo que es el último) -- fuente única, cero duplicación.
+   Sprint 5 (mismo roadmap, 2026-07-23): el objeto se renombró de
+   TORNEO_MUNDIAL_2026 a TORNEO_ACTUAL (genérico, ver torneo-mundial2026.js).
    ════════════════════════════════════════ */
-const GROUP_MATCHES = TORNEO_MUNDIAL_2026.groupMatches;
+const GROUP_MATCHES = TORNEO_ACTUAL.groupMatches;
 /* v0.4 — BANDERAS POR IMAGEN
    Antes se usaban emojis de bandera (TEAM_FLAG). Inglaterra y Escocia
    compartían el mismo emoji genérico (🏴) porque sus banderas reales usan

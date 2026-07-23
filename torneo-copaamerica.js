@@ -7,7 +7,7 @@
    torneo nuevo" de verdad es "completar un archivo de datos" y no
    "tocar scoring.js/utils.js/app-bracket-*.js/registro.js".
 
-   Mismo formato que TORNEO_MUNDIAL_2026 (torneo-mundial2026.js), pero:
+   Mismo formato que torneo-mundial2026.js, pero:
    - 16 equipos / 4 grupos de 4 (no 48/12) -- CONMEBOL completo (10)
      + 6 invitados, usando países ya presentes en paises.js más los 5
      que se agregaron en este mismo sprint (Chile/Perú/Bolivia/
@@ -24,17 +24,19 @@
    Este archivo NO se carga desde index.html todavía (Quinielita
    Borracha sigue siendo una instancia de Mundial 2026) -- se usa desde
    test_copa_america_e2e.js, que arma su propio DOM/FILES_IN_ORDER
-   reemplazando torneo-mundial2026.js por este archivo + un shim de una
-   línea (`const TORNEO_MUNDIAL_2026 = TORNEO_COPA_AMERICA;`) para que
-   partidos-grupos.js/app-static-data.js/app-eliminatoria-data.js -- que
-   hoy leen el identificador TORNEO_MUNDIAL_2026 literal, no uno
-   genérico -- funcionen sin tocarles una línea. Volver ese identificador
-   elegible en runtime (para que un futuro selector de plantillas de la
-   Fase 2 no necesite este shim) queda para cuando se construya ese
-   selector, no antes.
+   reemplazando torneo-mundial2026.js por este archivo directo.
+
+   Sprint 5 (mismo roadmap, 2026-07-23): declara TORNEO_ACTUAL
+   directamente (antes TORNEO_COPA_AMERICA + un shim en el test) --
+   partidos-grupos.js/app-static-data.js/app-eliminatoria-data.js/
+   registro.js/app-live-sync.js ya leen ese nombre genérico, así que
+   cualquier archivo torneo-<nombre>.js que declare TORNEO_ACTUAL
+   funciona sin shim, mientras index.html cargue solo uno a la vez. La
+   identidad del torneo vive en los campos id/nombre del objeto, no en
+   el nombre de la variable.
    ════════════════════════════════════════════════════════════ */
 
-const TORNEO_COPA_AMERICA = (function(){
+const TORNEO_ACTUAL = (function(){
   // 16 equipos, 4 grupos de 4. Sorteo ficticio (ver nota arriba).
   const groupMatches = [
     // Grupo A: Argentina, Chile, Perú, Canadá

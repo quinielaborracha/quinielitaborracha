@@ -42,10 +42,29 @@
    y los prevBasePid (73/89/97/101) escritos a mano -- es una
    generalización más grande (iterar ELIM_ROUNDS genéricamente en vez
    de 5 bloques desenrollados a mano por ronda), no una extracción de
-   dato como esta.
+   dato como esta. [Hecho, mismo día -- ver Sprint 3c en CLAUDE.md]
+
+   Sprint 5 (hoja de ruta comercial, 2026-07-23 -- prerrequisito de la
+   Fase 2, constructor de torneo): el global que este archivo declara se
+   RENOMBRÓ de `TORNEO_MUNDIAL_2026` a `TORNEO_ACTUAL`. Hasta acá, los 5
+   archivos que leen este objeto (`app-static-data.js`,
+   `partidos-grupos.js`, `app-eliminatoria-data.js`, `registro.js`,
+   `app-live-sync.js`) escribían el nombre `TORNEO_MUNDIAL_2026` LITERAL
+   -- un futuro segundo torneo (`torneo-copaamerica.js`, ver Sprint 4c)
+   no podía activarse solo cambiando qué archivo carga `index.html`,
+   porque esos 5 archivos seguían buscando ese nombre puntual. Ahora
+   todos leen `TORNEO_ACTUAL` (nombre genérico, sin importar qué torneo
+   sea), y CUALQUIER archivo `torneo-<nombre>.js` que se cargue debe
+   declarar `const TORNEO_ACTUAL = (...)` -- nunca se cargan dos a la
+   vez, así que no hay colisión de nombre. La identidad del torneo
+   (Mundial 2026 vs. Copa América) vive en el campo `id`/`nombre` DEL
+   OBJETO, no en el nombre de la variable. Esto es justo lo que
+   necesita un futuro selector de plantillas (Fase 2): elegir qué
+   archivo `torneo-<nombre>.js` cargar es la única decisión, ningún
+   consumidor necesita saber cuál se eligió.
    ════════════════════════════════════════════════════════════ */
 
-const TORNEO_MUNDIAL_2026 = (function(){
+const TORNEO_ACTUAL = (function(){
   // Fuente única de los 72 partidos de fase de grupos: id, grupo (A-L)
   // y los 2 equipos. matchLabels/mgmap (que consumen scoring.js/
   // utils.js/app-bracket-*.js) se derivan de este mismo array más

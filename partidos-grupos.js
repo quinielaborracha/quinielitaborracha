@@ -13,4 +13,6 @@
 // app-static-data.js). Este archivo queda como un re-export delgado
 // para que ningún consumidor existente (rebuildDynamicData() en
 // app-core-data.js, que depende de MATCH_LABELS) necesite tocarse.
-const MATCH_LABELS = TORNEO_MUNDIAL_2026.matchLabels;
+// Sprint 5 (mismo roadmap, 2026-07-23): el objeto se renombró de
+// TORNEO_MUNDIAL_2026 a TORNEO_ACTUAL (genérico, ver torneo-mundial2026.js).
+const MATCH_LABELS = TORNEO_ACTUAL.matchLabels;

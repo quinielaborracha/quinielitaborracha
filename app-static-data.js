@@ -11,7 +11,7 @@
 
    Sprint 2 de la "hoja de ruta comercial" (motor de datos de torneo,
    2026-07-22): ESPN_ABBR_MAP/MID_ABBRS/MGMAP/GES/ARULES ahora se
-   REASIGNAN desde TORNEO_MUNDIAL_2026 (torneo-mundial2026.js, carga
+   REASIGNAN desde TORNEO_ACTUAL (torneo-mundial2026.js, carga
    justo antes que este archivo) en vez de declararse acá con su valor
    literal -- el dato en sí vive en ese objeto, consolidado junto con
    MATCH_LABELS (partidos-grupos.js hace lo mismo). Cero cambios de
@@ -20,6 +20,14 @@
    etc.) necesitó tocarse. FLAGS2/ABBR/BGCOL quedan con su valor literal
    acá: no forman parte del fixture del torneo en curso (ver nota en
    torneo-mundial2026.js).
+
+   Sprint 5 (mismo roadmap, 2026-07-23): el objeto que arma
+   torneo-mundial2026.js se renombró de TORNEO_MUNDIAL_2026 a
+   TORNEO_ACTUAL (nombre genérico, no atado a qué torneo sea) -- ver
+   nota completa en torneo-mundial2026.js. Este archivo ya leía ese
+   objeto por 5 propiedades puntuales; ahora además usa el objeto
+   completo directamente (sin el alias intermedio que el Sprint 4b había
+   agregado acá abajo, ya innecesario).
 
    Sprint 1 (mismo roadmap): TEAM_NAMES/ESPN_NAME_ES/ALL_FLAGS/
    AVATAR_MAP se habían movido antes a paises.js, por ser datos de país
@@ -41,17 +49,17 @@
    ════════════════════════════════════════════════════════════ */
 
 // ── ESPN: mapa de partidos de fase de grupos (abbr → matchId) ──
-const ESPN_ABBR_MAP = TORNEO_MUNDIAL_2026.espnAbbrMap;
+const ESPN_ABBR_MAP = TORNEO_ACTUAL.espnAbbrMap;
 
 // Mapa abbr por matchId (para checksums y validación)
-const MID_ABBRS = TORNEO_MUNDIAL_2026.midAbbrs;
+const MID_ABBRS = TORNEO_ACTUAL.midAbbrs;
 
 // Normaliza abreviaturas alternativas que usa ESPN vs nuestro mapa
 
 // ── Grupos ──
-const MGMAP = TORNEO_MUNDIAL_2026.mgmap;
+const MGMAP = TORNEO_ACTUAL.mgmap;
 
-const GES = TORNEO_MUNDIAL_2026.ges;
+const GES = TORNEO_ACTUAL.ges;
 
 // ── Banderas y colores (set reducido, no específico del fixture -- ver
 //    nota de alcance en torneo-mundial2026.js) ──
@@ -72,14 +80,11 @@ const BGCOL={"España":"#c60b1e","Paises Bajos":"#ae1c28","Países Bajos":"#ae1c
 // SPECIAL_QUESTIONS (registro.js), la misma clave que usa
 // DB.configGlobal.reglas.avanzado.<id> (v2.7.6 — switch individual por
 // pregunta, ver calcAdv en scoring.js).
-const ARULES = TORNEO_MUNDIAL_2026.arules;
+const ARULES = TORNEO_ACTUAL.arules;
 
-// Alias genérico del torneo en curso -- para código que necesita leer el
-// objeto completo (bracketFormat, groupKeys, cantidad de partidos) en vez
-// de un global puntual. Sprint 4b (hoja de ruta comercial, 2026-07-23):
-// scoring.js/app-core-data.js/app-bracket-compute.js tenían la cantidad
-// de partidos de grupos (72) y las letras de grupo (A-L) escritas a mano
-// en varios lugares -- ahora leen TORNEO_ACTUAL.groupMatches.length /
-// TORNEO_ACTUAL.groupKeys. Un futuro segundo torneo solo cambia esta
-// línea (o qué archivo TORNEO_<NOMBRE> carga index.html).
-const TORNEO_ACTUAL = TORNEO_MUNDIAL_2026;
+// TORNEO_ACTUAL (declarado en torneo-mundial2026.js) también se lee
+// completo en otros archivos -- scoring.js/app-core-data.js/
+// app-bracket-compute.js (Sprint 4b) leen TORNEO_ACTUAL.groupMatches.length/
+// TORNEO_ACTUAL.groupKeys/TORNEO_ACTUAL.bracketFormat directo, sin alias
+// intermedio (el Sprint 4b lo agregaba acá cuando el objeto todavía se
+// llamaba TORNEO_MUNDIAL_2026; el Sprint 5 lo volvió innecesario).

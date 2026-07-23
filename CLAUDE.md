@@ -233,6 +233,35 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
     probado con 2 formatos de bracket reales — lo que falta para Fase 2
     es la ergonomía de selección, no el motor en sí.
 
+- **Sprint 5 (prerrequisito de la Fase 2, mismo día 2026-07-23): el
+  identificador se volvió genérico.** El global que arma
+  `torneo-mundial2026.js` se renombró de `TORNEO_MUNDIAL_2026` a
+  `TORNEO_ACTUAL` (nombre neutral, no atado a qué torneo sea). Hasta
+  acá, 5 archivos (`app-static-data.js`, `partidos-grupos.js`,
+  `app-eliminatoria-data.js`, `registro.js`, `app-live-sync.js`)
+  escribían el nombre `TORNEO_MUNDIAL_2026` LITERAL — un futuro
+  selector de plantillas no podía simplemente elegir qué archivo
+  `torneo-<nombre>.js` cargar, porque esos 5 archivos seguían buscando
+  ese nombre puntual por más que el contenido cambiara. Ahora los 5
+  leen `TORNEO_ACTUAL`, y `torneo-copaamerica.js` (Sprint 4c) también se
+  actualizó para declarar `TORNEO_ACTUAL` directamente (antes
+  `TORNEO_COPA_AMERICA` + un shim de una línea en el test) —
+  `test_copa_america_e2e.js` ya no necesita ese shim, prueba real de que
+  el identificador genérico funciona. La identidad de cada torneo vive
+  en los campos `id`/`nombre` DEL OBJETO, nunca en el nombre de la
+  variable — nunca se cargan dos archivos `torneo-*.js` a la vez, así
+  que no hay colisión posible. `app-static-data.js` además perdió el
+  alias intermedio `const TORNEO_ACTUAL = TORNEO_MUNDIAL_2026;` que el
+  Sprint 4b había agregado (ya redundante: ahora el objeto se llama así
+  desde su declaración). Suite completa verde, cero cambio de
+  comportamiento para el Mundial 2026 real.
+
+  **Lo que queda pendiente para Fase 2 (constructor de torneo)** ya NO
+  es de motor: es la ergonomía de elegir qué archivo `torneo-<nombre>.js`
+  termina cargando `index.html` (hoy es un `<script src>` fijo) — un
+  wizard, un build step, o un selector en el panel admin, a diseñar
+  cuando arranque esa fase.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

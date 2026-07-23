@@ -8,19 +8,17 @@
 // generalización de los sprints anteriores no quedó bien -- ver
 // discusión en CLAUDE.md.
 //
-// torneo-copaamerica.js define su propio objeto TORNEO_COPA_AMERICA (no
-// TORNEO_MUNDIAL_2026). app-static-data.js/partidos-grupos.js/
-// app-eliminatoria-data.js hoy leen el identificador TORNEO_MUNDIAL_2026
-// literal (no uno genérico -- ese es trabajo de la Fase 2, el selector
-// de plantillas), así que este test arma su propio FILES_IN_ORDER
-// reemplazando torneo-mundial2026.js por torneo-copaamerica.js + un shim
-// de una línea que redirige el nombre. Ningún archivo de producción se
-// modifica para este test.
+// torneo-copaamerica.js declara TORNEO_ACTUAL directamente (Sprint 5:
+// el identificador que antes era TORNEO_MUNDIAL_2026 se volvió genérico
+// en los 5 archivos que lo leen), así que este test arma su propio
+// FILES_IN_ORDER reemplazando torneo-mundial2026.js por
+// torneo-copaamerica.js sin ningún shim -- ningún archivo de producción
+// se modifica para este test.
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
 
-const FILES = ["participantes.js", "__TORNEO_SHIM__", "partidos-grupos.js", "utils.js", "paises.js", "app-static-data.js", "app-state.js", "scoring.js", "totp.js",
+const FILES = ["participantes.js", "torneo-copaamerica.js", "partidos-grupos.js", "utils.js", "paises.js", "app-static-data.js", "app-state.js", "scoring.js", "totp.js",
   "app-core-data.js", "app-admin-auth.js", "app-live-sync.js", "app-tabs.js",
   "app-eliminatoria-data.js", "app-batallas.js", "app-bracket-render.js",
   "app-bracket-annexc.js", "app-bracket-compute.js", "app-bracket-espn-sync.js", "app-bracket-view.js",
@@ -48,11 +46,8 @@ window.__fb = {
   signOut: () => Promise.resolve(),
 };
 
-const torneoShim = fs.readFileSync(path.join(__dirname, "torneo-copaamerica.js"), "utf8")
-  + "\nconst TORNEO_MUNDIAL_2026 = TORNEO_COPA_AMERICA;\n";
-
 for (const file of FILES) {
-  const code = file === "__TORNEO_SHIM__" ? torneoShim : fs.readFileSync(path.join(__dirname, file), "utf8");
+  const code = fs.readFileSync(path.join(__dirname, file), "utf8");
   const script = window.document.createElement("script");
   script.textContent = code;
   try { window.document.body.appendChild(script); }

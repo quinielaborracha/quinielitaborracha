@@ -25,24 +25,25 @@
 // Sprint 4a (hoja de ruta comercial, 2026-07-23): antes estos eran arrays/
 // objetos literales acá mismo -- Mundial-2026-específicos igual que
 // GROUP_MATCHES lo era en registro.js antes del Sprint 3b. Ahora se
-// reasignan desde TORNEO_MUNDIAL_2026 (mismo patrón, cero cambio de
+// reasignan desde TORNEO_ACTUAL (mismo patrón, cero cambio de
 // comportamiento) para que un futuro segundo torneo (Copa América) traiga
 // su propio ELIM_1_16_IDS/ELIM_TREE/ELIM_ROUNDS/BONUS_PHASES/WORLD_POOL
 // vía su propio TORNEO_<NOMBRE>, sin tocar scoring.js/app-bracket-*.js/
-// registro.js, que siguen leyendo estos mismos globals tal cual.
+// registro.js, que siguen leyendo estos mismos globals tal cual. Sprint 5
+// (mismo roadmap): TORNEO_MUNDIAL_2026 se renombró a TORNEO_ACTUAL.
 
-const ELIM_1_16_IDS=TORNEO_MUNDIAL_2026.elim1_16Ids;
-const ELIM_1_16_LABELS=TORNEO_MUNDIAL_2026.elim1_16Labels;
+const ELIM_1_16_IDS=TORNEO_ACTUAL.elim1_16Ids;
+const ELIM_1_16_LABELS=TORNEO_ACTUAL.elim1_16Labels;
 
 // Pool de selecciones del torneo en curso, para simulación
-const WORLD_POOL=TORNEO_MUNDIAL_2026.worldPool;
+const WORLD_POOL=TORNEO_ACTUAL.worldPool;
 
 // Estructura del bracket: cada partido posterior depende de quién ganó antes
 // parentH/parentA = id del partido cuyos ganadores se enfrentan aquí
 // Para P103 (3er lugar): perdedores de semis
-const ELIM_TREE=TORNEO_MUNDIAL_2026.elimTree;
+const ELIM_TREE=TORNEO_ACTUAL.elimTree;
 
-const ELIM_ROUNDS=TORNEO_MUNDIAL_2026.elimRounds;
+const ELIM_ROUNDS=TORNEO_ACTUAL.elimRounds;
 
 // v6.2 — Antes esto leía ELIMRAW[name] (array fijo) y recorría ELIM_TREE
 // recursivamente para resolver equipos en rondas posteriores a 1/16.
@@ -88,14 +89,14 @@ const ELIM_ROUNDS=TORNEO_MUNDIAL_2026.elimRounds;
 // ══════════════════════════════════════════════════════════════
 
 // Definición de fases con sus IDs de partido y puntos de clasificación.
-// v4.3 — "third" antes que "final" en TORNEO_MUNDIAL_2026.bonusPhases:
+// v4.3 — "third" antes que "final" en TORNEO_ACTUAL.bonusPhases:
 // ambas dependen solo de "sf" (mismo prevPhase, ninguna depende de la
 // otra — ver isPrevPhaseClosed() más abajo), así que este orden no cambia
 // ningún cálculo de puntos, solo el orden en que Admin → Bonos lista las
 // tarjetas de fase. Se invirtió porque el Tercer lugar se juega ANTES que
 // la Final en la vida real (mismo orden que ya usa ELIM_ROUNDS) — antes
 // mostraba "Final" arriba de "Tercer lugar", al revés de cómo se juegan.
-const BONUS_PHASES=TORNEO_MUNDIAL_2026.bonusPhases;
+const BONUS_PHASES=TORNEO_ACTUAL.bonusPhases;
 
 // Sprint 3a (hoja de ruta comercial, 2026-07-22): rango de match-ID de
 // TODA la eliminatoria, derivado de BONUS_PHASES en vez de hardcodeado
