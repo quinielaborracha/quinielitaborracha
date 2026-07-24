@@ -39,6 +39,17 @@
     appId: "1:981514819484:web:3857037c5203a0ebd71a59"
   };
 
+  // Fase 3, milestone 1 (hoja de ruta comercial -- multi-tenant,
+  // 2026-07-24): un solo tenant fijo por checkout estático, mismo
+  // criterio que firebaseConfig de arriba -- un futuro cliente nuevo
+  // sigue siendo "clonar el repo y cambiar 2 constantes", NO un
+  // selector en runtime (eso es un milestone futuro, ver CLAUDE.md).
+  // Todos los paths de Firestore de acá abajo quedan anidados bajo
+  // tenants/{TENANT_ID}/... en vez de planos, para que firestore.rules
+  // pueda aislar los datos de un tenant de los de otro (ver
+  // firestore.rules: match /tenants/{tenantId}).
+  const TENANT_ID = "quinielitaborracha";
+
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
   const auth = getAuth(fbApp);
@@ -55,11 +66,11 @@
   // Documento único que contiene todo el estado S de la quiniela (resultados
   // reales, bonos, batallas) — SIN CAMBIOS, sigue siendo de escritura
   // exclusiva del admin, como siempre.
-  const STATE_DOC_REAL = doc(db, "quiniela", "estado");
+  const STATE_DOC_REAL = doc(db, "tenants", TENANT_ID, "quiniela", "estado");
   // v7.2 — Documento espejo para Modo Prueba. Mismo modelo de permisos que
   // el real (ver firestore.rules), pero nunca lo lee ni lo escribe nadie
   // que no haya entrado con ?test=1 explícitamente.
-  const STATE_DOC_TEST = doc(db, "quiniela", "estado-test");
+  const STATE_DOC_TEST = doc(db, "tenants", TENANT_ID, "quiniela", "estado-test");
   const STATE_DOC = TEST_MODE ? STATE_DOC_TEST : STATE_DOC_REAL;
 
   // v6.4 — Reemplaza al viejo documento único "registro/estado" (escritura
@@ -67,26 +78,26 @@
   // su PROPIO documento en esta colección, con un campo ownerUid que las
   // reglas de Firestore usan para exigir que solo su dueño pueda escribirlo
   // (ver la nota de seguridad completa al final de participantes.js).
-  const PARTICIPANTS_COL = collection(db, "registro_participants");
+  const PARTICIPANTS_COL = collection(db, "tenants", TENANT_ID, "registro_participants");
   // v6.9 — Fase de Privacidad: clave + correo de cada participante, antes
   // dentro de PARTICIPANTS_COL (público), ahora en su propia colección de
   // lectura restringida (dueño o admin). Ver firestore.rules.
-  const PRIVADO_COL = collection(db, "registro_privado");
+  const PRIVADO_COL = collection(db, "tenants", TENANT_ID, "registro_privado");
   // Config global (fechaCierre, switches de admin) + contador de códigos.
   // Sin datos sensibles -> lectura pública; escritura de cualquier sesión
   // autenticada (anónima alcanza, no hace falta ser admin).
-  const REGISTRO_META_DOC = doc(db, "registro", "meta");
+  const REGISTRO_META_DOC = doc(db, "tenants", TENANT_ID, "registro", "meta");
   // Participantes eliminados — conserva su clave en texto plano, así que
   // queda en un documento separado de solo-admin (no en el público de arriba).
-  const REGISTRO_PAPELERA_DOC = doc(db, "registro", "papelera");
+  const REGISTRO_PAPELERA_DOC = doc(db, "tenants", TENANT_ID, "registro", "papelera");
   // v7.1 — Secreto TOTP del 2FA admin + mapa de navegadores de confianza
   // (hasheados, con expiración). Lectura/escritura exclusiva del admin,
   // mismo patrón que REGISTRO_PAPELERA_DOC -- ver firestore.rules.
-  const ADMIN2FA_DOC = doc(db, "registro", "admin2fa");
+  const ADMIN2FA_DOC = doc(db, "tenants", TENANT_ID, "registro", "admin2fa");
 
   // Exponemos en window para que el resto del script (no-módulo) lo use
   window.__fb = {
-    db, auth, STATE_DOC, STATE_DOC_REAL, STATE_DOC_TEST, TEST_MODE,
+    db, auth, STATE_DOC, STATE_DOC_REAL, STATE_DOC_TEST, TEST_MODE, TENANT_ID,
     PARTICIPANTS_COL, PRIVADO_COL, REGISTRO_META_DOC, REGISTRO_PAPELERA_DOC,
     ADMIN2FA_DOC,
     doc, collection, getDoc, query, where, setDoc, deleteDoc, deleteField, writeBatch, runTransaction,
@@ -112,7 +123,7 @@
      es true. position:sticky para que quede visible aunque se haga scroll,
      sin tapar nada con position:fixed. -->
 <div id="test-mode-banner" style="display:none;position:sticky;top:0;z-index:9999;align-items:center;justify-content:center;gap:6px;background:var(--qb-yellow);color:#1a1200;font-weight:800;text-align:center;padding:7px 10px;font-size:12px;letter-spacing:.02em">
-  🧪 MODO PRUEBA — esto NO afecta el sitio real. Los resultados que cargues acá se guardan aparte (<code style="background:rgba(0,0,0,.15);padding:1px 5px;border-radius:4px">quiniela/estado-test</code>).
+  🧪 MODO PRUEBA — esto NO afecta el sitio real. Los resultados que cargues acá se guardan aparte (<code style="background:rgba(0,0,0,.15);padding:1px 5px;border-radius:4px">tenants/&lt;id&gt;/quiniela/estado-test</code>).
 </div>
 
 <!-- v3.3 — Banda admin-only de Modo Mantenimiento. Mismo patrón que
@@ -884,7 +895,7 @@
      DEBE ser el último: hace el primer render llamando funciones
      definidas en todos los módulos anteriores. -->
 <script defer src="app-core-data.js?v=1.6"></script>
-<script defer src="app-admin-auth.js?v=1.7"></script>
+<script defer src="app-admin-auth.js?v=1.8"></script>
 <script defer src="app-live-sync.js?v=1.14"></script>
 <script defer src="app-tabs.js?v=1.6"></script>
 <script defer src="app-eliminatoria-data.js?v=1.4"></script>

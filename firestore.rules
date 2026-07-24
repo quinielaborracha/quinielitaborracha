@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ════════════════════════════════════════════════════════════════
-// QUINIELITA BORRACHA — Reglas de seguridad de Firestore (v1.0)
+// QUINIELITA BORRACHA — Reglas de seguridad de Firestore (v2.0)
 // Basado en Quiniela Borracha 2026 v7.2, instancia nueva y limpia.
 // ════════════════════════════════════════════════════════════════
 // Cómo publicar: Firebase Console -> proyecto "quinielitaborracha" ->
@@ -10,14 +10,26 @@ rules_version = '2';
 // se publiquen ahí — esto es solo el texto, no algo que el código JS
 // pueda aplicar por sí mismo.
 //
-// Modelo de autenticación usado por estas reglas (ver app.js::wireFirebaseAuth
+// v2.0 — Fase 3, milestone 1 (hoja de ruta comercial -- multi-tenant,
+// 2026-07-24): todo el árbol de documentos anterior (registro_participants,
+// registro_privado, registro/meta, registro/papelera, registro/admin2fa,
+// quiniela/estado, quiniela/estado-test) pasa a vivir anidado bajo
+// tenants/{tenantId}/... El email de admin, antes un string LITERAL
+// repetido en cada regla, ahora se lee de tenants/{tenantId}.adminEmail
+// (ver isAdmin() más abajo) -- así el mismo archivo de reglas sirve para
+// cualquier cantidad de tenants, cada uno con su propio admin, sin
+// tocar una sola línea de lógica por cliente nuevo. IMPORTANTE: el
+// documento tenants/{tenantId} se crea A MANO en Firebase Console (no
+// hay Cloud Functions todavía -- eso es un milestone futuro), con al
+// menos el campo adminEmail. Si ese documento no existe, isAdmin()
+// devuelve false para TODOS -- no hay recuperación desde la app, solo
+// recreándolo en Console (mismo riesgo ya aceptado hoy con
+// registro/admin2fa, ahora extendido a un documento más).
+//
+// Modelo de autenticación usado por estas reglas (ver app-admin-auth.js
 // y participantes.js para el código que las usa):
-//   - Admin:        Firebase Auth con correo+contraseña real (Tato).
-//                    request.auth.token.email == "quinielaborracha@gmail.com"
-//                    y request.auth.token.email_verified... (NO se exige
-//                    verificación de correo aquí a propósito: Firebase
-//                    Auth ya garantiza que solo quien conoce la
-//                    contraseña real puede autenticarse con ese email).
+//   - Admin:        Firebase Auth con correo+contraseña real, UN email
+//                    por tenant (tenants/{tenantId}.adminEmail).
 //   - Participante: Firebase Auth Anónima (signInAnonymously()), un UID
 //                    estable por dispositivo/navegador mientras no se
 //                    borren cookies/datos del sitio. NUNCA es admin
@@ -28,457 +40,479 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Helper (v6.8 — Fase de Estabilización) ───────────────────────
-    // ¿Ya pasó la fecha/hora de cierre configurada por el admin en
-    // registro/meta.configGlobal? Antes esto SOLO lo decidía isLocked()
-    // en registro.js (100% cliente) — alguien con la consola del
-    // navegador abierta podía seguir escribiendo predicciones después
-    // del cierre sin que Firestore lo notara. Esta función lo replica
-    // del lado del servidor para que la regla de "update" de abajo
-    // pueda exigirlo de verdad.
-    //
-    // NOTA DE INTERPRETACIÓN: el cliente (isGloballyClosed() en
-    // registro.js) compara fechaCierre+horaCierre contra la hora LOCAL
-    // del navegador de quien mira la pantalla — que varía por ciudad
-    // (Orlando, Panamá, Maracaibo, Buenos Aires, Barcelona, etc.), así
-    // que hoy el cierre "real" ya ocurre en instantes distintos según
-    // desde dónde se mire. Esta regla del servidor necesita UN solo
-    // instante real para todos, así que interpreta fechaCierre+
-    // horaCierre como UTC. Esto es una mejora respecto al
-    // comportamiento actual (ambiguo), no un cambio que vaya a notar
-    // nadie en el uso normal — el cierre siempre se configura con
-    // margen de horas antes del primer partido, no al segundo.
-    function _metaConfigGlobal() {
-      return get(/databases/$(database)/documents/registro/meta).data.get('configGlobal', {});
-    }
-    function isPastDeadline() {
-      return exists(/databases/$(database)/documents/registro/meta) && _isPastDeadlineInner();
-    }
-    function _isPastDeadlineInner() {
-      let cfg = _metaConfigGlobal();
-      let fc = cfg.get('fechaCierre', '');
-      let hc = cfg.get('horaCierre', '');
-      return fc != ''
-        && request.time > timestamp.value(fc + 'T' + (hc != '' ? hc : '23:59') + ':00Z');
-    }
+    match /tenants/{tenantId} {
 
-    // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
-    // ¿Está abierto el registro de nuevos participantes? Mismo patrón que
-    // isPastDeadline() de arriba: si registro/meta todavía no existe, o
-    // existe pero nunca declaró registroAbierto, se trata como ABIERTO
-    // (comportamiento idéntico al de siempre para cualquier instalación
-    // existente -- el default en el cliente, RG_DEFAULT_CONFIG, también
-    // es registroAbierto:true). Solo un registroAbierto == false EXPLÍCITO
-    // (el admin cerró el registro desde su panel) bloquea altas nuevas.
-    function isRegistroAbierto() {
-      return !exists(/databases/$(database)/documents/registro/meta)
-             || _isRegistroAbiertoInner();
-    }
-    function _isRegistroAbiertoInner() {
-      return _metaConfigGlobal().get('registroAbierto', true) != false;
-    }
+      // Nadie lee/escribe este documento desde el cliente en este
+      // milestone -- se crea/edita a mano en Firebase Console, mismo
+      // criterio que registro/admin2fa. Los get()/exists() de las
+      // funciones de abajo NO pasan por esta regla de lectura (leen el
+      // documento crudo para evaluar la condición de OTRA regla, no es
+      // un acceso del cliente).
+      allow read, write: if false;
 
-    // ── Helper (v3.3 — Modo Mantenimiento) ────────────────────────────
-    // Mismo patrón que isPastDeadline()/isRegistroAbierto() de arriba: si
-    // registro/meta no existe, o existe pero nunca declaró
-    // mantenimientoActivo, se trata como INACTIVO (default en el cliente,
-    // RG_DEFAULT_CONFIG, también es mantenimientoActivo:false). Solo se
-    // usa para bloquear escrituras de participantes -- la LECTURA de
-    // registro/meta sigue abierta para cualquiera con sesión (ver la
-    // regla de arriba) porque si no, nadie podría enterarse de que el
-    // mantenimiento está activo (el propio aviso depende de leer este
-    // documento). El admin nunca pasa por esta función: sus reglas de
-    // escritura ya lo aprueban por email antes de llegar acá.
-    function isMantenimientoActivo() {
-      return exists(/databases/$(database)/documents/registro/meta)
-             && _metaConfigGlobal().get('mantenimientoActivo', false) == true;
-    }
+      // ── Helper (Fase 3, milestone 1) — reemplaza el email de admin
+      // hardcodeado que existía literal en cada regla de abajo.
+      // tenantId sale del PATH real pedido (el segmento {tenantId} de
+      // este mismo match), nunca de algo que mande el cliente -- así
+      // que el admin de un tenant jamás puede evaluar como si fuera
+      // admin de otro.
+      function _tenantAdminEmail() {
+        return get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('adminEmail', null);
+      }
+      function isAdmin() {
+        return request.auth != null
+               && exists(/databases/$(database)/documents/tenants/$(tenantId))
+               && _tenantAdminEmail() == request.auth.token.email;
+      }
 
-    // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
-    // Antes, el único requisito para dar de alta un participante nuevo
-    // era que ownerUid fuera el uid de quien escribe -- cualquier sesión
-    // anónima (que se obtiene solo con visitar la página, sin acción del
-    // visitante) podía crear documentos con cualquier contenido, en
-    // cualquier cantidad, incluso con el registro ya cerrado por el
-    // admin. Esto valida la forma MÍNIMA de un alta real: los mismos
-    // campos y tipos que _rgPublicFieldsOf()/rgPushToFirestore/
-    // rgCreateParticipantConfirmed() en participantes.js escriben hoy
-    // (ver test_participantes_security.js, CASO 1 y CASO 8). NO exige
-    // predictions vacío a propósito: el primer sync de alguien que ya
-    // venía completando su quiniela offline (rgPushToFirestore, camino
-    // normal de autoguardado) puede legítimamente crear el documento CON
-    // predicciones ya cargadas -- ver CASO 1. No es tampoco una lista
-    // blanca exhaustiva de TODOS los campos (eso acoplaría esta regla a
-    // cada cambio futuro de forma del documento) -- es un piso mínimo
-    // contra basura evidente: nombre y código con tipo/tamaño razonable,
-    // estado inicial correcto, predicciones como mapa (no basura de otro
-    // tipo). El resto de la protección contra spam masivo la da
-    // isRegistroAbierto() de arriba, que bloquea altas nuevas apenas el
-    // admin cierra el registro (la mayor parte del torneo).
-    function esAltaValidaDeParticipante(d) {
-      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
-             && d.codigo is string && d.codigo.size() <= 50
-             && d.estadoQuiniela == 'borrador'
-             && d.predictions is map;
-    }
-
-    // ── Helper (v3.8.4 — Fase de Seguridad) ───────────────────────────
-    // Mismo piso mínimo que esAltaValidaDeParticipante() de arriba, pero
-    // para el `update` del propio dueño (auditoría 2026-07-05: "el
-    // dueño puede reescribir cualquier campo propio con cualquier
-    // tipo/tamaño -- incluido codigo o estadoQuiniela con un valor fuera
-    // de {'borrador','enviada'}"). NO reutiliza esAltaValidaDeParticipante()
-    // tal cual porque esa exige estadoQuiniela=='borrador' siempre --
-    // rgSubmitParticipantConfirmed() (participantes.js) escribe
-    // estadoQuiniela:'enviada' al enviar la quiniela, un update legítimo
-    // del propio dueño que esa regla rechazaría.
-    function esEdicionValidaDeParticipante(d) {
-      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
-             && d.codigo is string && d.codigo.size() <= 50
-             && (d.estadoQuiniela == 'borrador' || d.estadoQuiniela == 'enviada')
-             && d.predictions is map;
-    }
-
-    // ── Helper (v3.8 — Fase de Seguridad) ─────────────────────────────
-    // Mismo motivo que esAltaValidaDeParticipante() de arriba, pero para
-    // el documento HERMANO de registro_privado/{pid}. Hasta v3.7 el
-    // create de ese documento solo pedía que ownerUid coincidiera con
-    // quien escribe -- sin isRegistroAbierto(), sin isMantenimientoActivo()
-    // y sin validar la forma de clave/email/quierePelear. Como
-    // signInAnonymously() se obtiene solo con visitar la página (sin
-    // ninguna acción del visitante), eso dejaba abierto exactamente el
-    // mismo vector de spam/DoS que esAltaValidaDeParticipante() ya tapa
-    // del lado de registro_participants: un script podía crear
-    // documentos en loop, incluso con el registro cerrado, hasta agotar
-    // la cuota diaria de escrituras o el espacio de la base. Los dos
-    // documentos se escriben juntos en el mismo batch en el alta normal
-    // (ver rgPushToFirestore() en participantes.js), pero Firestore
-    // evalúa cada documento del batch por separado -- que uno de los dos
-    // quedara sin gating servía como puerta trasera para saltarse el
-    // gating del otro escribiendo SOLO acá, sin tocar nunca
-    // registro_participants.
-    function esAltaValidaDePrivado(d) {
-      return d.clave is string && d.clave.size() <= 20
-             && d.email is string && d.email.size() <= 200
-             && d.quierePelear is bool;
-    }
-
-    // ── RESULTADOS REALES, BONOS, BATALLAS — Solo el admin puede
-    // escribir; cualquier PARTICIPANTE puede leer (el Ranking público lo
-    // necesita).
-    //
-    // v3.2.5 — Fase de Seguridad: antes era "allow read: if true", sin
-    // exigir sesión de ningún tipo. Eso permitía a cualquier script (curl,
-    // un scanner automático de proyectos Firebase expuestos, un bot que
-    // jamás visitó la página) descargar este documento entero pegándole
-    // directo a la REST API de Firestore con el project id (público, está
-    // en index.html) y CERO credenciales. La app real NUNCA necesitó ese
-    // acceso sin sesión: wireFirebaseAuth() (app-admin-auth.js) hace
-    // signInAnonymously() ANTES de que cualquier listener de Firestore se
-    // conecte (ver wireFirestoreSync(), llamado recién en
-    // _afterAdminStatusResolved()) — así que exigir request.auth != null
-    // acá no le rompe nada a ningún participante real (la sesión anónima
-    // es instantánea y no pide ninguna acción), pero sube la vara para
-    // cualquiera que intente leer la base sin pasar por la app: ahora hace
-    // falta al menos sacar un token anónimo real de Firebase Auth primero
-    // (un paso más, pero ya no es "una sola URL pública sin login").
-    match /quiniela/estado {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-                   && request.auth.token.email == "quinielaborracha@gmail.com";
-    }
-
-    // ── MODO PRUEBA (?test=1) — v7.2 ──────────────────────────────────
-    // Documento espejo de /quiniela/estado, mismo modelo de permisos
-    // exacto (lectura solo con sesión, escritura solo admin — ver
-    // v3.2.5 arriba). Existe para que el admin pueda experimentar con
-    // resultados/Bonos/Batallas hipotéticos sin tocar nunca el documento
-    // real que ven los 27 participantes. Sin esta regla, Firestore niega
-    // por defecto cualquier lectura o escritura a esta ruta (no existía
-    // antes de v7.2).
-    match /quiniela/estado-test {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-                   && request.auth.token.email == "quinielaborracha@gmail.com";
-    }
-
-    // ── "MI QUINIELA" — v6.4, Fase de Seguridad; v6.9, Fase de Privacidad ──
-    // Reemplaza al viejo documento único "registro/estado" (escritura
-    // pública sin ninguna validación de servidor: cualquiera con las
-    // devtools abiertas podía leer la clave de cualquier participante y
-    // reescribir la quiniela de cualquiera, no solo la suya).
-    //
-    // Ahora cada participante es su PROPIO documento, y solo puede
-    // escribirlo quien demuestre ser su dueño real (mismo UID anónimo
-    // que lo creó) — la app ya no es quien decide si la clave es
-    // correcta de cara a Firestore, lo decide Firestore mismo.
-    //
-    // v6.9 — Fase de Privacidad: este documento YA NO contiene clave ni
-    // correo (ver match /registro_privado/{pid} más abajo). Antes vivían
-    // acá mismo, y como este documento es de lectura pública (ver abajo
-    // por qué tiene que seguir siéndolo), cualquier visitante sin sesión
-    // podía leer la clave de los 27 participantes con solo abrir la
-    // página — y con eso "reclamar" la cuenta de cualquiera. Mover esos
-    // dos campos a una colección de lectura restringida (dueño o admin)
-    // cierra ese hueco sin tocar nada de lo que sí necesita ser público
-    // (nombre, código, predicciones, estado de envío).
-    match /registro_participants/{pid} {
-      // Lectura: el Ranking, Estadísticas y "¿ya hay alguien con este
-      // nombre?" necesitan poder leer a todos los participantes, sin
-      // sesión "especial" (no hace falta ser el dueño ni el admin).
-      // (la verificación de correo duplicado ya NO se hace leyendo el
-      // correo de nadie -- ver emailHash en participantes.js).
+      // ── Helper (v6.8 — Fase de Estabilización) ───────────────────────
+      // ¿Ya pasó la fecha/hora de cierre configurada por el admin en
+      // registro/meta.configGlobal? Antes esto SOLO lo decidía isLocked()
+      // en registro.js (100% cliente) — alguien con la consola del
+      // navegador abierta podía seguir escribiendo predicciones después
+      // del cierre sin que Firestore lo notara. Esta función lo replica
+      // del lado del servidor para que la regla de "update" de abajo
+      // pueda exigirlo de verdad.
       //
-      // v3.2.5 — Fase de Seguridad: antes era "if true", sin exigir
-      // NINGÚN tipo de sesión -- cualquier script fuera de la app
-      // (curl, un scanner de proyectos Firebase mal configurados) podía
-      // descargar la colección ENTERA (nombre, ciudad, país, predictions
-      // de los 27) de un pedido HTTP sin autenticación, sin pasar nunca
-      // por la página. Exigir request.auth != null no le cambia nada al
-      // uso real: todo participante ya queda autenticado (al menos de
-      // forma anónima) ANTES de que la app intente leer esta colección
-      // (ver wireFirebaseAuth() en app-admin-auth.js) -- pero un
-      // "curl" directo, sin pasar primero por el login anónimo de
-      // Firebase Auth, ya no consigue nada.
-      allow read: if request.auth != null;
+      // NOTA DE INTERPRETACIÓN: el cliente (isGloballyClosed() en
+      // registro.js) compara fechaCierre+horaCierre contra la hora LOCAL
+      // del navegador de quien mira la pantalla — que varía por ciudad
+      // (Orlando, Panamá, Maracaibo, Buenos Aires, Barcelona, etc.), así
+      // que hoy el cierre "real" ya ocurre en instantes distintos según
+      // desde dónde se mire. Esta regla del servidor necesita UN solo
+      // instante real para todos, así que interpreta fechaCierre+
+      // horaCierre como UTC. Esto es una mejora respecto al
+      // comportamiento actual (ambiguo), no un cambio que vaya a notar
+      // nadie en el uso normal — el cierre siempre se configura con
+      // margen de horas antes del primer partido, no al segundo.
+      function _metaConfigGlobal() {
+        return get(/databases/$(database)/documents/tenants/$(tenantId)/registro/meta).data.get('configGlobal', {});
+      }
+      function isPastDeadline() {
+        return exists(/databases/$(database)/documents/tenants/$(tenantId)/registro/meta) && _isPastDeadlineInner();
+      }
+      function _isPastDeadlineInner() {
+        let cfg = _metaConfigGlobal();
+        let fc = cfg.get('fechaCierre', '');
+        let hc = cfg.get('horaCierre', '');
+        return fc != ''
+          && request.time > timestamp.value(fc + 'T' + (hc != '' ? hc : '23:59') + ':00Z');
+      }
 
-      // Crear: el documento nuevo debe declarar como ownerUid el UID de
-      // quien lo está creando (caso normal, alguien llena el wizard por
-      // primera vez) — o, si quien escribe es el admin, puede crear un
-      // documento "a nombre de" alguien más con cualquier ownerUid (o
-      // sin ninguno): esto cubre restaurar a alguien desde la papelera
-      // (que vuelve tal cual estaba, sin un ownerUid nuevo asignado).
-      //
-      // v1.5.2 — Fase de Seguridad: antes, con solo declarar su propio
-      // ownerUid alcanzaba -- cualquier sesión anónima (se obtiene solo
-      // con visitar la página) podía crear documentos con cualquier
-      // contenido, en cualquier cantidad, incluso con el registro ya
-      // cerrado por el admin. El camino no-admin ahora exige además que
-      // el registro esté abierto (isRegistroAbierto()) y que el
-      // documento tenga la forma mínima de un alta real
-      // (esAltaValidaDeParticipante()). El camino admin (restaurar desde
-      // la papelera) sigue exactamente igual que antes, sin estas dos
-      // exigencias -- un registro restaurado puede legítimamente traer
-      // estadoQuiniela:'enviada' y predicciones ya cargadas.
-      //
-      // v3.3 — Modo Mantenimiento: mismo criterio que isRegistroAbierto()
-      // de la línea de arriba, sumado con &&. El admin (segunda rama)
-      // sigue sin esta exigencia -- restaurar desde la papelera tiene que
-      // seguir funcionando aunque el sitio esté "cerrado" al público.
-      allow create: if request.auth != null
-                    && (
-                         (
-                           request.resource.data.ownerUid == request.auth.uid
-                           && isRegistroAbierto()
-                           && !isMantenimientoActivo()
-                           && esAltaValidaDeParticipante(request.resource.data)
-                         )
-                         ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
-                       );
+      // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
+      // ¿Está abierto el registro de nuevos participantes? Mismo patrón que
+      // isPastDeadline() de arriba: si registro/meta todavía no existe, o
+      // existe pero nunca declaró registroAbierto, se trata como ABIERTO
+      // (comportamiento idéntico al de siempre para cualquier instalación
+      // existente -- el default en el cliente, RG_DEFAULT_CONFIG, también
+      // es registroAbierto:true). Solo un registroAbierto == false EXPLÍCITO
+      // (el admin cerró el registro desde su panel) bloquea altas nuevas.
+      function isRegistroAbierto() {
+        return !exists(/databases/$(database)/documents/tenants/$(tenantId)/registro/meta)
+               || _isRegistroAbiertoInner();
+      }
+      function _isRegistroAbiertoInner() {
+        return _metaConfigGlobal().get('registroAbierto', true) != false;
+      }
 
-      // Actualizar: el dueño real (ownerUid ya guardado coincide con la
-      // sesión actual) puede tocar lo que sea de SU PROPIO documento —
-      // esto es la base de todo: guardar predicciones, marcar como
-      // enviada, etc. — siempre que no esté ya "enviada" ni haya pasado
-      // el plazo global (v6.8). El admin también puede tocar cualquier
-      // documento desde su panel (regenerar clave, cambiar estado, nota
-      // interna).
+      // ── Helper (v3.3 — Modo Mantenimiento) ────────────────────────────
+      // Mismo patrón que isPastDeadline()/isRegistroAbierto() de arriba: si
+      // registro/meta no existe, o existe pero nunca declaró
+      // mantenimientoActivo, se trata como INACTIVO (default en el cliente,
+      // RG_DEFAULT_CONFIG, también es mantenimientoActivo:false). Solo se
+      // usa para bloquear escrituras de participantes -- la LECTURA de
+      // registro/meta sigue abierta para cualquiera con sesión (ver la
+      // regla de arriba) porque si no, nadie podría enterarse de que el
+      // mantenimiento está activo (el propio aviso depende de leer este
+      // documento). El admin nunca pasa por esta función: sus reglas de
+      // escritura ya lo aprueban por isAdmin() antes de llegar acá.
+      function isMantenimientoActivo() {
+        return exists(/databases/$(database)/documents/tenants/$(tenantId)/registro/meta)
+               && _metaConfigGlobal().get('mantenimientoActivo', false) == true;
+      }
+
+      // ── Helper (v1.5.2 — Fase de Seguridad) ───────────────────────────
+      // Antes, el único requisito para dar de alta un participante nuevo
+      // era que ownerUid fuera el uid de quien escribe -- cualquier sesión
+      // anónima (que se obtiene solo con visitar la página, sin acción del
+      // visitante) podía crear documentos con cualquier contenido, en
+      // cualquier cantidad, incluso con el registro ya cerrado por el
+      // admin. Esto valida la forma MÍNIMA de un alta real: los mismos
+      // campos y tipos que _rgPublicFieldsOf()/rgPushToFirestore/
+      // rgCreateParticipantConfirmed() en participantes.js escriben hoy
+      // (ver test_participantes_security.js, CASO 1 y CASO 8). NO exige
+      // predictions vacío a propósito: el primer sync de alguien que ya
+      // venía completando su quiniela offline (rgPushToFirestore, camino
+      // normal de autoguardado) puede legítimamente crear el documento CON
+      // predicciones ya cargadas -- ver CASO 1. No es tampoco una lista
+      // blanca exhaustiva de TODOS los campos (eso acoplaría esta regla a
+      // cada cambio futuro de forma del documento) -- es un piso mínimo
+      // contra basura evidente: nombre y código con tipo/tamaño razonable,
+      // estado inicial correcto, predicciones como mapa (no basura de otro
+      // tipo). El resto de la protección contra spam masivo la da
+      // isRegistroAbierto() de arriba, que bloquea altas nuevas apenas el
+      // admin cierra el registro (la mayor parte del torneo).
+      function esAltaValidaDeParticipante(d) {
+        return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+               && d.codigo is string && d.codigo.size() <= 50
+               && d.estadoQuiniela == 'borrador'
+               && d.predictions is map;
+      }
+
+      // ── Helper (v3.8.4 — Fase de Seguridad) ───────────────────────────
+      // Mismo piso mínimo que esAltaValidaDeParticipante() de arriba, pero
+      // para el `update` del propio dueño (auditoría 2026-07-05: "el
+      // dueño puede reescribir cualquier campo propio con cualquier
+      // tipo/tamaño -- incluido codigo o estadoQuiniela con un valor fuera
+      // de {'borrador','enviada'}"). NO reutiliza esAltaValidaDeParticipante()
+      // tal cual porque esa exige estadoQuiniela=='borrador' siempre --
+      // rgSubmitParticipantConfirmed() (participantes.js) escribe
+      // estadoQuiniela:'enviada' al enviar la quiniela, un update legítimo
+      // del propio dueño que esa regla rechazaría.
+      function esEdicionValidaDeParticipante(d) {
+        return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+               && d.codigo is string && d.codigo.size() <= 50
+               && (d.estadoQuiniela == 'borrador' || d.estadoQuiniela == 'enviada')
+               && d.predictions is map;
+      }
+
+      // ── Helper (v3.8 — Fase de Seguridad) ─────────────────────────────
+      // Mismo motivo que esAltaValidaDeParticipante() de arriba, pero para
+      // el documento HERMANO de registro_privado/{pid}. Hasta v3.7 el
+      // create de ese documento solo pedía que ownerUid coincidiera con
+      // quien escribe -- sin isRegistroAbierto(), sin isMantenimientoActivo()
+      // y sin validar la forma de clave/email/quierePelear. Como
+      // signInAnonymously() se obtiene solo con visitar la página (sin
+      // ninguna acción del visitante), eso dejaba abierto exactamente el
+      // mismo vector de spam/DoS que esAltaValidaDeParticipante() ya tapa
+      // del lado de registro_participants: un script podía crear
+      // documentos en loop, incluso con el registro cerrado, hasta agotar
+      // la cuota diaria de escrituras o el espacio de la base. Los dos
+      // documentos se escriben juntos en el mismo batch en el alta normal
+      // (ver rgPushToFirestore() en participantes.js), pero Firestore
+      // evalúa cada documento del batch por separado -- que uno de los dos
+      // quedara sin gating servía como puerta trasera para saltarse el
+      // gating del otro escribiendo SOLO acá, sin tocar nunca
+      // registro_participants.
+      function esAltaValidaDePrivado(d) {
+        return d.clave is string && d.clave.size() <= 20
+               && d.email is string && d.email.size() <= 200
+               && d.quierePelear is bool;
+      }
+
+      // ── RESULTADOS REALES, BONOS, BATALLAS — Solo el admin puede
+      // escribir; cualquier PARTICIPANTE puede leer (el Ranking público lo
+      // necesita).
       //
-      // v6.9 — El re-claim YA NO compara una clave acá (ya no vive en
-      // este documento). En su lugar, exige que YA se haya reclamado
-      // exitosamente el documento HERMANO en registro_privado/{pid}
-      // (eso sí compara la clave, ver más abajo) ANTES de esta segunda
-      // escritura — son dos pasos secuenciales, no un batch atómico, a
-      // propósito: para cuando este segundo paso se evalúa, el primero
-      // ya quedó confirmado en el servidor, así que get() ve el ownerUid
-      // ya actualizado. Ver rgClaimOwnership() en participantes.js.
-      // v3.3 — Modo Mantenimiento: se suma a la primera rama (la del
-      // dueño editando su propia quiniela), igual que !isPastDeadline()
-      // en la línea de al lado. El admin (segunda rama) y el re-claim
-      // (tercera rama, solo reasigna ownerUid, no toca predicciones)
-      // siguen sin esta exigencia -- el admin tiene que poder seguir
-      // trabajando, y recuperar el acceso a un dispositivo nuevo no es
-      // "usar la app" en el sentido que Mantenimiento quiere bloquear.
-      allow update: if request.auth != null
-                    && (
-                         (
+      // v3.2.5 — Fase de Seguridad: antes era "allow read: if true", sin
+      // exigir sesión de ningún tipo. Eso permitía a cualquier script (curl,
+      // un scanner automático de proyectos Firebase expuestos, un bot que
+      // jamás visitó la página) descargar este documento entero pegándole
+      // directo a la REST API de Firestore con el project id (público, está
+      // en index.html) y CERO credenciales. La app real NUNCA necesitó ese
+      // acceso sin sesión: wireFirebaseAuth() (app-admin-auth.js) hace
+      // signInAnonymously() ANTES de que cualquier listener de Firestore se
+      // conecte (ver wireFirestoreSync(), llamado recién en
+      // _afterAdminStatusResolved()) — así que exigir request.auth != null
+      // acá no le rompe nada a ningún participante real (la sesión anónima
+      // es instantánea y no pide ninguna acción), pero sube la vara para
+      // cualquiera que intente leer la base sin pasar por la app: ahora hace
+      // falta al menos sacar un token anónimo real de Firebase Auth primero
+      // (un paso más, pero ya no es "una sola URL pública sin login").
+      match /quiniela/estado {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && isAdmin();
+      }
+
+      // ── MODO PRUEBA (?test=1) — v7.2 ──────────────────────────────────
+      // Documento espejo de /quiniela/estado, mismo modelo de permisos
+      // exacto (lectura solo con sesión, escritura solo admin — ver
+      // v3.2.5 arriba). Existe para que el admin pueda experimentar con
+      // resultados/Bonos/Batallas hipotéticos sin tocar nunca el documento
+      // real que ven los 27 participantes. Sin esta regla, Firestore niega
+      // por defecto cualquier lectura o escritura a esta ruta (no existía
+      // antes de v7.2).
+      match /quiniela/estado-test {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && isAdmin();
+      }
+
+      // ── "MI QUINIELA" — v6.4, Fase de Seguridad; v6.9, Fase de Privacidad ──
+      // Reemplaza al viejo documento único "registro/estado" (escritura
+      // pública sin ninguna validación de servidor: cualquiera con las
+      // devtools abiertas podía leer la clave de cualquier participante y
+      // reescribir la quiniela de cualquiera, no solo la suya).
+      //
+      // Ahora cada participante es su PROPIO documento, y solo puede
+      // escribirlo quien demuestre ser su dueño real (mismo UID anónimo
+      // que lo creó) — la app ya no es quien decide si la clave es
+      // correcta de cara a Firestore, lo decide Firestore mismo.
+      //
+      // v6.9 — Fase de Privacidad: este documento YA NO contiene clave ni
+      // correo (ver match /registro_privado/{pid} más abajo). Antes vivían
+      // acá mismo, y como este documento es de lectura pública (ver abajo
+      // por qué tiene que seguir siéndolo), cualquier visitante sin sesión
+      // podía leer la clave de los 27 participantes con solo abrir la
+      // página — y con eso "reclamar" la cuenta de cualquiera. Mover esos
+      // dos campos a una colección de lectura restringida (dueño o admin)
+      // cierra ese hueco sin tocar nada de lo que sí necesita ser público
+      // (nombre, código, predicciones, estado de envío).
+      match /registro_participants/{pid} {
+        // Lectura: el Ranking, Estadísticas y "¿ya hay alguien con este
+        // nombre?" necesitan poder leer a todos los participantes, sin
+        // sesión "especial" (no hace falta ser el dueño ni el admin).
+        // (la verificación de correo duplicado ya NO se hace leyendo el
+        // correo de nadie -- ver emailHash en participantes.js).
+        //
+        // v3.2.5 — Fase de Seguridad: antes era "if true", sin exigir
+        // NINGÚN tipo de sesión -- cualquier script fuera de la app
+        // (curl, un scanner de proyectos Firebase mal configurados) podía
+        // descargar la colección ENTERA (nombre, ciudad, país, predictions
+        // de los 27) de un pedido HTTP sin autenticación, sin pasar nunca
+        // por la página. Exigir request.auth != null no le cambia nada al
+        // uso real: todo participante ya queda autenticado (al menos de
+        // forma anónima) ANTES de que la app intente leer esta colección
+        // (ver wireFirebaseAuth() en app-admin-auth.js) -- pero un
+        // "curl" directo, sin pasar primero por el login anónimo de
+        // Firebase Auth, ya no consigue nada.
+        allow read: if request.auth != null;
+
+        // Crear: el documento nuevo debe declarar como ownerUid el UID de
+        // quien lo está creando (caso normal, alguien llena el wizard por
+        // primera vez) — o, si quien escribe es el admin, puede crear un
+        // documento "a nombre de" alguien más con cualquier ownerUid (o
+        // sin ninguno): esto cubre restaurar a alguien desde la papelera
+        // (que vuelve tal cual estaba, sin un ownerUid nuevo asignado).
+        //
+        // v1.5.2 — Fase de Seguridad: antes, con solo declarar su propio
+        // ownerUid alcanzaba -- cualquier sesión anónima (se obtiene solo
+        // con visitar la página) podía crear documentos con cualquier
+        // contenido, en cualquier cantidad, incluso con el registro ya
+        // cerrado por el admin. El camino no-admin ahora exige además que
+        // el registro esté abierto (isRegistroAbierto()) y que el
+        // documento tenga la forma mínima de un alta real
+        // (esAltaValidaDeParticipante()). El camino admin (restaurar desde
+        // la papelera) sigue exactamente igual que antes, sin estas dos
+        // exigencias -- un registro restaurado puede legítimamente traer
+        // estadoQuiniela:'enviada' y predicciones ya cargadas.
+        //
+        // v3.3 — Modo Mantenimiento: mismo criterio que isRegistroAbierto()
+        // de la línea de arriba, sumado con &&. El admin (segunda rama)
+        // sigue sin esta exigencia -- restaurar desde la papelera tiene que
+        // seguir funcionando aunque el sitio esté "cerrado" al público.
+        allow create: if request.auth != null
+                      && (
+                           (
+                             request.resource.data.ownerUid == request.auth.uid
+                             && isRegistroAbierto()
+                             && !isMantenimientoActivo()
+                             && esAltaValidaDeParticipante(request.resource.data)
+                           )
+                           ||
+                           isAdmin()
+                         );
+
+        // Actualizar: el dueño real (ownerUid ya guardado coincide con la
+        // sesión actual) puede tocar lo que sea de SU PROPIO documento —
+        // esto es la base de todo: guardar predicciones, marcar como
+        // enviada, etc. — siempre que no esté ya "enviada" ni haya pasado
+        // el plazo global (v6.8). El admin también puede tocar cualquier
+        // documento desde su panel (regenerar clave, cambiar estado, nota
+        // interna).
+        //
+        // v6.9 — El re-claim YA NO compara una clave acá (ya no vive en
+        // este documento). En su lugar, exige que YA se haya reclamado
+        // exitosamente el documento HERMANO en registro_privado/{pid}
+        // (eso sí compara la clave, ver más abajo) ANTES de esta segunda
+        // escritura — son dos pasos secuenciales, no un batch atómico, a
+        // propósito: para cuando este segundo paso se evalúa, el primero
+        // ya quedó confirmado en el servidor, así que get() ve el ownerUid
+        // ya actualizado. Ver rgClaimOwnership() en participantes.js.
+        // v3.3 — Modo Mantenimiento: se suma a la primera rama (la del
+        // dueño editando su propia quiniela), igual que !isPastDeadline()
+        // en la línea de al lado. El admin (segunda rama) y el re-claim
+        // (tercera rama, solo reasigna ownerUid, no toca predicciones)
+        // siguen sin esta exigencia -- el admin tiene que poder seguir
+        // trabajando, y recuperar el acceso a un dispositivo nuevo no es
+        // "usar la app" en el sentido que Mantenimiento quiere bloquear.
+        allow update: if request.auth != null
+                      && (
+                           (
+                             resource.data.ownerUid == request.auth.uid
+                             && resource.data.estadoQuiniela != 'enviada'
+                             && !isPastDeadline()
+                             && !isMantenimientoActivo()
+                             && esEdicionValidaDeParticipante(request.resource.data)
+                           )
+                           ||
+                           isAdmin()
+                           ||
+                           (
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['ownerUid', 'fechaActualizacion'])
+                             && get(/databases/$(database)/documents/tenants/$(tenantId)/registro_privado/$(pid)).data.ownerUid == request.auth.uid
+                           )
+                         );
+
+        // Borrar: el propio dueño puede borrar su documento (cancelar su
+        // inscripción, ver q_delete en registro.js) y el admin puede
+        // borrar el de cualquiera (mover a la papelera desde su panel,
+        // ver rgDeleteParticipantDoc() en participantes.js). En ambos
+        // casos, quien borra en Firestore también es responsable de
+        // quitar ese id de su copia local de DB.participants/predictions
+        // — eso lo hace el código JS, no esta regla.
+        allow delete: if request.auth != null
+                      && (
                            resource.data.ownerUid == request.auth.uid
-                           && resource.data.estadoQuiniela != 'enviada'
-                           && !isPastDeadline()
-                           && !isMantenimientoActivo()
-                           && esEdicionValidaDeParticipante(request.resource.data)
-                         )
-                         ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
-                         ||
-                         (
-                           request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['ownerUid', 'fechaActualizacion'])
-                           && get(/databases/$(database)/documents/registro_privado/$(pid)).data.ownerUid == request.auth.uid
-                         )
-                       );
+                           ||
+                           isAdmin()
+                         );
+      }
 
-      // Borrar: el propio dueño puede borrar su documento (cancelar su
-      // inscripción, ver q_delete en registro.js) y el admin puede
-      // borrar el de cualquiera (mover a la papelera desde su panel,
-      // ver rgDeleteParticipantDoc() en participantes.js). En ambos
-      // casos, quien borra en Firestore también es responsable de
-      // quitar ese id de su copia local de DB.participants/predictions
-      // — eso lo hace el código JS, no esta regla.
-      allow delete: if request.auth != null
+      // ── DATOS PRIVADOS DE "MI QUINIELA" (clave + correo) — v6.9, Fase
+      // de Privacidad ───────────────────────────────────────────────────
+      // Antes vivían dentro de registro_participants (público). Acá solo
+      // los puede leer el propio dueño o el admin -- nadie más, ni
+      // siquiera otro participante autenticado. La clave sigue sirviendo
+      // exactamente para lo mismo (reclamar el documento desde un
+      // dispositivo nuevo, ver el camino de re-claim abajo), pero ya no
+      // hace falta que sea legible por cualquiera para que ese mecanismo
+      // funcione: Firestore compara la clave ENVIADA contra la YA
+      // GUARDADA sin que el cliente necesite leerla primero.
+      match /registro_privado/{pid} {
+        allow read: if request.auth != null
                     && (
                          resource.data.ownerUid == request.auth.uid
                          ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
-                       );
-    }
-
-    // ── DATOS PRIVADOS DE "MI QUINIELA" (clave + correo) — v6.9, Fase
-    // de Privacidad ───────────────────────────────────────────────────
-    // Antes vivían dentro de registro_participants (público). Acá solo
-    // los puede leer el propio dueño o el admin -- nadie más, ni
-    // siquiera otro participante autenticado. La clave sigue sirviendo
-    // exactamente para lo mismo (reclamar el documento desde un
-    // dispositivo nuevo, ver el camino de re-claim abajo), pero ya no
-    // hace falta que sea legible por cualquiera para que ese mecanismo
-    // funcione: Firestore compara la clave ENVIADA contra la YA
-    // GUARDADA sin que el cliente necesite leerla primero.
-    match /registro_privado/{pid} {
-      allow read: if request.auth != null
-                  && (
-                       resource.data.ownerUid == request.auth.uid
-                       ||
-                       request.auth.token.email == "quinielaborracha@gmail.com"
-                     );
-
-      // v3.8 — Fase de Seguridad: antes alcanzaba con declarar el propio
-      // ownerUid, sin isRegistroAbierto()/isMantenimientoActivo()/forma
-      // válida -- ver esAltaValidaDePrivado() más arriba para el porqué.
-      // Mismo patrón exacto que el create de registro_participants: el
-      // camino admin (restaurar desde la papelera) sigue sin estas tres
-      // exigencias.
-      allow create: if request.auth != null
-                    && (
-                         (
-                           request.resource.data.ownerUid == request.auth.uid
-                           && isRegistroAbierto()
-                           && !isMantenimientoActivo()
-                           && esAltaValidaDePrivado(request.resource.data)
-                         )
-                         ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
+                         isAdmin()
                        );
 
-      // Actualizar: el dueño real puede tocar su propio correo/clave
-      // (ej. cambiar su correo desde el wizard) y el admin puede tocar
-      // cualquiera (regenerar clave). El tercer camino es el RE-CLAIM
-      // propiamente dicho: alguien que todavía no es el dueño puede
-      // tomar posesión SOLO si lo único que cambia es ownerUid+clave, Y
-      // la clave que manda coincide EXACTAMENTE con la que ya estaba
-      // guardada -- igual que antes, solo que ahora en este documento
-      // más chico en vez de en el público.
-      //
-      // NOTA (auditoría v3.8): este re-claim no tiene límite de intentos
-      // del lado del servidor -- un script podría probar las 10^6
-      // combinaciones de clave contra el pid de cualquiera (público en
-      // registro_participants). Se evaluó y se decidió NO agregar un
-      // contador de intentos fallidos por documento: como Firestore
-      // rechaza la escritura entera si la clave no coincide, ese contador
-      // solo puede vivir en un campo aparte, SIEMPRE escribible sin
-      // conocer la clave real -- lo que abriría una vía para que
-      // cualquiera bloquee el reclamo de OTRO participante (útil para
-      // "joder" a un amigo, no solo para un atacante real). Para un grupo
-      // cerrado de ~27 conocidos, ese riesgo de bloqueo mutuo pesa más
-      // que el de fuerza bruta real. Alternativa considerada para más
-      // adelante si hiciera falta: Firebase App Check (sube el costo de
-      // automatizar el ataque sin este efecto colateral).
-      allow update: if request.auth != null
-                    && (
-                         resource.data.ownerUid == request.auth.uid
-                         ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
-                         ||
-                         (
-                           request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['ownerUid', 'clave'])
-                           && request.resource.data.clave == resource.data.clave
-                         )
-                       );
+        // v3.8 — Fase de Seguridad: antes alcanzaba con declarar el propio
+        // ownerUid, sin isRegistroAbierto()/isMantenimientoActivo()/forma
+        // válida -- ver esAltaValidaDePrivado() más arriba para el porqué.
+        // Mismo patrón exacto que el create de registro_participants: el
+        // camino admin (restaurar desde la papelera) sigue sin estas tres
+        // exigencias.
+        allow create: if request.auth != null
+                      && (
+                           (
+                             request.resource.data.ownerUid == request.auth.uid
+                             && isRegistroAbierto()
+                             && !isMantenimientoActivo()
+                             && esAltaValidaDePrivado(request.resource.data)
+                           )
+                           ||
+                           isAdmin()
+                         );
 
-      allow delete: if request.auth != null
-                    && (
-                         resource.data.ownerUid == request.auth.uid
-                         ||
-                         request.auth.token.email == "quinielaborracha@gmail.com"
-                       );
-    }
+        // Actualizar: el dueño real puede tocar su propio correo/clave
+        // (ej. cambiar su correo desde el wizard) y el admin puede tocar
+        // cualquiera (regenerar clave). El tercer camino es el RE-CLAIM
+        // propiamente dicho: alguien que todavía no es el dueño puede
+        // tomar posesión SOLO si lo único que cambia es ownerUid+clave, Y
+        // la clave que manda coincide EXACTAMENTE con la que ya estaba
+        // guardada -- igual que antes, solo que ahora en este documento
+        // más chico en vez de en el público.
+        //
+        // NOTA (auditoría v3.8): este re-claim no tiene límite de intentos
+        // del lado del servidor -- un script podría probar las 10^6
+        // combinaciones de clave contra el pid de cualquiera (público en
+        // registro_participants). Se evaluó y se decidió NO agregar un
+        // contador de intentos fallidos por documento: como Firestore
+        // rechaza la escritura entera si la clave no coincide, ese contador
+        // solo puede vivir en un campo aparte, SIEMPRE escribible sin
+        // conocer la clave real -- lo que abriría una vía para que
+        // cualquiera bloquee el reclamo de OTRO participante (útil para
+        // "joder" a un amigo, no solo para un atacante real). Para un grupo
+        // cerrado de ~27 conocidos, ese riesgo de bloqueo mutuo pesa más
+        // que el de fuerza bruta real. Alternativa considerada para más
+        // adelante si hiciera falta: Firebase App Check (sube el costo de
+        // automatizar el ataque sin este efecto colateral).
+        allow update: if request.auth != null
+                      && (
+                           resource.data.ownerUid == request.auth.uid
+                           ||
+                           isAdmin()
+                           ||
+                           (
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['ownerUid', 'clave'])
+                             && request.resource.data.clave == resource.data.clave
+                           )
+                         );
 
-    // ── CONFIG GLOBAL + CONTADOR DE CÓDIGOS — sin datos sensibles.
-    // El contador de códigos (nextSeq) avanza cada vez que alguien nuevo
-    // se registra, así que tiene que ser escribible por cualquiera. Pero
-    // configGlobal (fechaCierre, registroAbierto, etc.) vive en el MISMO
-    // documento por simplicidad del cliente, y hasta v6.7 la regla no
-    // distinguía: cualquier sesión autenticada (anónima incluida) podía
-    // reescribir TODO el documento, incluida la fecha de cierre del
-    // torneo entero. v6.8 — Fase de Estabilización: ahora solo se acepta
-    // una escritura no-admin si lo ÚNICO que cambia es nextSeq (más el
-    // timestamp). Si configGlobal cambia y quien escribe no es el admin,
-    // la escritura se rechaza completa — no hay forma de tocar
-    // configGlobal sin ser admin. La app (rgPushToFirestore en
-    // participantes.js) ya solo escribe acá cuando su copia local de
-    // configGlobal coincide con la última conocida, así que en el uso
-    // normal esto no cambia nada visible para nadie.
-    match /registro/meta {
-      // v3.2.5 — Fase de Seguridad: mismo motivo que registro_participants
-      // arriba -- exigir sesión (aunque sea anónima) en vez de "if true"
-      // no cambia nada para la app real (ver wireFirebaseAuth()), pero
-      // saca este documento de la lista de cosas legibles con un curl
-      // suelto sin ninguna credencial.
-      allow read: if request.auth != null;
-      // v3.8.4 — Fase de Seguridad: antes, "resource == null" (el
-      // documento no existe) alcanzaba por sí solo para permitir la
-      // escritura a CUALQUIER sesión anónima, sin ninguna otra condición
-      // (auditoría 2026-07-05). Si este documento llegara a borrarse
-      // alguna vez (reset manual, migración, prueba fallida) antes de
-      // que el admin lo recree a mano, la primera sesión anónima en
-      // cargar la página podía ganarle de mano y escribir un
-      // configGlobal arbitrario (ej. fechaCierre manipulada). En
-      // producción esto no pasa hoy (el documento ya existe desde hace
-      // meses), pero cerramos el hueco igual: ahora, si el documento no
-      // existe, solo el admin puede crearlo -- exactamente el mismo
-      // criterio que ya rige cuando SÍ existe (ver la rama de abajo).
-      allow write: if request.auth != null
-                   && (
-                        request.auth.token.email == "quinielaborracha@gmail.com"
-                        ||
-                        (
-                          resource != null
-                          && request.resource.data.diff(resource.data).affectedKeys()
-                               .hasOnly(['nextSeq', 'updatedAt'])
-                        )
-                      );
-    }
+        allow delete: if request.auth != null
+                      && (
+                           resource.data.ownerUid == request.auth.uid
+                           ||
+                           isAdmin()
+                         );
+      }
 
-    // ── PAPELERA — conserva la clave en texto plano de quien se
-    // elimina (para poder restaurarlo exactamente como estaba), así que
-    // se mantiene completamente separada del resto: solo el admin puede
-    // leerla o escribirla.
-    match /registro/papelera {
-      allow read, write: if request.auth != null
-                          && request.auth.token.email == "quinielaborracha@gmail.com";
-    }
+      // ── CONFIG GLOBAL + CONTADOR DE CÓDIGOS — sin datos sensibles.
+      // El contador de códigos (nextSeq) avanza cada vez que alguien nuevo
+      // se registra, así que tiene que ser escribible por cualquiera. Pero
+      // configGlobal (fechaCierre, registroAbierto, etc.) vive en el MISMO
+      // documento por simplicidad del cliente, y hasta v6.7 la regla no
+      // distinguía: cualquier sesión autenticada (anónima incluida) podía
+      // reescribir TODO el documento, incluida la fecha de cierre del
+      // torneo entero. v6.8 — Fase de Estabilización: ahora solo se acepta
+      // una escritura no-admin si lo ÚNICO que cambia es nextSeq (más el
+      // timestamp). Si configGlobal cambia y quien escribe no es el admin,
+      // la escritura se rechaza completa — no hay forma de tocar
+      // configGlobal sin ser admin. La app (rgPushToFirestore en
+      // participantes.js) ya solo escribe acá cuando su copia local de
+      // configGlobal coincide con la última conocida, así que en el uso
+      // normal esto no cambia nada visible para nadie.
+      match /registro/meta {
+        // v3.2.5 — Fase de Seguridad: mismo motivo que registro_participants
+        // arriba -- exigir sesión (aunque sea anónima) en vez de "if true"
+        // no cambia nada para la app real (ver wireFirebaseAuth()), pero
+        // saca este documento de la lista de cosas legibles con un curl
+        // suelto sin ninguna credencial.
+        allow read: if request.auth != null;
+        // v3.8.4 — Fase de Seguridad: antes, "resource == null" (el
+        // documento no existe) alcanzaba por sí solo para permitir la
+        // escritura a CUALQUIER sesión anónima, sin ninguna otra condición
+        // (auditoría 2026-07-05). Si este documento llegara a borrarse
+        // alguna vez (reset manual, migración, prueba fallida) antes de
+        // que el admin lo recree a mano, la primera sesión anónima en
+        // cargar la página podía ganarle de mano y escribir un
+        // configGlobal arbitrario (ej. fechaCierre manipulada). En
+        // producción esto no pasa hoy (el documento ya existe desde hace
+        // meses), pero cerramos el hueco igual: ahora, si el documento no
+        // existe, solo el admin puede crearlo -- exactamente el mismo
+        // criterio que ya rige cuando SÍ existe (ver la rama de abajo).
+        allow write: if request.auth != null
+                     && (
+                          isAdmin()
+                          ||
+                          (
+                            resource != null
+                            && request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasOnly(['nextSeq', 'updatedAt'])
+                          )
+                        );
+      }
 
-    // ── 2FA ADMIN (v7.1) — secreto TOTP + código de respaldo (hasheado)
-    // + mapa de navegadores de confianza (también hasheados, con
-    // expiración). Mismo motivo y mismo patrón que papelera: contiene un
-    // secreto, así que solo el propio admin puede leerlo o escribirlo.
-    // Esta regla no existía desde la reescritura v6.8/v6.9 -- sin ella,
-    // ni siquiera el admin podía leer su propio secreto (Firestore niega
-    // por defecto cualquier ruta sin regla explícita).
-    match /registro/admin2fa {
-      allow read, write: if request.auth != null
-                          && request.auth.token.email == "quinielaborracha@gmail.com";
+      // ── PAPELERA — conserva la clave en texto plano de quien se
+      // elimina (para poder restaurarlo exactamente como estaba), así que
+      // se mantiene completamente separada del resto: solo el admin puede
+      // leerla o escribirla.
+      match /registro/papelera {
+        allow read, write: if request.auth != null && isAdmin();
+      }
+
+      // ── 2FA ADMIN (v7.1) — secreto TOTP + código de respaldo (hasheado)
+      // + mapa de navegadores de confianza (también hasheados, con
+      // expiración). Mismo motivo y mismo patrón que papelera: contiene un
+      // secreto, así que solo el propio admin puede leerlo o escribirlo.
+      // Esta regla no existía desde la reescritura v6.8/v6.9 -- sin ella,
+      // ni siquiera el admin podía leer su propio secreto (Firestore niega
+      // por defecto cualquier ruta sin regla explícita).
+      match /registro/admin2fa {
+        allow read, write: if request.auth != null && isAdmin();
+      }
     }
   }
 }

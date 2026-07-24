@@ -26,7 +26,7 @@ participantes.js → torneo-mundial2026.js → partidos-grupos.js → utils.js �
 - `utils.js` — helpers puros (validación, checksums)
 - `paises.js` — datos de país agnósticos de torneo: `TEAM_NAMES`, `ESPN_NAME_ES`, `ALL_FLAGS`, `AVATAR_MAP`. Sprint 1 de la hoja de ruta comercial: separado de `app-static-data.js` para que un futuro segundo torneo reuse esta misma base sin duplicarla. Carga temprano porque `utils.js` ya depende de estos globals en `abbr2name()`/`espnNameES()`.
 - `app-static-data.js` — reasigna `ESPN_ABBR_MAP`/`MID_ABBRS`/`MGMAP`/`GES`/`ARULES` desde `TORNEO_ACTUAL` (mismo patrón que `partidos-grupos.js`). `FLAGS2`/`ABBR`/`BGCOL` quedan con su valor literal acá — un set más chico, no específico del fixture del torneo en curso.
-- `app-state.js` — declara `S`, el objeto de estado mutable compartido (resultados reales, checksums, bonos, batallas, snapshots — lo que persiste en `quiniela/estado`). Va justo antes de `scoring.js`, su mayor consumidor.
+- `app-state.js` — declara `S`, el objeto de estado mutable compartido (resultados reales, checksums, bonos, batallas, snapshots — lo que persiste en `tenants/{tenantId}/quiniela/estado`). Va justo antes de `scoring.js`, su mayor consumidor.
 - `scoring.js` — cálculo de puntos / standings / bracket
 - `totp.js` — funciones puras de TOTP (2FA admin, RFC 6238)
 - `app-*.js` (16 archivos) — lógica principal: ranking, estadísticas, panel admin, Batallas. **v8.0** — hasta la v7.x esto era un único `app.js` de 3906 líneas; se dividió en 16 módulos de responsabilidad única (Sprint 1, roadmap de arquitectura), cada uno un slice contiguo y literal del `app.js` anterior, sin cambios de lógica (verificado byte a byte). Cargan en el mismo orden relativo exacto en que estaban dentro del archivo único — ese orden importa: comparten el scope global del navegador entre sí, igual que ya hacían participantes.js/utils.js/scoring.js/totp.js. **`app-bootstrap.js` debe ser siempre el último**: hace el primer render llamando funciones definidas en todos los módulos anteriores. **v1.7** — el `app.js` monolítico se borró del repo (ya no lo cargaba nada; historial completo vía `git log`) y `S`/`mmT`/`mmS`/colas de conflicto ESPN, que vivían sueltas en `app-admin-auth.js` por accidente de orden del monolito original, se movieron a `app-state.js`/`app-bracket-espn-live.js`/`app-bracket-espn-sync.js` respectivamente. El detalle de qué contiene cada uno:
@@ -75,14 +75,21 @@ Soporte: `manifest.json`, `sw.js` (PWA), `favicon.png`, `apple-touch-icon.png`,
 
 1. Reemplazar los placeholders de `firebaseConfig` en `index.html` (línea
    ~33) con los valores reales del proyecto Firebase `quinielitaborracha`.
-2. Publicar `firestore.rules` en Firebase Console.
-3. Habilitar Authentication → Sign-in method → **Email/Password** y
+   Revisar también la constante `TENANT_ID` (justo debajo, Fase 3 milestone 1
+   de la hoja de ruta comercial) — un cliente nuevo cambia ambas.
+2. Crear a mano el documento `tenants/{TENANT_ID}` en Firestore, con el
+   campo `adminEmail` (el correo real del admin de ESTE tenant) y
+   `createdAt`. **Tiene que existir ANTES de publicar `firestore.rules`**
+   — si no, `isAdmin()` da `false` para todos, admin incluido.
+3. Publicar `firestore.rules` en Firebase Console.
+4. Habilitar Authentication → Sign-in method → **Email/Password** y
    **Anonymous**.
-4. Crear el usuario admin (correo+contraseña) en Authentication.
-5. Crear a mano el documento `registro/admin2fa` en Firestore con el
-   secreto TOTP (ver detalle completo en la conversación con Claude que
-   armó este pack).
-6. Habilitar GitHub Pages en este repo (rama `main`, carpeta raíz).
+5. Crear el usuario admin (correo+contraseña, el mismo que `adminEmail`
+   del paso 2) en Authentication.
+6. Crear a mano el documento `tenants/{TENANT_ID}/registro/admin2fa` en
+   Firestore con el secreto TOTP (ver detalle completo en la conversación
+   con Claude que armó este pack).
+7. Habilitar GitHub Pages en este repo (rama `main`, carpeta raíz).
 
 ## Tests
 

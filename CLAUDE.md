@@ -347,6 +347,57 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
 
 ### Modelo de seguridad / datos (Firestore)
 
+- **Fase 3, milestone 1 (hoja de ruta comercial -- multi-tenant,
+  2026-07-24):** todos los paths de Firestore quedaron anidados bajo
+  `tenants/{tenantId}/...` (antes eran planos: `registro_participants`,
+  `quiniela/estado`, etc.). `TENANT_ID` es una constante nueva en
+  `index.html` (junto a `firebaseConfig`) — sigue siendo "un checkout
+  estático por cliente" (un futuro cliente nuevo es clonar el repo y
+  cambiar 2 constantes), NO un selector de tenant en runtime (eso es un
+  milestone futuro). Los 8 refs de Firestore se construyen una sola vez
+  ahí y se exponen en `window.__fb`; ningún otro archivo construye un
+  path por su cuenta (excepción histórica ya corregida: el fallback de
+  `_admin2faDocRef()` en `app-admin-auth.js` reconstruía el path viejo
+  sin tenant — se sacó, ahora usa directo `fb.ADMIN2FA_DOC`).
+  - Nuevo documento `tenants/{tenantId}` (`adminEmail`, `createdAt`) —
+    reemplaza el email de admin que antes vivía hardcodeado como string
+    literal en 7 bloques de `firestore.rules`. Se crea A MANO en
+    Firebase Console (`allow read, write: if false` — nadie lo toca
+    desde el cliente todavía). Si se borra por accidente, el admin
+    queda bloqueado hasta recrearlo — mismo riesgo ya aceptado hoy con
+    `registro/admin2fa`, ahora extendido a un documento más.
+  - `firestore.rules` ganó un helper compartido `isAdmin()` (dentro de
+    `match /tenants/{tenantId}`) que resuelve el email de admin vía
+    `get()` contra ese documento, en vez de comparar un literal — cada
+    tenant puede tener su propio admin sin tocar la lógica de las
+    reglas. Cuesta 2 lecturas extra (`exists()`+`get()`) por escritura
+    de admin; sin impacto real a esta escala (para un participante
+    normal editando lo suyo, `isAdmin()` ni se evalúa por el short-circuit
+    del `||`).
+  - `sim_firestore_rules.js` ahora simula por tenant (`simIsAdmin(auth,
+    tenantId)`, mapa `TENANTS` con un segundo tenant ficticio
+    `"cliente-demo"`) y suma un bloque "AISLAMIENTO MULTI-TENANT" que
+    prueba que el admin de un tenant nunca puede actuar como admin de
+    otro (papelera, admin2fa, quiniela/estado, editar la quiniela de un
+    participante ajeno) — mismo espíritu que el checkpoint de Copa
+    América en Fase 1 (un segundo caso concreto prueba la
+    generalización).
+  - **Migración de datos: no se migró nada.** Los documentos en los
+    paths viejos (planos) quedaron huérfanos a propósito — esta
+    instancia es secundaria/de pruebas, sin participantes reales en
+    juego, así que no valía la pena un script de migración (Admin SDK)
+    ni el export/import de Firebase Console (que además requiere plan
+    Blaze, contradice seguir en Spark). Para retomar las pruebas:
+    recrear a mano `tenants/quinielitaborracha` (`adminEmail`,
+    `createdAt`) y `tenants/quinielitaborracha/registro/admin2fa` (2FA
+    nuevo) en Firebase Console ANTES de publicar `firestore.rules` — si
+    las reglas nuevas se publican antes de que exista el documento
+    tenant, `isAdmin()` da `false` para todos, admin incluido.
+  - Explícitamente fuera de alcance de este milestone (futuros, no
+    tocar todavía): Cloud Functions, alta automática/pago, selector de
+    tenant en runtime (un solo origen sirviendo varios tenants), custom
+    claims de Auth, namespacing de `localStorage` (innecesario hasta
+    que 2 tenants puedan compartir un mismo origen).
 - Cada participante obtiene una identidad anónima de Firebase
   (`signInAnonymously`, UID estable por dispositivo/navegador) y es dueño de
   su propio documento en la colección `registro_participants`, con

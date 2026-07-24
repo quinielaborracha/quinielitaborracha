@@ -215,9 +215,16 @@ function _afterAdminStatusResolved(){
 const ADMIN2FA_TRUST_KEY="wb26_admin2fa_trust";
 const ADMIN2FA_TRUST_DAYS=30;
 
+// Fase 3, milestone 1 (hoja de ruta comercial -- multi-tenant,
+// 2026-07-24): antes este fallback reconstruía "registro/admin2fa" a
+// mano si ADMIN2FA_DOC viniera falsy (nunca ocurre: index.html siempre
+// lo define). Ahora ese path plano ya no matchea ninguna regla de
+// firestore.rules (todo quedó anidado bajo tenants/{tenantId}/...), así
+// que reconstruirlo a mano apuntaría a un documento fuera del árbol
+// permitido -- se saca, y se usa directo el ref ya armado.
 function _admin2faDocRef(){
   const fb=window.__fb;
-  return fb.ADMIN2FA_DOC || fb.doc(fb.db,"registro","admin2fa");
+  return fb.ADMIN2FA_DOC;
 }
 
 // Limpia entradas vencidas del mapa de navegadores de confianza antes de

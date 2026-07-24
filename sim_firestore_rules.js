@@ -1,6 +1,6 @@
 // Simulador MANUAL de la semántica de firestore.rules para
-// /registro_participants/{pid}, /registro_privado/{pid}, /registro/meta
-// y /registro/papelera.
+// /tenants/{tenantId}/registro_participants/{pid}, /registro_privado/{pid},
+// /registro/meta, /registro/papelera, /quiniela/estado y /registro/admin2fa.
 //
 // IMPORTANTE — esto NO es el emulador real de Firestore. En este entorno
 // no se puede descargar el binario del emulador (requiere
@@ -13,7 +13,31 @@
 // publicar firestore.rules de verdad, igual hay que probarlo con el
 // emulador real o con tráfico real controlado — esto es una red de
 // seguridad adicional, no un sustituto.
-const ADMIN_EMAIL = "quinielaborracha@gmail.com";
+//
+// Fase 3, milestone 1 (hoja de ruta comercial -- multi-tenant,
+// 2026-07-24): antes, "es admin" era una sola comparación contra un
+// string global (ADMIN_EMAIL). Ahora firestore.rules resuelve el email
+// de admin por tenant (tenants/{tenantId}.adminEmail), así que cada
+// simAllowXxx() de acá abajo recibe un tenantId (default
+// "quinielitaborracha", el tenant real -- así los ~50 casos existentes
+// no necesitan tocarse uno por uno, solo los NUEVOS de aislamiento
+// pasan un tenantId distinto a propósito). TENANTS simula el documento
+// tenants/{tenantId} de cada uno; "cliente-demo" es un segundo tenant
+// 100% ficticio, solo para probar que un tenant nunca puede actuar
+// como admin de otro -- mismo espíritu que Copa América probó un
+// segundo formato de bracket real en vez de solo una función aislada.
+const TENANTS = {
+  "quinielitaborracha": { adminEmail: "quinielaborracha@gmail.com" },
+  "cliente-demo": { adminEmail: "otro-cliente@example.com" },
+};
+function simIsAdmin(auth, tenantId) {
+  const t = TENANTS[tenantId];
+  return !!auth && !!t && auth.email === t.adminEmail;
+}
+// Compatibilidad: el email real del único tenant que existe hoy, para
+// que los ~50 fixtures de test existentes (que ya escriben
+// "email: ADMIN_EMAIL") seguir funcionando sin tocarse.
+const ADMIN_EMAIL = TENANTS.quinielitaborracha.adminEmail;
 
 function diffAffectedKeys(before, after) {
   const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
@@ -32,9 +56,9 @@ function hasOnly(affectedKeys, allowed) {
 // ════════════════════════════════════════════════════════════════
 // registro_participants/{pid} — v6.9: SIN clave/correo (ver registro_privado)
 // ════════════════════════════════════════════════════════════════
-function simAllowCreate(auth, newData) {
+function simAllowCreate(auth, newData, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   return newData.ownerUid === auth.uid || isAdmin;
 }
 
@@ -54,9 +78,9 @@ function simEsEdicionValidaDeParticipante(d) {
 // quedó guardado en el documento hermano al momento de evaluar esta
 // regla (el re-claim real son DOS escrituras secuenciales: primero se
 // confirma en registro_privado, y solo entonces se intenta este update).
-function simAllowUpdate(auth, before, after, ctx) {
+function simAllowUpdate(auth, before, after, ctx, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   if (before.ownerUid === auth.uid) {
     const pastDeadline = !!(ctx && ctx.pastDeadline);
     const mantenimientoActivo = !!(ctx && ctx.mantenimientoActivo);
@@ -73,28 +97,28 @@ function simAllowUpdate(auth, before, after, ctx) {
   return onlyOwnerFields && privadoYaReclamado;
 }
 
-function simAllowDelete(auth, before) {
+function simAllowDelete(auth, before, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   return before.ownerUid === auth.uid || isAdmin;
 }
 
 // ════════════════════════════════════════════════════════════════
 // registro_privado/{pid} — v6.9, NUEVO: clave + correo, dueño/admin only
 // ════════════════════════════════════════════════════════════════
-function simAllowPrivadoRead(auth, before) {
+function simAllowPrivadoRead(auth, before, tenantId = "quinielitaborracha") {
   if (!auth || !before) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   return before.ownerUid === auth.uid || isAdmin;
 }
-function simAllowPrivadoCreate(auth, newData) {
+function simAllowPrivadoCreate(auth, newData, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   return newData.ownerUid === auth.uid || isAdmin;
 }
-function simAllowPrivadoUpdate(auth, before, after) {
+function simAllowPrivadoUpdate(auth, before, after, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   if (before.ownerUid === auth.uid) return true;
   if (isAdmin) return true;
   // Re-claim propiamente dicho: solo ownerUid+clave, Y la clave que se
@@ -102,9 +126,9 @@ function simAllowPrivadoUpdate(auth, before, after) {
   const affected = diffAffectedKeys(before, after);
   return hasOnly(affected, ['ownerUid', 'clave']) && after.clave === before.clave;
 }
-function simAllowPrivadoDelete(auth, before) {
+function simAllowPrivadoDelete(auth, before, tenantId = "quinielitaborracha") {
   if (!auth || !before) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   return before.ownerUid === auth.uid || isAdmin;
 }
 
@@ -112,17 +136,29 @@ function simAllowPrivadoDelete(auth, before) {
 // solo por sí mismo para permitir la escritura a cualquiera. Ahora, igual
 // que en la rama de abajo, solo el admin puede escribir cuando el
 // documento no existe (ver la nota en firestore.rules).
-function simAllowMetaWrite(auth, before, after) {
+function simAllowMetaWrite(auth, before, after, tenantId = "quinielitaborracha") {
   if (!auth) return false;
-  const isAdmin = auth.email === ADMIN_EMAIL;
+  const isAdmin = simIsAdmin(auth, tenantId);
   if (isAdmin) return true;
   if (before === null) return false;
   const affected = diffAffectedKeys(before, after);
   return hasOnly(affected, ['nextSeq', 'updatedAt']);
 }
 
-function simAllowPapelera(auth) {
-  return !!auth && auth.email === ADMIN_EMAIL;
+function simAllowPapelera(auth, tenantId = "quinielitaborracha") {
+  return !!auth && simIsAdmin(auth, tenantId);
+}
+
+// Fase 3, milestone 1 -- NUEVAS: no existía simulación de
+// quiniela/estado ni de registro/admin2fa hasta ahora (el archivo solo
+// cubría registro_participants/registro_privado/registro/meta/papelera).
+// Ambas reglas reales son "allow read/write: if request.auth != null &&
+// isAdmin();" -- mismo shape que simAllowPapelera().
+function simAllowStateWrite(auth, tenantId = "quinielitaborracha") {
+  return !!auth && simIsAdmin(auth, tenantId);
+}
+function simAllowAdmin2fa(auth, tenantId = "quinielitaborracha") {
+  return !!auth && simIsAdmin(auth, tenantId);
 }
 
 let pass = 0, fail = 0;
@@ -393,6 +429,46 @@ check("Solo el admin puede leer/escribir la papelera -> permitido para admin",
   simAllowPapelera({ uid: "admin-uid", isAnonymous: false, email: ADMIN_EMAIL }));
 check("Un participante normal NO puede leer/escribir la papelera -> rechazado",
   !simAllowPapelera({ uid: "anon-1", isAnonymous: true }));
+
+console.log("\n=== AISLAMIENTO MULTI-TENANT (Fase 3, milestone 1) ===");
+// "cliente-demo" es un segundo tenant 100% ficticio (ver TENANTS arriba),
+// solo para probar que el admin de un tenant nunca puede actuar como
+// admin de otro -- mismo espíritu que el checkpoint de Copa América
+// (Fase 1): un segundo caso concreto prueba la generalización, no solo
+// una función aislada.
+check(
+  "Admin real de quinielitaborracha (mismo email de siempre) NO puede escribir quiniela/estado de cliente-demo -> rechazado",
+  !simAllowStateWrite({ uid: "admin-a", email: ADMIN_EMAIL }, "cliente-demo")
+);
+check(
+  "Admin de cliente-demo (su propio email) SÍ puede escribir su propio quiniela/estado -> permitido",
+  simAllowStateWrite({ uid: "admin-b", email: "otro-cliente@example.com" }, "cliente-demo")
+);
+check(
+  "Admin de quinielitaborracha sigue pudiendo escribir el suyo (regresión, sin cambios) -> permitido",
+  simAllowStateWrite({ uid: "admin-a", email: ADMIN_EMAIL }, "quinielitaborracha")
+);
+check(
+  "El string de admin viejo (hardcodeado antes de esta migración), evaluado contra el tenant EQUIVOCADO -> rechazado " +
+  "(el regression-guard directo del bug que esta migración previene: un email real que NO es admin de ESE tenant)",
+  !simIsAdmin({ email: ADMIN_EMAIL }, "cliente-demo")
+);
+check(
+  "Admin de quinielitaborracha NO puede leer/escribir la papelera de cliente-demo -> rechazado",
+  !simAllowPapelera({ uid: "admin-a", email: ADMIN_EMAIL }, "cliente-demo")
+);
+check(
+  "Admin de quinielitaborracha NO puede leer/escribir el admin2fa de cliente-demo -> rechazado",
+  !simAllowAdmin2fa({ uid: "admin-a", email: ADMIN_EMAIL }, "cliente-demo")
+);
+check(
+  "Un participante de quinielitaborracha edita su propia quiniela normalmente, sin verse afectado por nada de cliente-demo -> permitido",
+  simAllowUpdate({ uid: "anon-1", isAnonymous: true }, docDeJuan, { ...docDeJuan, predictions: { m1: { h: 2, a: 2 } } }, {}, "quinielitaborracha")
+);
+check(
+  "El admin de cliente-demo NO puede editar la quiniela de Juan (participante de quinielitaborracha) -> rechazado",
+  !simAllowUpdate({ uid: "admin-b", email: "otro-cliente@example.com" }, docDeJuan, { ...docDeJuan, notaAdmin: "x" }, {}, "quinielitaborracha")
+);
 
 console.log(`\n=== RESULTADO: ${pass} pasaron, ${fail} fallaron ===`);
 process.exit(fail === 0 ? 0 : 1);
