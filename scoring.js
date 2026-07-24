@@ -1356,6 +1356,19 @@ function allGroupsComplete() {
   return true;
 }
 
+// Sprint 7 (hoja de ruta comercial, Fase 2 "constructor de torneo" --
+// bloqueo de reglas, 2026-07-23): las Reglas de puntaje (Configuración
+// del torneo → Reglas) se pueden editar en vivo en cualquier momento,
+// incluso a mitad de torneo -- nada lo impedía. Ahora, en cuanto existe
+// AL MENOS un resultado real cargado (grupos o eliminatoria), se
+// consideran "publicadas" y el panel las muestra de solo lectura (ver
+// buildReglasHtml() en app-admin-tools.js) -- sin depender de que el
+// admin se acuerde de apretar un botón de "publicar": el primer
+// resultado real ES la publicación.
+function isReglasBloqueadas(){
+  return Object.keys(S.scores||{}).length>0 || Object.keys(S.elimScores||{}).length>0;
+}
+
 function getRealAdvancers(phase){
   const winners=new Set();
   if(!phase.elimPhase)return winners;

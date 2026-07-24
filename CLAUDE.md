@@ -297,19 +297,47 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
     directa), XSS (una URL maliciosa no rompe el HTML del panel), y
     restablecer. 13/13 checks en verde.
 
-  **Pendiente (sesión aparte):** bloqueo de reglas de puntaje una vez
-  publicado el torneo — hoy nada impide cambiar los puntos a mitad de
-  camino. La idea más simple (evaluada, no implementada todavía):
-  auto-bloquear los campos numéricos de Reglas en cuanto exista al menos
-  un resultado real cargado (`Object.keys(S.scores).length>0`), sin
-  exigirle al admin que se acuerde de apretar un botón de "publicar".
-
   **Selector de plantilla (elegir qué `torneo-<nombre>.js` carga
   `index.html`)** sigue sin programarse — se bajó de alcance a "paso de
   setup" en vez de "feature en la app", porque Fase 2 sigue siendo un
   proyecto Firebase por cliente (no multi-tenant): armar un cliente
   nuevo ya es, gracias al Sprint 5, cambiar una sola línea de
   `<script src>`.
+
+- **Sprint 7 (Fase 2 "constructor de torneo" -- última pieza real,
+  2026-07-23): bloqueo de reglas.** Hasta acá, Configuración del torneo
+  → Reglas se podía editar en vivo en cualquier momento, incluso a
+  mitad de torneo — nada lo impedía. Nueva `isReglasBloqueadas()`
+  (`scoring.js`, junto a `allGroupsComplete()`): devuelve `true` en
+  cuanto existe AL MENOS un resultado real cargado (`S.scores` o
+  `S.elimScores` con algo adentro) — el primer resultado real ES la
+  publicación, sin exigirle al admin que se acuerde de apretar un botón
+  aparte.
+  - `reglaNumInput()`/`reglaSwitchRow()`/`reglaSwitchMini()`
+    (`app-admin-tools.js`) son el ÚNICO lugar donde se arma el markup de
+    un input/switch de Reglas — agregar el chequeo ahí adentro bloqueó
+    TODO el panel (puntos base, por fase, multiplicador, racha,
+    preguntas avanzadas, batallas/rumble) sin tocar ninguno de sus
+    muchos call sites: inputs quedan `disabled`, switches pierden su
+    `onclick` y suman la clase visual `.switch-disabled` (`styles.css`).
+  - `buildReglasHtml()` muestra un banner "🔒 Reglas bloqueadas" cuando
+    corresponde.
+  - `updateReglaValor()`/`toggleReglaSwitch()` (las 2 únicas funciones
+    que escriben sobre `reglas`) tienen además un chequeo defensivo
+    propio: si alguien las llama con el DOM desactualizado (ej. el
+    primer resultado real llegó justo con el panel abierto), no
+    escriben nada — no dependen solo del atributo `disabled` del input.
+  - Nuevo `test_reglas_bloqueadas.js` (13 checks): editable sin
+    resultados, se bloquea con el primer resultado de grupos O de
+    eliminatoria, el banner aparece, y la defensa extra corta una
+    escritura directa aunque se la fuerce.
+
+  Con esto, la Fase 2 (constructor de torneo) queda completa en su
+  alcance actual: marca propia (Sprint 6) + reglas bloqueadas al
+  publicar (Sprint 7) + selector de plantilla bajado a paso de setup
+  (Sprint 5). Lo que sigue del roadmap original es Fase 3
+  (multi-tenant) — gateada por demanda real, no por elegancia de
+  arquitectura.
 
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker

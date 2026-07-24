@@ -315,22 +315,30 @@ function renderTorneoConfig(){
 // de heredarlos — así nunca dependen de en qué contenedor termine cada
 // número, evitando el problema de contraste que reportaste en "Puntos
 // por fase".
+// Sprint 7 (bloqueo de reglas): las 3 funciones de acá abajo son el
+// ÚNICO lugar donde se arma el markup de un input/switch de Reglas --
+// agregar el chequeo de isReglasBloqueadas() acá adentro alcanza para
+// bloquear TODO el panel (puntos base, por fase, multiplicador, racha,
+// preguntas avanzadas) sin tocar ninguno de sus muchos call sites.
 function reglaNumInput(path,value,width,disabled){
-  return `<input type="number" class="reglas-num" min="0" step="1" value="${value}" data-reglas-path="${path}" onchange="updateReglaValor(this)" style="width:${width||50}px" ${disabled?"disabled":""}>`;
+  const bloqueado=disabled||(typeof isReglasBloqueadas==="function"&&isReglasBloqueadas());
+  return `<input type="number" class="reglas-num" min="0" step="1" value="${value}" data-reglas-path="${path}" onchange="updateReglaValor(this)" style="width:${width||50}px" ${bloqueado?"disabled":""}>`;
 }
 function reglaSwitchRow(path,on,label,desc){
+  const bloqueado=typeof isReglasBloqueadas==="function"&&isReglasBloqueadas();
   return `<div class="switch-row">
     <div>
       <div style="font-weight:700;color:var(--qb-text)">${label}</div>
       ${desc?`<div class="muted" style="font-size:11px;margin-top:2px">${desc}</div>`:""}
     </div>
-    <div class="switch ${on?'on':''}" role="switch" aria-checked="${on}" tabindex="0" onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}"><div class="switch-knob"></div></div>
+    <div class="switch ${on?'on':''}${bloqueado?' switch-disabled':''}" role="switch" aria-checked="${on}" tabindex="${bloqueado?"-1":"0"}" ${bloqueado?"":`onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}"`}><div class="switch-knob"></div></div>
   </div>`;
 }
 // Switch chico (sin descripción aparte), para usar DENTRO de una fila
 // existente (ej. el switch de "puntos activos" de cada fase).
 function reglaSwitchMini(path,on){
-  return `<div class="switch ${on?'on':''}" role="switch" aria-checked="${on}" tabindex="0" onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}" style="flex-shrink:0"><div class="switch-knob"></div></div>`;
+  const bloqueado=typeof isReglasBloqueadas==="function"&&isReglasBloqueadas();
+  return `<div class="switch ${on?'on':''}${bloqueado?' switch-disabled':''}" role="switch" aria-checked="${on}" tabindex="${bloqueado?"-1":"0"}" ${bloqueado?"":`onclick="toggleReglaSwitch('${path}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleReglaSwitch('${path}');}"`} style="flex-shrink:0"><div class="switch-knob"></div></div>`;
 }
 function buildReglasHtml(R){
   const activeAll=getActivePhases();
@@ -409,7 +417,13 @@ function buildReglasHtml(R){
       <span>+${reglaNumInput(`rachaDesaciertos.hitos.${i}.pts`,h.pts,44)}pts</span>
     </div>`).join('');
 
+  const bloqueado=isReglasBloqueadas();
+  const bannerBloqueo=bloqueado?`<div class="ib" style="margin-bottom:1rem">
+      🔒 <strong>Reglas bloqueadas.</strong> Ya hay al menos un resultado real cargado, así que los puntos y switches de acá abajo quedaron de solo lectura para que nadie los cambie a mitad de camino sin querer.
+    </div>`:'';
+
   return `
+    ${bannerBloqueo}
     <div class="card">
       <div class="card-title">🎯 Puntos base</div>
       <div class="muted" style="font-size:11.5px;margin-bottom:.5rem">Lo que vale cada predicción, antes de cualquier multiplicador. Estos son los valores de siempre — cambiar un número acá cambia el puntaje de todos a partir de ahora (no recalcula partidos ya jugados de forma distinta a como ya se jugaron, simplemente la fórmula usa el nuevo valor desde este momento).</div>
@@ -488,6 +502,15 @@ function buildReglasHtml(R){
 }
 
 function updateReglaValor(el){
+  // Sprint 7 -- defensa extra además de "disabled" en el input (que ya
+  // debería impedir este onchange): si el render quedó desactualizado
+  // por una carrera (ej. el primer resultado real llegó justo mientras
+  // el admin tenía el panel abierto), esto corta la escritura igual.
+  if(typeof isReglasBloqueadas==="function"&&isReglasBloqueadas()){
+    renderTorneoConfig();
+    toast("🔒 Las reglas quedaron bloqueadas: ya hay resultados reales cargados",true);
+    return;
+  }
   const path=el.dataset.reglasPath.split('.');
   let obj=DB.configGlobal.reglas;
   for(let i=0;i<path.length-1;i++){
@@ -505,6 +528,12 @@ function updateReglaValor(el){
 }
 
 function toggleReglaSwitch(path){
+  // Sprint 7 -- misma defensa extra que updateReglaValor().
+  if(typeof isReglasBloqueadas==="function"&&isReglasBloqueadas()){
+    renderTorneoConfig();
+    toast("🔒 Las reglas quedaron bloqueadas: ya hay resultados reales cargados",true);
+    return;
+  }
   const parts=path.split('.');
   let obj=DB.configGlobal.reglas;
   for(let i=0;i<parts.length-1;i++){
