@@ -48,21 +48,30 @@
   // Sprint 10 (mismo roadmap, Fase 3 -- selector de plantilla en
   // runtime, segundo paso, 2026-08-04): TENANT_ID deja de ser un
   // literal fijo -- mismo patrón exacto que TEST_MODE un poco más abajo
-  // (?param de la URL, con localStorage como memoria entre visitas).
-  // Sin ?tenant= ni caché, cae en el mismo tenant real de siempre
-  // ("quinielitaborracha") -- cero riesgo de romper producción. Esto es
-  // lo que permite que el admin cree tenants de prueba nuevos (ver
-  // app-admin-tenants.js, Sprint 12) sin que cada uno necesite su
+  // (?param de la URL). Sin ?tenant=, cae en el mismo tenant real de
+  // siempre ("quinielitaborracha") -- cero riesgo de romper producción.
+  // Esto es lo que permite que el admin cree tenants de prueba nuevos
+  // (ver app-admin-tenants.js, Sprint 12) sin que cada uno necesite su
   // propio repo/proyecto de Firebase.
+  //
+  // CORRECCIÓN URGENTE (mismo día, BUG REAL en producción, no ajuste
+  // cosmético): la versión original de esta línea cacheaba el
+  // ?tenant= elegido en localStorage "para que el próximo load sin el
+  // parámetro siguiera en el mismo tenant". En la práctica eso
+  // "secuestraba" el navegador de quien lo usara: visitar UNA SOLA VEZ
+  // un link de prueba con ?tenant=euro-2028 dejaba ese navegador
+  // entrando silenciosamente a esa quiniela de prueba incluso al volver
+  // a la URL real sin ningún parámetro (le pasó al admin real el mismo
+  // día que se probó esto -- el 2FA de la quiniela real "dejó de
+  // funcionar" porque en realidad estaba autenticando contra el tenant
+  // de prueba). Se sacó el cacheo por completo: sin ?tenant= en el
+  // link, SIEMPRE es "quinielitaborracha", sin excepciones ni memoria
+  // de visitas anteriores en ese dispositivo -- el único costo es que
+  // hay que repetir ?tenant= cada vez que se quiera un tenant distinto
+  // del real (o guardarse el link completo), precio bajo comparado con
+  // el riesgo de romper el sitio real para el propio admin.
   const TENANT_ID = new URLSearchParams(window.location.search).get("tenant")
-    || localStorage.getItem("qb_tenant_activo")
     || "quinielitaborracha";
-  // Si vino explícito en la URL, se cachea para que el próximo load SIN
-  // ?tenant= (ej. alguien recarga sin el parámetro) siga en el mismo
-  // tenant -- mismo criterio que torneo-resolver.js con qb_torneo_activo.
-  if (new URLSearchParams(window.location.search).get("tenant")) {
-    try { localStorage.setItem("qb_tenant_activo", TENANT_ID); } catch (e) {}
-  }
 
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
@@ -237,7 +246,7 @@
       <img id="logo-img" src="" alt="QB" style="width:70px;height:70px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v5.0</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v5.0.1</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -889,11 +898,11 @@
 
 <div id="pdfPoster"></div>
 
-<script defer src="participantes.js?v=1.15"></script>
+<script defer src="participantes.js?v=1.16"></script>
 <script defer src="torneo-mundial2026.js?v=1.4"></script>
 <script defer src="torneo-copaamerica.js?v=1"></script>
 <script defer src="torneo-euro.js?v=1"></script>
-<script defer src="torneo-resolver.js?v=1"></script>
+<script defer src="torneo-resolver.js?v=2"></script>
 <script defer src="partidos-grupos.js?v=1.2"></script>
 <script defer src="utils.js?v=1.11"></script>
 <script defer src="paises.js?v=1.0"></script>

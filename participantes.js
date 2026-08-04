@@ -842,17 +842,17 @@ function _rgApplyCombinedSnapshot(){
   DB.nextSeq = (_rgLatestMeta && _rgLatestMeta.nextSeq) || 1;
   DB.configGlobal = mergeConfigGlobal((_rgLatestMeta && _rgLatestMeta.configGlobal) || {});
 
-  // Sprint 10 -- cachear el torneoId de este tenant en localStorage
-  // apenas llega de Firestore, para que el PRÓXIMO load de este mismo
-  // dispositivo (sin ?torneo= en la URL) ya arranque con la plantilla
-  // correcta desde torneo-resolver.js, en vez de caer en el default por
-  // orden de carga. Solo si viene algo real -- un torneoId vacío
-  // (tenant recién creado, todavía sin elegir plantilla) no debe borrar
-  // una elección previa ya cacheada.
-  if(DB.configGlobal.torneoId){
-    try{ localStorage.setItem('qb_torneo_activo', DB.configGlobal.torneoId); }catch(e){}
-  }
-
+  // CORRECCIÓN URGENTE (mismo día, Sprint 10 -- BUG REAL en producción):
+  // esta función cacheaba DB.configGlobal.torneoId en
+  // localStorage.qb_torneo_activo apenas llegaba de Firestore, "para que
+  // el próximo load de este dispositivo ya arrancara con la plantilla
+  // correcta". El problema real: torneoId es un campo POR TENANT, pero
+  // localStorage.qb_torneo_activo es UNA sola clave compartida por
+  // TODOS los tenants en ese navegador -- visitar un tenant de prueba
+  // (torneoId:"euro-ficticio") dejaba esa clave contaminada incluso
+  // para cuando ese mismo navegador volviera al tenant real. Se sacó
+  // por completo (torneo-resolver.js ya no lee localStorage tampoco,
+  // ver la nota ahí) -- este cacheo quedaba redundante e inseguro.
   _rgMergeKnownPrivadoFields();
 
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }catch(e){}

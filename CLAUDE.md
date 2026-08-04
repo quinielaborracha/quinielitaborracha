@@ -435,6 +435,51 @@ app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-boot
   completo. Plan detallado (contexto original, decisiones de diseño) en
   `C:\Users\eldio\.claude\plans\atomic-popping-leaf.md`.
 
+- **CORRECCIÓN URGENTE (mismo día, 2026-08-04, post-deploy) -- 2 bugs
+  reales encontrados apenas se usó "Crear nueva quiniela" contra
+  Firebase real, ambos ya en producción antes de detectarse:**
+  1. **El default de plantilla sin `?torneo=` NO era el Mundial real.**
+     `torneo-resolver.js` (Sprint 9), sin `?torneo=` en la URL, dejaba
+     `TORNEO_ACTUAL` "tal cual había quedado por el simple orden de
+     carga de los `<script>` anteriores" -- eso funcionaba por
+     casualidad mientras `torneo-mundial2026.js` fuera el ÚLTIMO
+     `torneo-<nombre>.js` en cargar, pero dejó de ser cierto en el
+     mismo Sprint 9 (se agregó `torneo-copaamerica.js` después) y
+     empeoró en el Sprint 11 (`torneo-euro.js` después de ese). El
+     default silencioso pasó a ser el ÚLTIMO template ficticio
+     agregado, aplicado sobre los datos REALES del tenant de
+     producción, para cualquier visitante sin `?torneo=` en su link --
+     es decir, todos los participantes reales. Fix: `torneo-resolver.js`
+     ahora tiene un `DEFAULT_TORNEO_ID = 'mundial2026'` explícito,
+     inmune al orden de carga de los demás templates.
+  2. **El cacheo en `localStorage` "secuestraba" el navegador de quien
+     probara un link de otro tenant/torneo.** Tanto `TENANT_ID`
+     (`index.html`, Sprint 10) como `torneo-resolver.js` (Sprint 9)
+     cacheaban la elección de `?tenant=`/`?torneo=` en `localStorage`
+     "para recordarla entre visitas". En la práctica, esto le pasó al
+     propio admin real el mismo día: visitar UNA VEZ un link de prueba
+     (`?tenant=euro-2028&torneo=euro-ficticio`) dejó ese navegador
+     entrando silenciosamente al tenant de prueba incluso al volver a
+     la URL real sin ningún parámetro -- el 2FA de la quiniela real
+     "dejó de funcionar" porque en realidad se estaba autenticando
+     contra el tenant equivocado. Fix: se sacó TODO el cacheo en
+     `localStorage` de los 3 lugares que lo tenían (`index.html`,
+     `torneo-resolver.js`, y el cacheo de `configGlobal.torneoId` en
+     `_rgApplyCombinedSnapshot()`, `participantes.js`) -- sin
+     `?tenant=`/`?torneo=` explícitos en el link, el comportamiento es
+     100% predecible: SIEMPRE el tenant/torneo real, sin excepciones ni
+     memoria de visitas anteriores en ese dispositivo. El único costo
+     es repetir el parámetro cada vez que se quiera un tenant/torneo
+     distinto del real (o guardarse el link completo) -- precio bajo
+     comparado con el riesgo de romper el sitio real.
+
+  Ambos fixes verificados con casos de test dedicados (no solo
+  ajustados los existentes): `test_torneo_resolver.js` CASO 2 confirma
+  el default explícito con los 3 templates cargados juntos, CASO 4
+  confirma que un `localStorage` "contaminado" de una visita anterior
+  no afecta una visita nueva; mismo criterio en `test_tenant_runtime.js`
+  CASO 3. Suite completa verde (66 harnesses) después del fix.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
