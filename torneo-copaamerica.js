@@ -21,22 +21,35 @@
    que es el objetivo de este sprint, sin necesitar el calendario real
    de una Copa América todavía sin fecha confirmada.
 
-   Este archivo NO se carga desde index.html todavía (Quinielita
-   Borracha sigue siendo una instancia de Mundial 2026) -- se usa desde
-   test_copa_america_e2e.js, que arma su propio DOM/FILES_IN_ORDER
-   reemplazando torneo-mundial2026.js por este archivo directo.
+   Hasta el Sprint 9, este archivo NO se cargaba desde index.html
+   (Quinielita Borracha seguía siendo una instancia de Mundial 2026) --
+   solo se usaba desde test_copa_america_e2e.js, que armaba su propio
+   DOM/FILES_IN_ORDER reemplazando torneo-mundial2026.js por este
+   archivo directo.
 
    Sprint 5 (mismo roadmap, 2026-07-23): declara TORNEO_ACTUAL
    directamente (antes TORNEO_COPA_AMERICA + un shim en el test) --
    partidos-grupos.js/app-static-data.js/app-eliminatoria-data.js/
    registro.js/app-live-sync.js ya leen ese nombre genérico, así que
    cualquier archivo torneo-<nombre>.js que declare TORNEO_ACTUAL
-   funciona sin shim, mientras index.html cargue solo uno a la vez. La
-   identidad del torneo vive en los campos id/nombre del objeto, no en
-   el nombre de la variable.
+   funciona sin shim.
+
+   Sprint 9 (hoja de ruta comercial, Fase 3 -- selector de plantilla en
+   runtime): ahora SÍ se carga desde index.html (junto con
+   torneo-mundial2026.js y torneo-resolver.js), como una de las
+   plantillas elegibles -- sigue siendo ficticio (no es el sorteo real
+   de ninguna edición), pero ya deja de ser "solo un archivo de test".
+   Cada torneo-<nombre>.js ahora se registra en TORNEOS_DISPONIBLES (ver
+   el final de este archivo) en vez de asumir que es el único cargado --
+   torneo-resolver.js es quien decide, en runtime, cuál de todos los
+   registrados pasa a ser TORNEO_ACTUAL para esta sesión.
    ════════════════════════════════════════════════════════════ */
 
-const TORNEO_ACTUAL = (function(){
+// Sprint 9 -- `var`, no `const`: ver la nota equivalente en
+// torneo-mundial2026.js. Ambos archivos se cargan juntos desde
+// index.html desde este sprint, así que ninguno de los dos puede usar
+// `const` para este nombre sin chocar con el otro.
+var TORNEO_ACTUAL = (function(){
   // 16 equipos, 4 grupos de 4. Sorteo ficticio (ver nota arriba).
   const groupMatches = [
     // Grupo A: Argentina, Chile, Perú, Canadá
@@ -167,3 +180,7 @@ const TORNEO_ACTUAL = (function(){
     ],
   };
 })();
+
+// Sprint 9 -- ver la nota equivalente en torneo-mundial2026.js.
+window.TORNEOS_DISPONIBLES = window.TORNEOS_DISPONIBLES || {};
+TORNEOS_DISPONIBLES[TORNEO_ACTUAL.id] = TORNEO_ACTUAL;

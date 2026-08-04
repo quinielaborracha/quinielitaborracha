@@ -46,13 +46,13 @@ superior declarada en un archivo está disponible en cualquiera que cargue
 después. El orden importa y es exactamente este:
 
 ```
-participantes.js → torneo-mundial2026.js → partidos-grupos.js → utils.js → paises.js →
+participantes.js → torneo-mundial2026.js → torneo-copaamerica.js → torneo-euro.js → torneo-resolver.js → partidos-grupos.js → utils.js → paises.js →
 app-static-data.js → app-state.js → scoring.js → totp.js →
 app-core-data.js → app-admin-auth.js → app-live-sync.js → app-tabs.js →
 app-eliminatoria-data.js → app-batallas.js → app-bracket-render.js →
 app-bracket-annexc.js → app-bracket-compute.js → app-bracket-espn-sync.js → app-bracket-view.js →
 app-bracket-espn-live.js → app-integridad.js → app-predicciones.js →
-app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
+app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-bootstrap.js → registro.js
 ```
 
 - Los 16 `app-*.js` son slices literales y contiguos de un antiguo `app.js`
@@ -339,6 +339,102 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
   (multi-tenant) — gateada por demanda real, no por elegancia de
   arquitectura.
 
+- **Sprint 8 (retomando la hoja de ruta comercial tras Fase 3 milestone
+  1, 2026-08-04): "🎭 Participantes ficticios".** Para poder probar
+  Ranking/Estadísticas/Batallas sin esperar altas reales, nueva tarjeta
+  en el panel Admin (`registro.js`, `renderAdmin()`) que crea/borra
+  participantes de prueba. Descubrimiento clave: no hizo falta ninguna
+  regla nueva de `firestore.rules` — el `create` de
+  `registro_participants`/`registro_privado` ya tenía `isAdmin()` como
+  rama incondicional (el mismo camino que usa "restaurar desde la
+  papelera"), así que el admin ya podía escribir con cualquier
+  `ownerUid` sintético sin pasar por `isRegistroAbierto()`/
+  `esAltaValidaDeParticipante()`. `rgCreateFakeParticipants(n)`/
+  `rgDeleteFakeParticipants()` (`participantes.js`) hacen un solo
+  `writeBatch` cada una; los ficticios llevan `esFicticio:true` y un
+  código propio `FAKE-NNNN` (no consumen el `nextSeq` real) y arrancan
+  con `estadoQuiniela:'enviada'` + predicciones random de fase de
+  grupos (mismo generador 0-3 que `simularMarcadores()`). Test:
+  `test_participantes_ficticios.js`.
+
+- **Sprint 9 (mismo día, Fase 3 — selector de plantilla en runtime,
+  primer paso): registro compartido de torneos.** Hasta acá nunca se
+  cargaban dos `torneo-<nombre>.js` a la vez (Sprint 5) — ahora
+  `index.html` carga `torneo-mundial2026.js` Y `torneo-copaamerica.js`
+  juntos (esta última deja de ser solo un archivo de test) más un
+  `torneo-resolver.js` nuevo, cargado después de ambos y antes de
+  `partidos-grupos.js`. Cada `torneo-<nombre>.js` se registra en
+  `window.TORNEOS_DISPONIBLES[id]` (además de seguir declarando
+  `TORNEO_ACTUAL` como siempre — **ahora con `var`, no `const`**: dos
+  `const TORNEO_ACTUAL` en `<script>` distintos del mismo documento
+  chocan con un `SyntaxError` real, `var` no). `torneo-resolver.js`
+  resuelve `TORNEO_ACTUAL` de forma SÍNCRONA (sin `await`/Firestore,
+  porque `partidos-grupos.js` lee `TORNEO_ACTUAL.groupMatches` en una
+  asignación de nivel superior) leyendo, en orden: `?torneo=` de la URL
+  → `localStorage.qb_torneo_activo` → lo que haya quedado por simple
+  orden de carga (hoy, `torneo-mundial2026.js` siempre gana por default,
+  al cargar primero). Limitación aceptada: un dispositivo nuevo sin
+  `?torneo=` ni caché siempre cae en ese default hasta el próximo load
+  (recién se corrige cuando el boot real cachee
+  `registro/meta.configGlobal.torneoId`, milestone futuro). Test:
+  `test_torneo_resolver.js`.
+
+- **Sprint 11 (mismo día, Fase 3 -- checkpoint del selector de
+  plantilla): `torneo-euro.js`, el primer torneo SIN fase de grupos**
+  (`groupMatches:[]`, `groupKeys:[]`) -- mismo espíritu que Copa América
+  probó en su momento (Sprint 4c): un segundo caso concreto confirma
+  que el registro compartido (Sprint 9) generaliza de verdad. La
+  primera fase de `bonusPhases` ya es de eliminatoria (Semifinales,
+  `prevPhase:null`); sus equipos se cargan a mano (mecanismo YA
+  EXISTENTE, "✏️ Editar llaves", para "empezar en una fase que no es
+  Dieciseisavos") o con "🎲 Simular". **Hallazgo real al escribir este
+  checkpoint** (no anticipado en el plan original): `bracketFormat`
+  tiene que ser `"direct"` (con `directCrosses:{}`), NO el default
+  "best-thirds" — `generarLlavesDieciseisavos()`
+  (`app-bracket-compute.js`) solo delega en `generarLlavesDirecto()`
+  cuando el formato es `"direct"`; en cualquier otro caso corre su rama
+  "mejores terceros", que tiene los pids 73-88 y las letras A-L del
+  Mundial 2026 HARDCODEADOS en el cuerpo de la función (no derivados de
+  `TORNEO_ACTUAL`) — con `groupKeys:[]` esa rama no explota, pero
+  contaminaría `S.elimTeams` con datos ajenos a este torneo si el admin
+  aprieta "Generar llaves" (que además queda habilitado de entrada:
+  `updateGenerarBtn()` considera "0 de 0 partidos" como fase de grupos
+  completa). Con `bracketFormat:"direct"` y `directCrosses:{}`, esa
+  rama nunca se ejecuta y `generarLlavesDirecto()` no encuentra nada
+  que resolver — verificado explícitamente en `test_euro_e2e.js`
+  (confirma que `S.elimTeams` queda vacío después de "Generar llaves",
+  sin pids 73/74 contaminados). Se cargó también en `index.html` junto
+  a los otros 2 templates, ya elegible desde `TORNEOS_DISPONIBLES` para
+  cuando exista el picker (Sprint 12).
+
+- **Sprint 12 (mismo día, Fase 3 -- última pieza): "🏗️ Crear nueva
+  quiniela", el formulario real.** Junta 9+10+11: nuevo
+  `app-admin-tenants.js` (slice de responsabilidad única, mismo criterio
+  que el resto de `app-*.js`) agrega una tarjeta a la sub-pestaña
+  "⚙️ Configuración del torneo" (`#torneo-content`, el mismo container
+  que ya llena `renderTorneoConfig()`) con input de nombre + selector de
+  plantilla poblado de `Object.values(TORNEOS_DISPONIBLES)`. Al
+  confirmar: `setDoc(tenants/{id}, {adminEmail, createdAt, torneoId})`
+  (permitido por la regla de auto-servicio del Sprint 10) → **espera esa
+  confirmación** → recién ahí `setDoc` semilla de
+  `tenants/{id}/registro/meta` (su `create` exige `isAdmin()`, que
+  necesita que el tenant YA exista en el servidor -- por eso es
+  secuencial, nunca un batch/`Promise.all`) → redirect completo a
+  `?tenant=<id>&torneo=<templateId>`. `app-tabs.js`
+  (`adminSubTab('torneo')`) ganó una línea nueva (mismo chequeo
+  defensivo `typeof fn==="function"` que ya usaba para
+  `renderTorneoConfig()`) para llamar a `renderTenantsCard()` justo
+  después, sin tocar `app-admin-tools.js`. Test:
+  `test_crear_quiniela_admin.js` (el redirect se separó en
+  `_tenantRedirectTo(url)` solo para poder espiarlo -- jsdom no
+  implementa navegación real, asignar `location.href` ahí es un no-op
+  silencioso).
+
+  Con esto, el roadmap de este bloque (menú para crear quiniela nueva +
+  participantes ficticios + simulación end-to-end, Sprints 8-12) queda
+  completo. Plan detallado (contexto original, decisiones de diseño) en
+  `C:\Users\eldio\.claude\plans\atomic-popping-leaf.md`.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
@@ -394,10 +490,28 @@ app-estadisticas.js → app-admin-tools.js → app-bootstrap.js → registro.js
     las reglas nuevas se publican antes de que exista el documento
     tenant, `isAdmin()` da `false` para todos, admin incluido.
   - Explícitamente fuera de alcance de este milestone (futuros, no
-    tocar todavía): Cloud Functions, alta automática/pago, selector de
-    tenant en runtime (un solo origen sirviendo varios tenants), custom
-    claims de Auth, namespacing de `localStorage` (innecesario hasta
-    que 2 tenants puedan compartir un mismo origen).
+    tocar todavía): Cloud Functions, alta automática/pago, custom claims
+    de Auth, namespacing de `localStorage` (innecesario hasta que 2
+    tenants puedan compartir un mismo origen).
+  - **Sprint 10 (mismo roadmap, 2026-08-04): `TENANT_ID` en runtime.**
+    `TENANT_ID` (`index.html`) dejó de ser el literal fijo
+    `"quinielitaborracha"` — ahora resuelve por `?tenant=` de la URL →
+    `localStorage.qb_tenant_activo` → ese mismo default, mismo patrón
+    que ya usa `TEST_MODE`. Sin `?tenant=` ni caché, el comportamiento
+    es idéntico al de siempre (cero riesgo para producción). El
+    documento `tenants/{tenantId}` ganó una regla de auto-servicio:
+    `allow create` (nuevo) exige que quien escribe se declare a sí
+    mismo como `adminEmail` — una sesión anónima nunca tiene
+    `request.auth.token.email`, así que nunca puede pasar esta
+    condición; `read`/`update`/`delete` siguen en `if false` como
+    siempre, así que nadie puede leer, recrear ni secuestrar un tenant
+    ajeno con esto. `registro/meta.configGlobal` sumó `torneoId` (qué
+    `torneo-<nombre>.js` usa este tenant, ver Sprint 9) —
+    `_rgApplyCombinedSnapshot()` (`participantes.js`) lo cachea en
+    `localStorage.qb_torneo_activo` apenas llega, para que el próximo
+    load de ese dispositivo (sin `?torneo=` en la URL) ya resuelva la
+    plantilla correcta. Tests: bloque "AUTO-SERVICIO DE TENANTS" en
+    `sim_firestore_rules.js`, `test_tenant_runtime.js`.
 - Cada participante obtiene una identidad anónima de Firebase
   (`signInAnonymously`, UID estable por dispositivo/navegador) y es dueño de
   su propio documento en la colección `registro_participants`, con

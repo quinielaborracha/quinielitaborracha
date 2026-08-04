@@ -161,6 +161,20 @@ function simAllowAdmin2fa(auth, tenantId = "quinielitaborracha") {
   return !!auth && simIsAdmin(auth, tenantId);
 }
 
+// Sprint 10 (hoja de ruta comercial, Fase 3 -- selector de plantilla en
+// runtime, 2026-08-04): auto-servicio de creación de tenants nuevos.
+// Espeja el `allow create` nuevo de `match /tenants/{tenantId}` en
+// firestore.rules -- a propósito NO usa simIsAdmin() (sería circular:
+// ese tenant todavía no existe en TENANTS/Firestore, así que isAdmin()
+// no tendría de dónde resolverlo). En cambio, exige que quien escribe
+// se declare a SÍ MISMO como adminEmail -- una sesión anónima nunca
+// tiene auth.email, así que nunca puede pasar esta condición.
+function simAllowTenantCreate(auth, newData) {
+  if (!auth || !auth.email) return false;
+  return typeof newData.adminEmail === 'string' && newData.adminEmail.length > 0
+    && newData.adminEmail === auth.email;
+}
+
 let pass = 0, fail = 0;
 function check(label, condition) {
   if (condition) { console.log("✅ " + label); pass++; }
@@ -469,6 +483,35 @@ check(
   "El admin de cliente-demo NO puede editar la quiniela de Juan (participante de quinielitaborracha) -> rechazado",
   !simAllowUpdate({ uid: "admin-b", email: "otro-cliente@example.com" }, docDeJuan, { ...docDeJuan, notaAdmin: "x" }, {}, "quinielitaborracha")
 );
+
+console.log("\n=== AUTO-SERVICIO DE TENANTS (Sprint 10) ===");
+check(
+  "El admin real puede crear un tenant nuevo declarándose a sí mismo adminEmail -> permitido",
+  simAllowTenantCreate({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: ADMIN_EMAIL, createdAt: 1000 })
+);
+check(
+  "Una sesión anónima (sin email) NUNCA puede crear un tenant, sin importar qué adminEmail declare -> rechazado",
+  !simAllowTenantCreate({ uid: "anon-1", isAnonymous: true }, { adminEmail: ADMIN_EMAIL, createdAt: 1000 })
+);
+check(
+  "Nadie puede crear un tenant declarando el email de OTRA persona (no coincide con auth.email) -> rechazado",
+  !simAllowTenantCreate({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: "otro-cliente@example.com", createdAt: 1000 })
+);
+check(
+  "adminEmail vacío no alcanza (el string debe tener contenido real) -> rechazado",
+  !simAllowTenantCreate({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: "", createdAt: 1000 })
+);
+check(
+  "Un cliente de otro tenant (cliente-demo) puede crear SU PROPIO tenant nuevo, declarándose admin de ese -> permitido",
+  simAllowTenantCreate({ uid: "admin-b", email: "otro-cliente@example.com" }, { adminEmail: "otro-cliente@example.com", createdAt: 1000 })
+);
+// update/delete de un tenant ya existente siguen en `if false` en
+// firestore.rules (sin cambios de este sprint) -- esto es lo que
+// impide que este `create` de auto-servicio sirva para "recrear"/
+// secuestrar un tenant ajeno: Firestore ya rechaza cualquier create
+// sobre un documento que ya existe, así que ni hace falta simularlo acá
+// aparte (sería simular el comportamiento nativo de Firestore, no una
+// regla de este archivo).
 
 console.log(`\n=== RESULTADO: ${pass} pasaron, ${fail} fallaron ===`);
 process.exit(fail === 0 ? 0 : 1);

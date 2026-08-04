@@ -64,7 +64,15 @@
    consumidor necesita saber cuál se eligió.
    ════════════════════════════════════════════════════════════ */
 
-const TORNEO_ACTUAL = (function(){
+// Sprint 9 (hoja de ruta comercial, Fase 3) -- `var`, no `const`: desde
+// este sprint index.html puede cargar MÁS DE UN torneo-<nombre>.js a la
+// vez (ver torneo-resolver.js), y dos `const TORNEO_ACTUAL` en scripts
+// distintos del mismo documento chocan con un SyntaxError real ("ya fue
+// declarado"). `var` permite que cada archivo lo redeclare sin romper
+// nada -- total, torneo-resolver.js (que carga después de todos los
+// torneo-*.js) es quien decide el valor final antes de que
+// partidos-grupos.js lo lea.
+var TORNEO_ACTUAL = (function(){
   // Fuente única de los 72 partidos de fase de grupos: id, grupo (A-L)
   // y los 2 equipos. matchLabels/mgmap (que consumen scoring.js/
   // utils.js/app-bracket-*.js) se derivan de este mismo array más
@@ -210,3 +218,14 @@ const TORNEO_ACTUAL = (function(){
     ],
   };
 })();
+
+// Sprint 9 (hoja de ruta comercial, Fase 3 -- selector de plantilla en
+// runtime): además de declarar TORNEO_ACTUAL (arriba, sin cambios --
+// mientras solo se cargue este archivo, todo sigue exactamente igual
+// que antes), este objeto se registra en TORNEOS_DISPONIBLES para que
+// torneo-resolver.js pueda elegir entre varios torneo-<nombre>.js
+// cargados a la vez. Antes (Sprint 5) nunca se cargaban dos de estos
+// archivos juntos -- ahora sí (ver index.html), así que cada uno tiene
+// que anotarse en vez de asumir que es el único.
+window.TORNEOS_DISPONIBLES = window.TORNEOS_DISPONIBLES || {};
+TORNEOS_DISPONIBLES[TORNEO_ACTUAL.id] = TORNEO_ACTUAL;

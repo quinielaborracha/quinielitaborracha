@@ -81,6 +81,12 @@ function adminSubTab(id){
   });
   if(id==="general" && typeof renderAdminTab==="function") renderAdminTab();
   if(id==="torneo" && typeof renderTorneoConfig==="function") renderTorneoConfig();
+  // Sprint 12 (hoja de ruta comercial, Fase 3 -- selector de plantilla
+  // en runtime): renderTenantsCard() (app-admin-tenants.js) agrega la
+  // tarjeta "🏗️ Crear nueva quiniela" DESPUÉS del innerHTML que acaba
+  // de armar renderTorneoConfig() en el mismo container (#torneo-content)
+  // -- mismo chequeo defensivo typeof===function que la línea de arriba.
+  if(id==="torneo" && typeof renderTenantsCard==="function") renderTenantsCard();
   if(id==="bonos"){checkAndAwardBonos();renderBonosPanel();}
   if(id==="integ" && typeof renderIntegPanel==="function") renderIntegPanel();
 }

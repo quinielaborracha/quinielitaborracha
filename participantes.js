@@ -90,6 +90,16 @@ const RG_DEFAULT_CONFIG = {
   // ver applyBrandingConfig() en app-bootstrap.js.
   logoUrl:'',
   colorAcento:'',
+  // Sprint 10 (hoja de ruta comercial, Fase 3 -- selector de plantilla
+  // en runtime, 2026-08-04): qué torneo-<nombre>.js (ver
+  // TORNEOS_DISPONIBLES/torneo-resolver.js) usa este tenant. Vacío por
+  // defecto -- torneo-resolver.js ya resuelve un default razonable sin
+  // esto (ver la limitación aceptada ahí). Se llena al crear una
+  // quiniela nueva eligiendo plantilla (app-admin-tenants.js, Sprint
+  // 12); rgWireFirestoreSync() (más abajo) lo cachea en localStorage
+  // apenas llega, para que el PRÓXIMO load de este dispositivo (sin
+  // ?torneo= en la URL) ya resuelva bien la plantilla correcta.
+  torneoId:'',
   // v3.3 — Modo Mantenimiento: cierra la app entera a cualquiera que no
   // sea admin (ver applyMaintenanceGuard() en app-admin-auth.js). El
   // admin SIEMPRE puede entrar -- eso NO es un campo acá (a propósito:
@@ -615,6 +625,96 @@ function rgSubmitParticipantConfirmed(p, preds){
   });
 }
 
+// ── Sprint 8 (hoja de ruta comercial) — participantes ficticios ─────
+// Para poder ejercitar Ranking/Estadísticas/Batallas sin esperar altas
+// reales. Reusa el mismo camino que ya permite "restaurar desde la
+// papelera" en firestore.rules: el `create` de registro_participants/
+// registro_privado tiene isAdmin() como rama incondicional, así que el
+// admin ya puede escribir con CUALQUIER ownerUid (incluso sintético),
+// sin pasar por isRegistroAbierto()/esAltaValidaDeParticipante(). No
+// hace falta ninguna regla nueva ni una sesión anónima por cada
+// ficticio -- un solo writeBatch desde la sesión del admin alcanza.
+//
+// No consumen el nextSeq real (quedarían códigos QLB-2026-NNNN
+// mezclados con altas de verdad) -- usan su propio prefijo FAKE-.
+// Después del commit no hace falta tocar DB.participants a mano: el
+// listener en tiempo real (rgWireFirestoreSync, más abajo) ya
+// reconstruye DB.participants/predictions completo apenas Firestore
+// confirma el batch -- mismo mecanismo que ya usa cualquier alta hecha
+// desde otro dispositivo.
+const FAKE_NOMBRES = ["Tato","Pipa","Bocha","Colo","Nano","Rulo","Cabezón","Pity","Chino","Turco","Flaco","Negro","Toto","Kaiser","Pelado","Mono","Beto","Cacho","Pancho","Tincho"];
+const FAKE_APELLIDOS = ["Gómez","Pérez","Fernández","López","García","Martínez","Rodríguez","Díaz","Sosa","Acosta","Romero","Torres","Flores","Benítez","Medina"];
+const FAKE_CIUDADES = ["Buenos Aires","Córdoba","Rosario","Mendoza","La Plata","Montevideo","CDMX","Bogotá","Lima","Santiago"];
+
+function _rgFakeName(i){
+  const nom = FAKE_NOMBRES[i % FAKE_NOMBRES.length];
+  const ape = FAKE_APELLIDOS[Math.floor(i / FAKE_NOMBRES.length) % FAKE_APELLIDOS.length];
+  return `${nom} ${ape}`;
+}
+
+// Predicciones random SOLO de fase de grupos -- mismo criterio que un
+// participante real: las de eliminatoria recién se pueden cargar
+// cuando se conocen los cruces, no antes. Mismo generador 0-3 al azar
+// que ya usa simularMarcadores() (app-bracket-compute.js). Lee
+// TORNEO_ACTUAL adentro de la función (no a nivel de módulo) a
+// propósito: participantes.js carga ANTES que torneo-mundial2026.js en
+// index.html, así que ese global todavía no existiría si se leyera al
+// parsear este archivo -- mismo patrón ya usado con ELIM_MID_MIN/
+// BONUS_PHASES (ver notas de Sprint 3a en CLAUDE.md).
+function _rgFakePredictions(){
+  const preds = {};
+  ((typeof TORNEO_ACTUAL!=='undefined' && TORNEO_ACTUAL.groupMatches)||[]).forEach(m=>{
+    preds[m.id] = { h: Math.floor(Math.random()*4), a: Math.floor(Math.random()*4) };
+  });
+  return preds;
+}
+
+function rgCreateFakeParticipants(n){
+  const fb = window.__fb;
+  if(!fb || !fb.PARTICIPANTS_COL || !fb.PRIVADO_COL || !fb.writeBatch || !fb.auth.currentUser){
+    return Promise.reject(new Error("Todavía estamos preparando tu sesión — espera un segundo y vuelve a intentar."));
+  }
+  const yaFicticios = DB.participants.filter(p=>p.esFicticio).length;
+  const now = new Date().toISOString();
+  const batch = fb.writeBatch(fb.db);
+  for(let i=0;i<n;i++){
+    const seq = yaFicticios + i + 1;
+    const preds = _rgFakePredictions();
+    const p = {
+      id: uid(),
+      codigo: `FAKE-${String(seq).padStart(4,'0')}`,
+      name: _rgFakeName(seq-1),
+      city: FAKE_CIUDADES[(seq-1) % FAKE_CIUDADES.length],
+      country: '', countryIso: '',
+      email: '', clave: genClave(),
+      ownerUid: 'fake-'+uid(),
+      esFicticio: true,
+      estadoQuiniela: 'enviada',
+      fechaCreacion: now, fechaActualizacion: now, fechaEnvio: now,
+    };
+    batch.set(fb.doc(fb.PARTICIPANTS_COL, p.id), { ..._rgPublicFieldsOf(p), predictions: preds, updatedAt: fb.serverTimestamp() });
+    batch.set(fb.doc(fb.PRIVADO_COL, p.id), _rgPrivadoFieldsOf(p));
+  }
+  return batch.commit();
+}
+
+// "Borrar todos los ficticios": mismo patrón que rgDeleteAllParticipants
+// (más abajo) pero filtrado a esFicticio===true -- usa
+// _rgLatestParticipants (el último snapshot real de Firestore, no
+// DB.participants, por si el caller ya lo hubiera tocado antes) para
+// no depender de qué tan al día esté la copia local.
+function rgDeleteFakeParticipants(){
+  const fb = window.__fb;
+  const ficticios = (_rgLatestParticipants||[]).filter(p=>p.esFicticio);
+  if(!fb || !fb.PARTICIPANTS_COL || !ficticios.length) return Promise.resolve(0);
+  const batch = fb.writeBatch(fb.db);
+  ficticios.forEach(p=>{
+    batch.delete(fb.doc(fb.PARTICIPANTS_COL, p.id));
+    if(fb.PRIVADO_COL) batch.delete(fb.doc(fb.PRIVADO_COL, p.id));
+  });
+  return batch.commit().then(()=>ficticios.length);
+}
+
 // v6.9 — Fase de Privacidad: el reclamo ahora son DOS escrituras
 // SECUENCIALES (no un batch atómico, a propósito):
 //   1) registro_privado/{pid}: se manda la clave que la persona ESCRIBIÓ
@@ -741,6 +841,17 @@ function _rgApplyCombinedSnapshot(){
   DB.predictions = _rgLatestPredictions;
   DB.nextSeq = (_rgLatestMeta && _rgLatestMeta.nextSeq) || 1;
   DB.configGlobal = mergeConfigGlobal((_rgLatestMeta && _rgLatestMeta.configGlobal) || {});
+
+  // Sprint 10 -- cachear el torneoId de este tenant en localStorage
+  // apenas llega de Firestore, para que el PRÓXIMO load de este mismo
+  // dispositivo (sin ?torneo= en la URL) ya arranque con la plantilla
+  // correcta desde torneo-resolver.js, en vez de caer en el default por
+  // orden de carga. Solo si viene algo real -- un torneoId vacío
+  // (tenant recién creado, todavía sin elegir plantilla) no debe borrar
+  // una elección previa ya cacheada.
+  if(DB.configGlobal.torneoId){
+    try{ localStorage.setItem('qb_torneo_activo', DB.configGlobal.torneoId); }catch(e){}
+  }
 
   _rgMergeKnownPrivadoFields();
 

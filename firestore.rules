@@ -42,13 +42,39 @@ service cloud.firestore {
 
     match /tenants/{tenantId} {
 
-      // Nadie lee/escribe este documento desde el cliente en este
-      // milestone -- se crea/edita a mano en Firebase Console, mismo
-      // criterio que registro/admin2fa. Los get()/exists() de las
-      // funciones de abajo NO pasan por esta regla de lectura (leen el
-      // documento crudo para evaluar la condición de OTRA regla, no es
-      // un acceso del cliente).
-      allow read, write: if false;
+      // Nadie LEE este documento desde el cliente -- se sigue editando a
+      // mano en Firebase Console si hace falta (ej. cambiar adminEmail
+      // de un tenant ya existente). Los get()/exists() de las funciones
+      // de abajo NO pasan por esta regla de lectura (leen el documento
+      // crudo para evaluar la condición de OTRA regla, no es un acceso
+      // del cliente).
+      allow read, update, delete: if false;
+
+      // ── Sprint 10 (hoja de ruta comercial, Fase 3 -- selector de
+      // plantilla en runtime, 2026-08-04): auto-servicio de creación de
+      // tenants nuevos, para que el admin pueda armar quinielas de
+      // prueba sin pasar por Firebase Console cada vez (ver
+      // app-admin-tenants.js). Solo CREATE -- update/delete de un tenant
+      // ya existente siguen en `if false` (arriba), así que nadie puede
+      // "recrear"/secuestrar un tenant ajeno con esto: Firestore rechaza
+      // un create sobre un documento que ya existe.
+      //
+      // Por qué es seguro sin exigir isAdmin() (que acá sería circular
+      // -- isAdmin() necesita que el documento YA exista para
+      // resolverlo): exige que quien escribe se declare a SÍ MISMO como
+      // adminEmail. Una sesión anónima (lo único que tiene cualquier
+      // visitante sin credenciales, ver participantes.js) NUNCA tiene
+      // request.auth.token.email -- jamás puede pasar esta condición,
+      // sin importar qué valor mande. Con un solo admin real
+      // (email+contraseña) en el proyecto, esto equivale en la práctica
+      // a "solo el admin puede crear tenants nuevos". El único riesgo
+      // residual es autoinfligido (crear tenants de más por error o por
+      // un script propio) -- riesgo de cuota, no de seguridad contra
+      // terceros.
+      allow create: if request.auth != null
+                    && request.resource.data.adminEmail is string
+                    && request.resource.data.adminEmail.size() > 0
+                    && request.resource.data.adminEmail == request.auth.token.email;
 
       // ── Helper (Fase 3, milestone 1) — reemplaza el email de admin
       // hardcodeado que existía literal en cada regla de abajo.

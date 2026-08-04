@@ -4433,6 +4433,19 @@ function renderAdmin(){
       </div>
     </div>
 
+    <div class="card" id="fake_participants_card" style="border:1px solid var(--qb-blue)">
+      <div class="card-title">🎭 Participantes ficticios <span class="badge badge-muted" id="fake_count_badge">${DB.participants.filter(p=>p.esFicticio).length}</span></div>
+      <div class="note">Genera participantes de prueba (nombre al azar + predicciones de fase de grupos al azar) para ejercitar Ranking/Estadísticas/Batallas sin esperar altas reales. No consumen la numeración de códigos real (usan su propio prefijo <code>FAKE-</code>) y quedan marcados aparte para poder borrarlos todos de un golpe sin tocar a nadie más.</div>
+      <div class="field" style="margin-bottom:.6rem;max-width:140px">
+        <label>Cantidad a crear</label>
+        <input type="number" id="a_fake_n" min="1" max="50" value="10">
+      </div>
+      <div class="rg-btn-row">
+        <button class="rg-btn rg-btn-primary" id="a_fake_crear">➕ Crear ficticios</button>
+        <button class="rg-btn rg-btn-danger" id="a_fake_borrar" title="Borra SOLO los participantes marcados como ficticios">🗑️ Borrar todos los ficticios</button>
+      </div>
+    </div>
+
     <div class="card" id="papelera_card" style="display:${SHOW_PAPELERA?'block':'none'}">
       <div class="card-title">🗑️ Papelera</div>
       <div class="note">Los participantes eliminados quedan acá con toda su quiniela hasta que los restaures o los borres para siempre — eliminar desde la tabla de arriba ya no es instantáneo ni definitivo.</div>
@@ -4642,6 +4655,35 @@ function renderAdmin(){
     rgResetAll();
     toast('Datos de Mi Quiniela borrados y configuración restaurada (en todos los dispositivos).');
     renderAdminTab();
+  });
+
+  // Sprint 8 (hoja de ruta comercial) — "🎭 Participantes ficticios":
+  // rgCreateFakeParticipants()/rgDeleteFakeParticipants() (participantes.js)
+  // ya escriben/borran directo en Firestore -- el listener en tiempo real
+  // se encarga de reconstruir DB.participants solo, por eso acá alcanza
+  // con un toast + renderAdminTab() al terminar (mismo criterio que el
+  // resto de los botones de esta tarjeta).
+  document.getElementById('a_fake_crear').addEventListener('click', ()=>{
+    const btn = document.getElementById('a_fake_crear');
+    const n = Math.max(1, Math.min(50, parseInt(document.getElementById('a_fake_n').value, 10) || 10));
+    btn.disabled = true; btn.textContent = 'Creando...';
+    rgCreateFakeParticipants(n).then(()=>{
+      toast(`✓ ${n} participantes ficticios creados`);
+      renderAdminTab();
+    }).catch(err=>{
+      toast('No se pudo crear: ' + (err && err.message ? err.message : 'error desconocido'), true);
+      btn.disabled = false; btn.textContent = '➕ Crear ficticios';
+    });
+  });
+
+  document.getElementById('a_fake_borrar').addEventListener('click', ()=>{
+    const count = DB.participants.filter(p=>p.esFicticio).length;
+    if(!count){ toast('No hay participantes ficticios para borrar', true); return; }
+    if(!confirm(`¿Borrar los ${count} participantes ficticios? No pasan por la Papelera -- esta acción no se puede deshacer.`)) return;
+    rgDeleteFakeParticipants().then(()=>{
+      toast('✓ Ficticios borrados');
+      renderAdminTab();
+    });
   });
 }
 
