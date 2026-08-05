@@ -25,6 +25,16 @@
    patrón defensivo (`typeof fn==="function"`) que ya usa para
    renderTorneoConfig() -- un chequeo extra en un archivo que ya conocía
    ese patrón, no una integración nueva rara.
+
+   Sprint 13 (mismo roadmap, un día después): "📋 Mis quinielas" --
+   sumó renderMisQuinielasCard(), arriba de la de crear. Necesitó una
+   regla nueva de firestore.rules (`allow read` en tenants/{tenantId},
+   scoped a resource.data.adminEmail==auth.token.email -- antes ERA
+   `if false` sin excepción, ni el propio admin podía leer su tenant
+   desde el cliente). Usa query()+where()+onSnapshot() sobre
+   collection(db,'tenants') -- todos ya venían expuestos en
+   window.__fb desde el bloque de Firebase de index.html, no hizo
+   falta importar nada nuevo.
    ════════════════════════════════════════════════════════════ */
 
 // Convierte lo que el admin escribió en un id de tenant válido para
@@ -37,6 +47,63 @@ function _tenantSlugify(raw){
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+// "📋 Mis quinielas" (Sprint 13): lista, en vivo, todos los tenants
+// donde el admin logueado ES el adminEmail -- onSnapshot en vez de un
+// getDocs() de una sola vez, mismo criterio reactivo que el resto de
+// la app (si creás una quiniela nueva en otra pestaña, esta lista se
+// actualiza sola, sin recargar).
+function renderMisQuinielasCard(){
+  const c = document.getElementById('torneo-content');
+  if(!c) return;
+  if(typeof isAdmin!=='function' || !isAdmin()) return;
+
+  const html = `
+    <div class="card" id="mis_quinielas_card" style="border:1px solid var(--qb-blue)">
+      <div class="card-title">📋 Mis quinielas</div>
+      <div class="note">Todas las quinielas creadas con esta cuenta de admin (incluida esta misma). Tocá "Entrar" para cambiar a otra.</div>
+      <div id="mis_quinielas_list" class="muted">Cargando...</div>
+    </div>
+  `;
+  c.insertAdjacentHTML('beforeend', html);
+
+  const fb = window.__fb;
+  const listEl = () => document.getElementById('mis_quinielas_list');
+  if(!fb || !fb.db || !fb.auth.currentUser){
+    if(listEl()) listEl().innerHTML = '<div class="muted">Todavía estamos preparando tu sesión...</div>';
+    return;
+  }
+
+  const q = fb.query(fb.collection(fb.db, 'tenants'), fb.where('adminEmail', '==', fb.auth.currentUser.email));
+  fb.onSnapshot(q, (snap)=>{
+    const el = listEl();
+    if(!el) return; // el panel pudo haberse cerrado/re-renderizado mientras tanto
+    const tenants = [];
+    snap.forEach(docSnap => tenants.push({ id: docSnap.id, ...docSnap.data() }));
+    tenants.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+    if(!tenants.length){
+      el.innerHTML = '<div class="muted">No se encontró ninguna todavía.</div>';
+      return;
+    }
+    el.innerHTML = tenants.map(t=>{
+      const esActual = t.id === fb.TENANT_ID;
+      const disponibles = window.TORNEOS_DISPONIBLES || {};
+      const nombrePlantilla = (disponibles[t.torneoId] && disponibles[t.torneoId].nombre) || t.torneoId || '(sin plantilla)';
+      const fecha = (t.createdAt && typeof t.createdAt.toDate === 'function') ? t.createdAt.toDate().toLocaleDateString() : '';
+      return `<div class="switch-row" style="align-items:center">
+        <div>
+          <div style="font-weight:700">${esc(t.id)}${esActual ? ' <span class="badge badge-muted">actual</span>' : ''}</div>
+          <div class="muted" style="font-size:11.5px">${esc(nombrePlantilla)}${fecha ? ' · creada ' + esc(fecha) : ''}</div>
+        </div>
+        ${esActual ? '' : `<a class="rg-btn rg-btn-ghost" href="?tenant=${encodeURIComponent(t.id)}&torneo=${encodeURIComponent(t.torneoId||'')}">Entrar</a>`}
+      </div>`;
+    }).join('');
+  }, (err)=>{
+    console.error('Error al listar "Mis quinielas":', err);
+    const el = listEl();
+    if(el) el.innerHTML = '<div class="muted">No se pudo cargar -- puede que falte publicar la regla nueva de lectura en Firebase Console.</div>';
+  });
 }
 
 // Separado en su propia función solo para que un test pueda espiarla

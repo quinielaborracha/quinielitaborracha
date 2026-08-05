@@ -42,13 +42,27 @@ service cloud.firestore {
 
     match /tenants/{tenantId} {
 
-      // Nadie LEE este documento desde el cliente -- se sigue editando a
-      // mano en Firebase Console si hace falta (ej. cambiar adminEmail
-      // de un tenant ya existente). Los get()/exists() de las funciones
-      // de abajo NO pasan por esta regla de lectura (leen el documento
+      // Nadie ACTUALIZA/BORRA este documento desde el cliente -- se
+      // sigue editando a mano en Firebase Console si hace falta (ej.
+      // cambiar adminEmail de un tenant ya existente).
+      allow update, delete: if false;
+
+      // ── Sprint 13 (hoja de ruta comercial, mismo día): "📋 Mis
+      // quinielas" -- el admin necesita poder LISTAR los tenants que
+      // creó (app-admin-tenants.js hace `query(collection(db,
+      // 'tenants'), where('adminEmail','==', su propio email))`).
+      // Alcanza con comparar resource.data.adminEmail contra
+      // auth.token.email -- Firestore evalúa esta regla POR DOCUMENTO
+      // (tanto en get() como en list()/query()), así que un admin
+      // nunca puede ver el documento tenant de otro (ni con una query
+      // sin filtro: los documentos que no cumplen la condición
+      // simplemente no aparecen en el resultado, no hace que la query
+      // entera falle). Los get()/exists() de las funciones de abajo
+      // (isAdmin(), etc.) NO pasan por esta regla -- leen el documento
       // crudo para evaluar la condición de OTRA regla, no es un acceso
-      // del cliente).
-      allow read, update, delete: if false;
+      // del cliente.
+      allow read: if request.auth != null
+                  && resource.data.adminEmail == request.auth.token.email;
 
       // ── Sprint 10 (hoja de ruta comercial, Fase 3 -- selector de
       // plantilla en runtime, 2026-08-04): auto-servicio de creación de

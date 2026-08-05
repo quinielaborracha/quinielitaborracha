@@ -480,6 +480,46 @@ app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-boot
   no afecta una visita nueva; mismo criterio en `test_tenant_runtime.js`
   CASO 3. Suite completa verde (66 harnesses) después del fix.
 
+- **Sprint 13 (un día después de los Sprints 8-12, 2026-08-05): "📋 Mis
+  quinielas".** El usuario, ya usando "Crear nueva quiniela" contra
+  Firebase real, preguntó dónde ver las quinielas (tenants) que ya
+  había creado -- no existía ninguna vista para eso (Sprint 12 solo
+  construyó "crear", nunca "listar"), y `tenants/{tenantId}` tenía
+  `allow read: if false` sin excepción (ni el propio admin podía leer
+  su tenant desde el cliente). Nueva regla: `allow read: if
+  request.auth != null && resource.data.adminEmail ==
+  request.auth.token.email` (Firestore evalúa esto POR DOCUMENTO tanto
+  en `get()` como en `list()`/query -- una query sin filtro sobre
+  `tenants` simplemente devuelve los que coinciden, no falla entera;
+  aun así `app-admin-tenants.js` usa un `where('adminEmail','==',...)`
+  explícito para que la query esté acotada desde el pedido mismo, no
+  solo confiando en el filtrado de la regla). `update`/`delete` siguen
+  en `if false`, sin cambios.
+
+  `renderMisQuinielasCard()` (`app-admin-tenants.js`, nueva, arriba de
+  "🏗️ Crear nueva quiniela" en el mismo container `#torneo-content`,
+  mismo hook defensivo en `app-tabs.js`) usa `onSnapshot()` (no un
+  `getDocs()` de una sola vez -- mismo criterio reactivo que el resto
+  de la app) sobre `query(collection(db,'tenants'),
+  where('adminEmail','==', fb.auth.currentUser.email))`. Todo lo que
+  necesitó (`query`/`where`/`collection`/`onSnapshot`) ya estaba
+  expuesto en `window.__fb` desde el bloque de Firebase de
+  `index.html` -- no hizo falta agregar ningún import nuevo. Cada fila
+  muestra el id del tenant, el nombre real de su plantilla (buscado en
+  `TORNEOS_DISPONIBLES`, no el id crudo), fecha de creación, y un badge
+  "actual" en el que coincide con `fb.TENANT_ID` (sin link de
+  "Entrar" ahí -- ya estás adentro); el resto trae un link a
+  `?tenant=<id>&torneo=<torneoId>`. Test: bloque "MIS QUINIELAS" en
+  `sim_firestore_rules.js` (la regla en sí) + `test_mis_quinielas.js`
+  (el render, con el mock de Firestore capturando el filtro real que
+  se le pasa a `where()`). Suite completa verde (69 harnesses).
+
+  **Pendiente manual, igual que cualquier cambio de `firestore.rules`**:
+  esta regla nueva todavía no está publicada en Firebase Console al
+  cerrar esta sesión -- sin publicarla, "Mis quinielas" muestra el
+  mensaje de error ("puede que falte publicar la regla nueva") en vez
+  de la lista.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

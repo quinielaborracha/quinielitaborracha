@@ -175,6 +175,16 @@ function simAllowTenantCreate(auth, newData) {
     && newData.adminEmail === auth.email;
 }
 
+// Sprint 13 (hoja de ruta comercial, mismo día): "📋 Mis quinielas" --
+// el admin puede LEER (get/list) un documento tenants/{id} solo si
+// coincide con su propio email como adminEmail. Misma evaluación
+// por-documento que el resto de las reglas -- una query sin filtro
+// simplemente no devuelve los tenants ajenos, no falla entera.
+function simAllowTenantRead(auth, tenantData) {
+  if (!auth || !auth.email || !tenantData) return false;
+  return tenantData.adminEmail === auth.email;
+}
+
 let pass = 0, fail = 0;
 function check(label, condition) {
   if (condition) { console.log("✅ " + label); pass++; }
@@ -512,6 +522,25 @@ check(
 // sobre un documento que ya existe, así que ni hace falta simularlo acá
 // aparte (sería simular el comportamiento nativo de Firestore, no una
 // regla de este archivo).
+
+console.log("\n=== \"MIS QUINIELAS\" -- LECTURA DE TENANTS PROPIOS (Sprint 13) ===");
+check(
+  "El admin puede leer un tenant donde ES el adminEmail -> permitido",
+  simAllowTenantRead({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: ADMIN_EMAIL, torneoId: "euro-ficticio" })
+);
+check(
+  "El admin de quinielitaborracha NO puede leer un tenant de OTRO admin -> rechazado",
+  !simAllowTenantRead({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: "otro-cliente@example.com" })
+);
+check(
+  "Una sesión anónima (sin email) nunca puede leer ningún tenant -> rechazado",
+  !simAllowTenantRead({ uid: "anon-1", isAnonymous: true }, { adminEmail: ADMIN_EMAIL })
+);
+check(
+  "Cada admin ve SOLO los suyos -- el de cliente-demo lee el suyo, no el de quinielitaborracha -> permitido/rechazado respectivamente",
+  simAllowTenantRead({ uid: "admin-b", email: "otro-cliente@example.com" }, { adminEmail: "otro-cliente@example.com" })
+  && !simAllowTenantRead({ uid: "admin-b", email: "otro-cliente@example.com" }, { adminEmail: ADMIN_EMAIL })
+);
 
 console.log(`\n=== RESULTADO: ${pass} pasaron, ${fail} fallaron ===`);
 process.exit(fail === 0 ? 0 : 1);
