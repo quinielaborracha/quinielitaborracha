@@ -14,7 +14,7 @@ const fs = require("fs");
 const path = require("path");
 
 const html = `<!doctype html><html><body>
-  <div id="torneo-content"></div>
+  <div id="quinielas-content"></div>
   <div id="toast"></div>
 </body></html>`;
 const dom = new JSDOM(html, { url: "https://example.org/", runScripts: "dangerously" });
@@ -93,7 +93,7 @@ window._tenantRedirectTo = (url) => { redirectedTo = url; };
 console.log("--- CASO 1: renderTenantsCard() arma el formulario ---");
 window.renderTenantsCard();
 const card = window.document.getElementById("tenants_card");
-check("La tarjeta '🏗️ Crear nueva quiniela' se agregó a #torneo-content", !!card);
+check("La tarjeta '🏗️ Crear nueva quiniela' se agregó a #quinielas-content", !!card);
 const select = window.document.getElementById("a_tenant_torneo");
 const opciones = Array.from(select.options).map(o => o.value);
 check("El selector tiene las 3 plantillas registradas", opciones.length === 3);

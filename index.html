@@ -246,7 +246,7 @@
       <img id="logo-img" src="" alt="QB" style="width:70px;height:70px;object-fit:contain;border-radius:8px">
     </div>
     <div style="flex:1" id="hdr-title-col">
-      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v5.3</span>
+      <div class="hdr-title" id="hdr-title-row">Quinielita Borracha <span class="ver">v5.4</span>
         <span id="admin-indicator" role="button" tabindex="0" onclick="openLoginModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openLoginModal();}" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);transition:all .2s;margin-left:4px" title="Admin" aria-label="Acceso admin">🔑</span>
       </div>
       <div class="hdr-sub" style="display:flex;align-items:center;gap:8px">
@@ -571,6 +571,7 @@
     <div class="inner-tabs" style="margin-bottom:.75rem">
       <button class="inner-tab on" onclick="adminSubTab('general')" id="atab-general">🛠️ General</button>
       <button class="inner-tab" onclick="adminSubTab('torneo')" id="atab-torneo">⚙️ Configuración del torneo</button>
+      <button class="inner-tab" onclick="adminSubTab('quinielas')" id="atab-quinielas">📋 Mis Quinielas</button>
       <button class="inner-tab" onclick="adminSubTab('bonos')" id="atab-bonos">🎁 Bonos</button>
       <button class="inner-tab" onclick="adminSubTab('integ')" id="atab-integ">🔒 Integridad</button>
     </div>
@@ -584,6 +585,17 @@
          y las clases .card/.switch/.ib de .rg-scope. -->
     <div id="admin-torneo" class="rg-scope" style="display:none">
       <div id="torneo-content"></div>
+    </div>
+
+    <!-- Sprint 15 (hoja de ruta comercial, 2026-08-05): "Mis Quinielas"
+         se saca de adentro de "Configuración del torneo" (donde vivía
+         desde los Sprints 12/13) a su propia sub-pestaña -- son 2 cards
+         sobre OTRAS quinielas (crear/listar/eliminar tenants), no
+         configuración de ESTA. Mismas 2 funciones de siempre
+         (renderMisQuinielasCard()/renderTenantsCard(),
+         app-admin-tenants.js), ahora apuntando a #quinielas-content. -->
+    <div id="admin-quinielas" class="rg-scope" style="display:none">
+      <div id="quinielas-content"></div>
     </div>
 
     <div id="admin-bonos" style="display:none">
@@ -923,7 +935,7 @@
 <script defer src="app-core-data.js?v=1.6"></script>
 <script defer src="app-admin-auth.js?v=1.8"></script>
 <script defer src="app-live-sync.js?v=1.14"></script>
-<script defer src="app-tabs.js?v=1.8"></script>
+<script defer src="app-tabs.js?v=1.9"></script>
 <script defer src="app-eliminatoria-data.js?v=1.4"></script>
 <script defer src="app-batallas.js?v=3.6"></script>
 <script defer src="app-bracket-render.js?v=1.5"></script>
@@ -936,7 +948,7 @@
 <script defer src="app-predicciones.js?v=1.17"></script>
 <script defer src="app-estadisticas.js?v=1.16"></script>
 <script defer src="app-admin-tools.js?v=1.15"></script>
-<script defer src="app-admin-tenants.js?v=4"></script>
+<script defer src="app-admin-tenants.js?v=5"></script>
 <script defer src="app-bootstrap.js?v=1.6"></script>
 <script defer src="registro.js?v=2.45"></script>
 

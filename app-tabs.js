@@ -75,20 +75,20 @@ let ADMIN_SUBTAB = 'general';
 function adminSubTab(id){
   if(!isAdmin()){toast('🔒 Acceso restringido',true);return;}
   ADMIN_SUBTAB = id;
-  ["general","torneo","bonos","integ"].forEach(x=>{
+  ["general","torneo","quinielas","bonos","integ"].forEach(x=>{
     document.getElementById("admin-"+x).style.display = x===id ? "block" : "none";
     document.getElementById("atab-"+x)?.classList.toggle("on", x===id);
   });
   if(id==="general" && typeof renderAdminTab==="function") renderAdminTab();
   if(id==="torneo" && typeof renderTorneoConfig==="function") renderTorneoConfig();
-  // Sprint 13 (hoja de ruta comercial, un día después): "📋 Mis
-  // quinielas" primero (para ver qué ya existe), después "🏗️ Crear
-  // nueva quiniela" (Sprint 12) -- ambas de app-admin-tenants.js,
-  // agregadas DESPUÉS del innerHTML que arma renderTorneoConfig() en
-  // el mismo container (#torneo-content), mismo chequeo defensivo
-  // typeof===function que la línea de arriba.
-  if(id==="torneo" && typeof renderMisQuinielasCard==="function") renderMisQuinielasCard();
-  if(id==="torneo" && typeof renderTenantsCard==="function") renderTenantsCard();
+  // Sprint 15 (hoja de ruta comercial, 2026-08-05): "📋 Mis Quinielas"
+  // pasó a ser su PROPIA sub-pestaña (antes vivía adentro de
+  // "Configuración del torneo", Sprints 12/13) -- ambas funciones son
+  // de app-admin-tenants.js, apuntando ahora a #quinielas-content.
+  // "Mis quinielas" primero (ver qué ya existe), después "🏗️ Crear
+  // nueva quiniela".
+  if(id==="quinielas" && typeof renderMisQuinielasCard==="function") renderMisQuinielasCard();
+  if(id==="quinielas" && typeof renderTenantsCard==="function") renderTenantsCard();
   if(id==="bonos"){checkAndAwardBonos();renderBonosPanel();}
   if(id==="integ" && typeof renderIntegPanel==="function") renderIntegPanel();
 }

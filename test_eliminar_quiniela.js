@@ -15,7 +15,7 @@ const fs = require("fs");
 const path = require("path");
 
 const html = `<!doctype html><html><body>
-  <div id="torneo-content"></div>
+  <div id="quinielas-content"></div>
   <div id="toast"></div>
 </body></html>`;
 const dom = new JSDOM(html, { url: "https://example.org/", runScripts: "dangerously" });

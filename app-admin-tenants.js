@@ -18,13 +18,9 @@
    Carga después de participantes.js (necesita RG_DEFAULT_CONFIG) y de
    app-admin-tools.js, antes de app-bootstrap.js.
 
-   Dónde vive en el DOM: adentro de la sub-pestaña "⚙️ Configuración del
-   torneo" (mismo container que renderTorneoConfig(), #torneo-content),
-   agregada DESPUÉS de su innerHTML (insertAdjacentHTML, nunca lo pisa).
-   app-tabs.js (adminSubTab()) llama a renderTenantsCard() con el mismo
-   patrón defensivo (`typeof fn==="function"`) que ya usa para
-   renderTorneoConfig() -- un chequeo extra en un archivo que ya conocía
-   ese patrón, no una integración nueva rara.
+   Dónde vive en el DOM: hasta el Sprint 15, adentro de la sub-pestaña
+   "⚙️ Configuración del torneo" (#torneo-content) -- ver esa nota más
+   abajo para dónde vive ahora.
 
    Sprint 13 (mismo roadmap, un día después): "📋 Mis quinielas" --
    sumó renderMisQuinielasCard(), arriba de la de crear. Necesitó una
@@ -49,6 +45,16 @@
    adminEmail (misma condición que `allow read`, NO isAdmin(): borrar
    el documento es justo lo que haría que isAdmin() dejara de poder
    resolverse para ese tenant).
+
+   Sprint 15 (mismo roadmap, un día después): "📋 Mis Quinielas" se saca
+   de adentro de "Configuración del torneo" a su propia sub-pestaña
+   (pedido directo del usuario -- son 2 cards sobre OTRAS quinielas,
+   no configuración de ESTA). `renderMisQuinielasCard()`/
+   `renderTenantsCard()` ahora apuntan a `#quinielas-content` (antes
+   `#torneo-content`) -- mismas 2 funciones, mismo
+   `insertAdjacentHTML('beforeend')`, un solo `getElementById` distinto
+   en cada una. `app-tabs.js` (`adminSubTab()`) las llama para
+   `id==="quinielas"` en vez de `id==="torneo"`.
    ════════════════════════════════════════════════════════════ */
 
 // Convierte lo que el admin escribió en un id de tenant válido para
@@ -69,7 +75,7 @@ function _tenantSlugify(raw){
 // la app (si creás una quiniela nueva en otra pestaña, esta lista se
 // actualiza sola, sin recargar).
 function renderMisQuinielasCard(){
-  const c = document.getElementById('torneo-content');
+  const c = document.getElementById('quinielas-content');
   if(!c) return;
   if(typeof isAdmin!=='function' || !isAdmin()) return;
 
@@ -193,7 +199,7 @@ function _tenantRedirectTo(url){
 }
 
 function renderTenantsCard(){
-  const c = document.getElementById('torneo-content');
+  const c = document.getElementById('quinielas-content');
   if(!c) return;
   if(typeof isAdmin!=='function' || !isAdmin()) return; // renderTorneoConfig() ya deja el mensaje de acceso restringido en este mismo container
 

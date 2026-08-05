@@ -573,6 +573,24 @@ app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-boot
   borrado completo, incluida la enumeración de colecciones). Suite
   completa verde (68 harnesses).
 
+- **Sprint 15 (un día después del 14): "📋 Mis Quinielas" pasa a ser su
+  propia sub-pestaña de Admin.** Pedido directo del usuario: las 2
+  cards (listar/crear) vivían adentro de "⚙️ Configuración del torneo"
+  (Sprints 12/13) -- son sobre OTRAS quinielas, no configuración de
+  ESTA, así que confundía tenerlas ahí mezcladas. Nuevo botón
+  "📋 Mis Quinielas" (`atab-quinielas`) en la barra de sub-pestañas de
+  Admin (`index.html`), entre "Configuración del torneo" y "Bonos";
+  nuevo container `#admin-quinielas`/`#quinielas-content`.
+  `adminSubTab()` (`app-tabs.js`) agregó `"quinielas"` al array de
+  sub-tabs y mueve el llamado a
+  `renderMisQuinielasCard()`/`renderTenantsCard()` de `id==="torneo"` a
+  `id==="quinielas"`. `app-admin-tenants.js`: cambio mínimo, las 2
+  funciones ahora apuntan a `document.getElementById('quinielas-content')`
+  en vez de `'torneo-content'` -- mismo `insertAdjacentHTML`, cero
+  cambio de lógica interna. Tests existentes (`test_crear_quiniela_admin.js`/
+  `test_mis_quinielas.js`/`test_eliminar_quiniela.js`) actualizados para
+  usar el fixture `#quinielas-content`. Suite completa verde.
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con
