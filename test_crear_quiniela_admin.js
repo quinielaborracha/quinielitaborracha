@@ -42,8 +42,22 @@ window.__fb = {
   PRIVADO_COL: { __col: "registro_privado" },
   REGISTRO_META_DOC: { __doc: "registro/meta" },
   REGISTRO_PAPELERA_DOC: { __doc: "registro/papelera" },
+  // ADMIN2FA_DOC simula el 2FA del tenant DESDE el que se está creando
+  // la quiniela nueva (donde la sesión actual ya pasó el 2FA para
+  // llegar a este formulario) -- app-admin-tenants.js lo copia tal
+  // cual al tenant nuevo (2026-08-05, pedido real del usuario).
+  ADMIN2FA_DOC: { __doc: "registro/admin2fa" },
   onSnapshot: () => () => {},
   doc: (dbOrCol, ...segments) => ({ __ref: true, path: segments.join("/") }),
+  getDoc: (ref) => {
+    if (ref === window.__fb.ADMIN2FA_DOC) {
+      return Promise.resolve({
+        exists: () => true,
+        data: () => ({ secret: "SECRETO-2FA-DEL-TENANT-ACTUAL", trustedDevices: { "hash-de-este-navegador": { expiresAt: Date.now() + 1000000 } } }),
+      });
+    }
+    return Promise.resolve({ exists: () => false, data: () => null });
+  },
   setDoc: (ref, data) => {
     setDocCalls.push({ path: ref.path, data });
     return Promise.resolve();
@@ -88,10 +102,14 @@ check("Incluye 'copaamerica-ficticia'", opciones.includes("copaamerica-ficticia"
 check("Incluye 'euro-ficticio'", opciones.includes("euro-ficticio"));
 
 /* ════════════════════════════════════════════════════════════════
-   CASO 2 — completar el formulario y crear la quiniela: 2 escrituras
-   SECUENCIALES (tenant primero, meta después -- nunca en paralelo, ver
-   el comentario en app-admin-tenants.js sobre por qué el orden importa
-   para que isAdmin() del segundo paso resuelva bien).
+   CASO 2 — completar el formulario y crear la quiniela: 3 escrituras
+   SECUENCIALES (tenant -> meta -> admin2fa, nunca en paralelo, ver el
+   comentario en app-admin-tenants.js sobre por qué el orden importa
+   para que isAdmin() de cada paso siguiente resuelva bien). El 2FA
+   nuevo se copia TAL CUAL del tenant actual (mismo secreto, mismos
+   navegadores de confianza) -- corrección del 2026-08-05: antes cada
+   tenant nuevo quedaba SIN 2FA hasta configurarlo a mano en Firebase
+   Console, y "recordar este navegador" nunca se heredaba entre tenants.
    ════════════════════════════════════════════════════════════════ */
 console.log("\n--- CASO 2: crear una quiniela nueva ---");
 window.document.getElementById("a_tenant_id").value = "Mi Quiniela Champions";
@@ -105,9 +123,10 @@ window.document.getElementById("a_tenant_crear").dispatchEvent(new window.Event(
 // solo pisado para el `window` de jsdom) para dejar que la cola de
 // microtasks drene antes de revisar qué se escribió.
 setTimeout(() => {
-  check("Se hicieron exactamente 2 escrituras (tenant + meta)", setDocCalls.length === 2);
+  check("Se hicieron exactamente 3 escrituras (tenant + meta + admin2fa)", setDocCalls.length === 3);
   const tenantWrite = setDocCalls[0];
   const metaWrite = setDocCalls[1];
+  const admin2faWrite = setDocCalls[2];
 
   check("El nombre se convirtió en un slug válido (sin espacios ni mayúsculas)",
     tenantWrite && tenantWrite.path === "tenants/mi-quiniela-champions");
@@ -125,6 +144,13 @@ setTimeout(() => {
     metaWrite && metaWrite.data.configGlobal.torneoId === "euro-ficticio");
   check("meta.configGlobal trae el resto de RG_DEFAULT_CONFIG (registroAbierto:true, etc.)",
     metaWrite && metaWrite.data.configGlobal.registroAbierto === true);
+
+  check("El tercer write es registro/admin2fa DEL MISMO tenant nuevo",
+    admin2faWrite && admin2faWrite.path === "tenants/mi-quiniela-champions/registro/admin2fa");
+  check("Copia el MISMO secreto TOTP que ya tenía el tenant actual (mismo authenticator, sin reconfigurar nada)",
+    admin2faWrite && admin2faWrite.data.secret === "SECRETO-2FA-DEL-TENANT-ACTUAL");
+  check("Copia también los navegadores YA marcados como de confianza (este dispositivo no vuelve a pedir código)",
+    admin2faWrite && !!admin2faWrite.data.trustedDevices["hash-de-este-navegador"]);
 
   check("Redirige a la quiniela nueva con ?tenant= y ?torneo= en la URL",
     !!redirectedTo && redirectedTo.includes("?tenant=mi-quiniela-champions") && redirectedTo.includes("&torneo=euro-ficticio"));

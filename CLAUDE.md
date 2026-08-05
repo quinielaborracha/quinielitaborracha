@@ -514,11 +514,36 @@ app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-boot
   (el render, con el mock de Firestore capturando el filtro real que
   se le pasa a `where()`). Suite completa verde (69 harnesses).
 
-  **Pendiente manual, igual que cualquier cambio de `firestore.rules`**:
-  esta regla nueva todavía no está publicada en Firebase Console al
-  cerrar esta sesión -- sin publicarla, "Mis quinielas" muestra el
-  mensaje de error ("puede que falte publicar la regla nueva") en vez
-  de la lista.
+  La regla ya se publicó en Firebase Console (confirmado por el
+  usuario) y "Mis quinielas" funciona contra el proyecto real.
+
+- **Corrección (mismo día, 2026-08-05): el 2FA de una quiniela nueva
+  ahora se HEREDA, no se configura de cero.** Pedido real del usuario
+  al usar "Entrar" desde "Mis quinielas": le pedía el código de 2FA de
+  nuevo para una quiniela que él mismo había creado, aun estando ya
+  logueado como admin -- le pareció ilógico. Causa real: cada tenant
+  tenía su PROPIO secreto TOTP (había que crearlo a mano en Firebase
+  Console para cada quiniela nueva, como se hizo para `euro-2028`), y
+  "recordar este navegador" (`trustedDevices`, `app-admin-auth.js`)
+  vive ADENTRO del `admin2fa` de cada tenant -- nunca se heredaba entre
+  tenants aunque fuera el mismo admin, mismo dispositivo. Fix: "🏗️
+  Crear nueva quiniela" (`app-admin-tenants.js`) ahora copia TAL CUAL
+  el documento `registro/admin2fa` del tenant DESDE el que se está
+  creando (`fb.ADMIN2FA_DOC`, donde la sesión actual ya pasó el 2FA
+  para llegar a ese formulario) hacia el tenant nuevo -- mismo secreto
+  TOTP (el mismo código de tu authenticator sirve para todas tus
+  quinielas) y mismos navegadores ya marcados de confianza (no vuelve a
+  pedir el código en el mismo dispositivo). Sin cambios de
+  `firestore.rules`: la regla de `registro/admin2fa`
+  (`allow read,write: if isAdmin()`) ya alcanzaba, porque `isAdmin()`
+  del tenant nuevo ya resuelve `true` en ese punto de la secuencia (su
+  documento ya existe, con el propio email como `adminEmail` -- mismo
+  razonamiento que ya permitía crear `registro/meta` justo antes). Si
+  el tenant actual no tuviera 2FA configurado, el paso simplemente no
+  copia nada -- no bloquea la creación por eso. Test:
+  `test_crear_quiniela_admin.js` actualizado (ahora 3 escrituras
+  secuenciales: tenant → meta → admin2fa, con casos dedicados a que se
+  copien tanto `secret` como `trustedDevices`).
 
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker

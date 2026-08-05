@@ -169,8 +169,27 @@ function renderTenantsCard(){
     //    contra tenants/{tenantId}). Si esto se mandara junto en un
     //    batch/Promise.all, Firestore podría evaluar ambas reglas antes
     //    de que el paso 1 se confirmara, y el paso 2 se rechazaría.
+    // 3) tenants/{tenantId}/registro/admin2fa: CORRECCIÓN (2026-08-05,
+    //    pedido real del usuario -- "por qué me pide 2FA de nuevo si ya
+    //    entré como admin"): cada tenant tenía su PROPIO secreto TOTP,
+    //    creado a mano en Firebase Console -- una quiniela nueva
+    //    quedaba sin 2FA configurado hasta ese paso manual, y aunque se
+    //    configurara, "recordar este navegador" (trustedDevices) vive
+    //    ADENTRO de cada admin2fa por tenant, así que nunca se
+    //    heredaba. Ahora, al crear una quiniela nueva, se copia
+    //    TAL CUAL el admin2fa del tenant DESDE EL QUE SE ESTÁ CREANDO
+    //    (fb.ADMIN2FA_DOC ya apunta ahí -- es donde la sesión actual ya
+    //    pasó el 2FA para llegar a este formulario) -- mismo secreto Y
+    //    mismos navegadores de confianza. Permitido por la MISMA regla
+    //    de siempre (`registro/admin2fa`: `allow read,write: if
+    //    isAdmin()`) -- isAdmin() del tenant nuevo ya resuelve `true`
+    //    en este punto (su documento ya existe, con nuestro propio
+    //    email como adminEmail). Si el tenant actual no tuviera 2FA
+    //    configurado (no debería pasar nunca en la práctica), este paso
+    //    simplemente no copia nada -- no bloquea la creación por eso.
     const tenantDocRef = fb.doc(fb.db, 'tenants', tenantId);
     const metaDocRef = fb.doc(fb.db, 'tenants', tenantId, 'registro', 'meta');
+    const nuevoAdmin2faRef = fb.doc(fb.db, 'tenants', tenantId, 'registro', 'admin2fa');
     fb.setDoc(tenantDocRef, {
       adminEmail: fb.auth.currentUser.email,
       createdAt: fb.serverTimestamp(),
@@ -179,7 +198,10 @@ function renderTenantsCard(){
       nextSeq: 1,
       configGlobal: { ...RG_DEFAULT_CONFIG, torneoId },
       updatedAt: fb.serverTimestamp(),
-    })).then(()=>{
+    })).then(()=> fb.getDoc(fb.ADMIN2FA_DOC)).then(snap=>{
+      if(!snap.exists()) return; // el tenant actual no tiene 2FA configurado -- no bloquea la creación
+      return fb.setDoc(nuevoAdmin2faRef, snap.data());
+    }).then(()=>{
       toast('✓ Quiniela creada, entrando...');
       setTimeout(()=>{
         _tenantRedirectTo(location.pathname
