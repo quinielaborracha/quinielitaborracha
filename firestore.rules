@@ -42,10 +42,10 @@ service cloud.firestore {
 
     match /tenants/{tenantId} {
 
-      // Nadie ACTUALIZA/BORRA este documento desde el cliente -- se
-      // sigue editando a mano en Firebase Console si hace falta (ej.
-      // cambiar adminEmail de un tenant ya existente).
-      allow update, delete: if false;
+      // Nadie ACTUALIZA este documento desde el cliente -- se sigue
+      // editando a mano en Firebase Console si hace falta (ej. cambiar
+      // adminEmail de un tenant ya existente).
+      allow update: if false;
 
       // ── Sprint 13 (hoja de ruta comercial, mismo día): "📋 Mis
       // quinielas" -- el admin necesita poder LISTAR los tenants que
@@ -63,6 +63,21 @@ service cloud.firestore {
       // del cliente.
       allow read: if request.auth != null
                   && resource.data.adminEmail == request.auth.token.email;
+
+      // ── Sprint 14 (hoja de ruta comercial, mismo día): "🗑️ Eliminar
+      // quiniela" desde "Mis quinielas" -- mismo criterio de ownership
+      // que la regla de lectura de arriba (comparar
+      // resource.data.adminEmail, no isAdmin(): borrar el documento
+      // tenant es precisamente lo que haría que isAdmin() dejara de
+      // poder resolverse para ese tenant -- evaluar la condición contra
+      // el documento que TODAVÍA existe, no contra uno hipotético post-
+      // borrado). El cliente (app-admin-tenants.js) borra además, antes
+      // de este paso, los documentos conocidos de adentro (registro/meta,
+      // registro/admin2fa, registro/papelera, quiniela/estado(-test),
+      // registro_participants/registro_privado) -- cada uno ya tenía su
+      // propia regla de borrado vía isAdmin(), sin cambios acá.
+      allow delete: if request.auth != null
+                    && resource.data.adminEmail == request.auth.token.email;
 
       // ── Sprint 10 (hoja de ruta comercial, Fase 3 -- selector de
       // plantilla en runtime, 2026-08-04): auto-servicio de creación de

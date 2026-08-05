@@ -545,6 +545,34 @@ app-estadisticas.js → app-admin-tools.js → app-admin-tenants.js → app-boot
   secuenciales: tenant → meta → admin2fa, con casos dedicados a que se
   copien tanto `secret` como `trustedDevices`).
 
+- **Sprint 14 (mismo día que el 13): "🗑️ Eliminar" en "Mis quinielas".**
+  Pedido directo del usuario: botón con doble confirmación para borrar
+  las quinielas de prueba que ya no usa. Nueva regla `allow delete` en
+  `tenants/{tenantId}` (mismo `firestore.rules`), scoped a
+  `resource.data.adminEmail == request.auth.token.email` -- misma
+  condición que `allow read`, a propósito NO `isAdmin()` (borrar el
+  documento es justo lo que haría que `isAdmin()` dejara de poder
+  resolverse para ese tenant; hay que evaluar contra el documento que
+  TODAVÍA existe). `update` sigue en `if false`, sin cambios.
+
+  `_tenantDeleteFully(tenantId)` (`app-admin-tenants.js`) borra de
+  punta a punta: primero enumera con `getDocs()` (único import nuevo de
+  Firebase de toda esta hoja de ruta -- todo lo demás ya estaba
+  expuesto en `window.__fb`) las 2 colecciones de tamaño variable
+  (`registro_participants`/`registro_privado`), y junta todo en un solo
+  `writeBatch` con los documentos fijos conocidos (`registro/meta`,
+  `registro/admin2fa`, `registro/papelera`, `quiniela/estado(-test)`) y
+  el propio documento `tenants/{tenantId}` al final. El botón "🗑️
+  Eliminar" NUNCA aparece en la fila del tenant ACTUAL (`fb.TENANT_ID`)
+  -- hay que cambiarse a otra quiniela antes de poder borrar esta;
+  evita el caso raro de quedar "parado" en un tenant que uno mismo
+  acaba de eliminar a mitad de sesión. Doble `confirm()`, mismo criterio
+  que "Borrar datos de participantes"/"Restaurar configuración
+  original" (`registro.js`). Tests: bloque "ELIMINAR QUINIELA" en
+  `sim_firestore_rules.js` (la regla) + `test_eliminar_quiniela.js` (el
+  borrado completo, incluida la enumeración de colecciones). Suite
+  completa verde (68 harnesses).
+
 - Cache-busting: cada archivo modificado necesita su contenido cambiado **y**
   el `?v=` correspondiente bumpeado en `index.html`, o el Service Worker
   (`sw.js`) sigue sirviendo la versión vieja desde caché para pedidos con

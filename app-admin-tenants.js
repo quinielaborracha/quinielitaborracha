@@ -35,6 +35,20 @@
    collection(db,'tenants') -- todos ya venían expuestos en
    window.__fb desde el bloque de Firebase de index.html, no hizo
    falta importar nada nuevo.
+
+   Sprint 14 (mismo día que el 13): "🗑️ Eliminar" en cada fila de "Mis
+   quinielas" (nunca en la actual -- primero hay que cambiarse a otra).
+   `_tenantDeleteFully()` enumera con getDocs() (ÚNICO import nuevo de
+   Firebase en toda esta hoja de ruta -- todo lo demás ya estaba
+   expuesto) las 2 colecciones de tamaño variable
+   (registro_participants/registro_privado) del tenant a borrar, y
+   junta todo en un solo writeBatch con los documentos fijos conocidos
+   (registro/meta, registro/admin2fa, registro/papelera,
+   quiniela/estado(-test)) y el propio documento tenants/{tenantId} al
+   final -- permitido por una regla `allow delete` nueva, scoped a
+   adminEmail (misma condición que `allow read`, NO isAdmin(): borrar
+   el documento es justo lo que haría que isAdmin() dejara de poder
+   resolverse para ese tenant).
    ════════════════════════════════════════════════════════════ */
 
 // Convierte lo que el admin escribió en un id de tenant válido para
@@ -62,7 +76,7 @@ function renderMisQuinielasCard(){
   const html = `
     <div class="card" id="mis_quinielas_card" style="border:1px solid var(--qb-blue)">
       <div class="card-title">📋 Mis quinielas</div>
-      <div class="note">Todas las quinielas creadas con esta cuenta de admin (incluida esta misma). Tocá "Entrar" para cambiar a otra.</div>
+      <div class="note">Todas las quinielas creadas con esta cuenta de admin (incluida esta misma). Tocá "Entrar" para cambiar a otra, o "🗑️ Eliminar" para borrar una que ya no uses -- no se puede eliminar la que estás usando ahora mismo (cambiá a otra primero).</div>
       <div id="mis_quinielas_list" class="muted">Cargando...</div>
     </div>
   `;
@@ -96,13 +110,74 @@ function renderMisQuinielasCard(){
           <div style="font-weight:700">${esc(t.id)}${esActual ? ' <span class="badge badge-muted">actual</span>' : ''}</div>
           <div class="muted" style="font-size:11.5px">${esc(nombrePlantilla)}${fecha ? ' · creada ' + esc(fecha) : ''}</div>
         </div>
-        ${esActual ? '' : `<a class="rg-btn rg-btn-ghost" href="?tenant=${encodeURIComponent(t.id)}&torneo=${encodeURIComponent(t.torneoId||'')}">Entrar</a>`}
+        <div style="display:flex;gap:6px">
+          ${esActual ? '' : `<a class="rg-btn rg-btn-ghost" href="?tenant=${encodeURIComponent(t.id)}&torneo=${encodeURIComponent(t.torneoId||'')}">Entrar</a>`}
+          ${esActual ? '' : `<button class="rg-btn rg-btn-danger" data-delete-tenant="${esc(t.id)}">🗑️ Eliminar</button>`}
+        </div>
       </div>`;
     }).join('');
   }, (err)=>{
     console.error('Error al listar "Mis quinielas":', err);
     const el = listEl();
     if(el) el.innerHTML = '<div class="muted">No se pudo cargar -- puede que falte publicar la regla nueva de lectura en Firebase Console.</div>';
+  });
+
+  // Delegación de eventos en el contenedor (no en cada botón): la lista
+  // se reconstruye entera en cada onSnapshot -- wirear una sola vez acá
+  // afuera evita tener que re-wirear cada botón después de cada
+  // actualización en vivo.
+  listEl().addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-delete-tenant]');
+    if(!btn) return;
+    const tenantId = btn.getAttribute('data-delete-tenant');
+    if(!confirm(`¿Eliminar la quiniela "${tenantId}"? Se borran TODOS sus datos (participantes, resultados, configuración) -- no se puede deshacer.`)) return;
+    if(!confirm(`Última confirmación: "${tenantId}" y todo lo que tenga adentro se pierde para siempre. ¿Seguro?`)) return;
+    btn.disabled = true; btn.textContent = 'Eliminando...';
+    _tenantDeleteFully(tenantId).then(()=>{
+      toast(`✓ "${tenantId}" eliminada`);
+      // No hace falta tocar el DOM a mano: en cuanto el batch confirma,
+      // el onSnapshot de arriba recibe el cambio solo (el tenant ya no
+      // matchea el where(), Firestore lo saca del resultado) y repinta
+      // la lista sin este ítem.
+    }).catch(err=>{
+      console.error(`Error al eliminar la quiniela "${tenantId}":`, err);
+      toast('No se pudo eliminar: ' + (err && err.message ? err.message : 'error desconocido'), true);
+      btn.disabled = false; btn.textContent = '🗑️ Eliminar';
+    });
+  });
+}
+
+// Borra un tenant AJENO a la sesión activa (nunca el actual, ver el
+// guard en el botón de arriba) de punta a punta: primero enumera y
+// borra sus colecciones (registro_participants/registro_privado --
+// las únicas de tamaño variable, todo lo demás son documentos únicos
+// conocidos de antemano), después los documentos fijos, y al final el
+// documento tenants/{tenantId} en sí (permitido por la regla nueva del
+// Sprint 14 -- create/read ya existían, delete scoped a
+// adminEmail==auth.token.email, igual que read). Un solo writeBatch:
+// para una quiniela de prueba (el caso real de uso) nunca se acerca al
+// límite de 500 operaciones de un batch.
+function _tenantDeleteFully(tenantId){
+  const fb = window.__fb;
+  const participantsCol = fb.collection(fb.db, 'tenants', tenantId, 'registro_participants');
+  const privadoCol = fb.collection(fb.db, 'tenants', tenantId, 'registro_privado');
+
+  return Promise.all([
+    fb.getDocs(participantsCol),
+    fb.getDocs(privadoCol),
+  ]).then(([participantsSnap, privadoSnap])=>{
+    const batch = fb.writeBatch(fb.db);
+    participantsSnap.forEach(d => batch.delete(d.ref));
+    privadoSnap.forEach(d => batch.delete(d.ref));
+    [
+      fb.doc(fb.db, 'tenants', tenantId, 'registro', 'meta'),
+      fb.doc(fb.db, 'tenants', tenantId, 'registro', 'admin2fa'),
+      fb.doc(fb.db, 'tenants', tenantId, 'registro', 'papelera'),
+      fb.doc(fb.db, 'tenants', tenantId, 'quiniela', 'estado'),
+      fb.doc(fb.db, 'tenants', tenantId, 'quiniela', 'estado-test'),
+      fb.doc(fb.db, 'tenants', tenantId),
+    ].forEach(ref => batch.delete(ref));
+    return batch.commit();
   });
 }
 

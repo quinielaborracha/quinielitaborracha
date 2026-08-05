@@ -185,6 +185,15 @@ function simAllowTenantRead(auth, tenantData) {
   return tenantData.adminEmail === auth.email;
 }
 
+// Sprint 14 (hoja de ruta comercial, mismo día): "🗑️ Eliminar
+// quiniela" -- mismo criterio de ownership que la lectura (comparar
+// contra el documento que TODAVÍA existe, no isAdmin() -- borrarlo es
+// justo lo que haría que isAdmin() dejara de poder resolverse).
+function simAllowTenantDelete(auth, tenantData) {
+  if (!auth || !auth.email || !tenantData) return false;
+  return tenantData.adminEmail === auth.email;
+}
+
 let pass = 0, fail = 0;
 function check(label, condition) {
   if (condition) { console.log("✅ " + label); pass++; }
@@ -540,6 +549,20 @@ check(
   "Cada admin ve SOLO los suyos -- el de cliente-demo lee el suyo, no el de quinielitaborracha -> permitido/rechazado respectivamente",
   simAllowTenantRead({ uid: "admin-b", email: "otro-cliente@example.com" }, { adminEmail: "otro-cliente@example.com" })
   && !simAllowTenantRead({ uid: "admin-b", email: "otro-cliente@example.com" }, { adminEmail: ADMIN_EMAIL })
+);
+
+console.log("\n=== \"ELIMINAR QUINIELA\" -- BORRADO DE TENANTS PROPIOS (Sprint 14) ===");
+check(
+  "El admin puede borrar un tenant donde ES el adminEmail -> permitido",
+  simAllowTenantDelete({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: ADMIN_EMAIL })
+);
+check(
+  "El admin de quinielitaborracha NO puede borrar un tenant de OTRO admin -> rechazado",
+  !simAllowTenantDelete({ uid: "admin-a", email: ADMIN_EMAIL }, { adminEmail: "otro-cliente@example.com" })
+);
+check(
+  "Una sesión anónima nunca puede borrar ningún tenant -> rechazado",
+  !simAllowTenantDelete({ uid: "anon-1", isAnonymous: true }, { adminEmail: ADMIN_EMAIL })
 );
 
 console.log(`\n=== RESULTADO: ${pass} pasaron, ${fail} fallaron ===`);
